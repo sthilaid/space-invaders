@@ -51,7 +51,7 @@
 
 ; normally 5 x 11
 (define-type level-struct height width invaders player walls)
-(define (new-level heigth width)
+(define (new-level height width)
   (define invaders '())
   (define walls
     ; todo: must change! un-hardcode boundaries + not use spaceship
@@ -66,7 +66,22 @@
           (else 'hard)))
 
   ; todo: BAD generation of invaders... not one per pixel...
-  (for h 0 (< h heigth)
+  (define invader-spacing 16)
+  (let loop-h ((h 0))
+    (let ((current-type (get-type (determine-type-id h))))
+      (if (< h height)
+          (begin
+            (let loop-w ((w 0))
+              (if (< w width)
+                  (begin
+                    (set! invaders
+                          (cons (new-spaceship current-type (new-pos2d h w))
+                                invaders))
+                    (loop-w (+ w invader-spacing)))))
+            (loop-h
+             (+ h invader-spacing))))))
+              
+  (for h 0 (< h height)
        (let ((type (get-type (determine-type-id h))))
          (for w 0 (< w width)
               (set! invaders
@@ -75,8 +90,8 @@
   
   ;Warning: todo... must change the new player gen...
   (let ((player-ship (new-spaceship (get-type 'player)
-                                    (new-pos2d (- heigth 1) 3))))
-    (make-level-struct heigth width invaders player-ship walls)))
+                                    (new-pos2d (- height 1) 3))))
+    (make-level-struct height width invaders player-ship walls)))
 
 (define level-height level-struct-height)
 (define level-width level-struct-width)

@@ -49,49 +49,46 @@
 (define type-width ship-type-width)
 
 
+(define-type wall-struct start-point end-point)
+(define new-wall make-wall-struct)
+(define wall-start wall-struct-start-point)
+(define wall-end wall-struct-end-point)
+
 ; normally 5 x 11
-(define-type level-struct height width invaders player walls)
-(define (new-level height width)
+(define-type level-struct height max-x invaders player walls)
+(define (new-level)
   (define invaders '())
-  (define walls
-    ; todo: must change! un-hardcode boundaries + not use spaceship
-    (list (new-spaceship (get-type 'horiz-wall) (new-pos2d 0 0))
-          (new-spaceship (get-type 'horiz-wall) (new-pos2d 0 125))
-          (new-spaceship (get-type 'side-wall) (new-pos2d 0 0))
-          (new-spaceship (get-type 'side-wall) (new-pos2d 200 0))))
-          
-  (define (determine-type-id height)
-    (cond ((< height 2) 'easy)
-          ((< height 4) 'medium)
+  (define max-x 200)
+  (define max-y 125)
+  (define invader-spacing 16)
+  
+  (define (determine-type-id max-y)
+    (cond ((< max-y 2) 'easy)
+          ((< max-y 4) 'medium)
           (else 'hard)))
 
-  ; todo: BAD generation of invaders... not one per pixel...
-  (define invader-spacing 16)
-  (let loop-h ((h 0))
+  (let loop-h ((h invader-spacing))
     (let ((current-type (get-type (determine-type-id h))))
-      (if (< h height)
+      (if (< h (- max-y invader-spacing))
           (begin
-            (let loop-w ((w 0))
-              (if (< w width)
+            (let loop-w ((w invader-spacing))
+              (if (< w (- max-x invader-spacing))
                   (begin
                     (set! invaders
-                          (cons (new-spaceship current-type (new-pos2d h w))
+                          (cons (new-spaceship current-type (new-pos2d w h))
                                 invaders))
                     (loop-w (+ w invader-spacing)))))
             (loop-h
              (+ h invader-spacing))))))
-              
-  (for h 0 (< h height)
-       (let ((type (get-type (determine-type-id h))))
-         (for w 0 (< w width)
-              (set! invaders
-                    (cons (new-spaceship type (new-pos2d h w))
-                          invaders)))))
   
   ;Warning: todo... must change the new player gen...
-  (let ((player-ship (new-spaceship (get-type 'player)
-                                    (new-pos2d (- height 1) 3))))
-    (make-level-struct height width invaders player-ship walls)))
+  (let ((walls (list (new-wall (new-pos2d 0 0) (new-pos2d 0 max-y))
+                     (new-wall (new-pos2d 0 max-y) (new-pos2d max-x max-y))
+                     (new-wall (new-pos2d max-x max-y) (new-pos2d max-x 0))
+                     (new-wall (new-pos2d max-x 0) (new-pos2d 0 0))))
+        (player-ship (new-spaceship (get-type 'player)
+                                    (new-pos2d 40 (- max-y 30)))))
+    (make-level-struct max-y max-x invaders player-ship walls)))
 
 (define level-height level-struct-height)
 (define level-width level-struct-width)

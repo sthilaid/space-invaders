@@ -10,11 +10,9 @@
   (make-event label actions))
 
 (define (schedule-event! sim ev absolute-time)
-;  (pp `(now scheduling new event at ,absolute-time))
   (heap-insert! (event-simulation-event-queue sim)
                 (heap-node-create absolute-time ev))
   'void)
-
 
 (define (start-simulation! sim horizon)
   (define stop-simulation #f)
@@ -30,7 +28,7 @@
     (schedule-event! sim end-of-simulation-event horizon)
     (let iterate ((time 0))
       (if (heap-empty? (event-simulation-event-queue sim))
-          (stop-simulation "No more events available...")
+          (error "No more events available...")
           (let* ((top-node (heap-retrieve-top!
                             (event-simulation-event-queue sim)))
                  (current-time (heap-value top-node))
@@ -43,3 +41,14 @@
                    (lambda (msg) (pp msg) (k #t)))
              (run-simulation))))
              
+(define (test)
+  (define sim (create-event-simulation))
+  (define (make-test-ev i)
+    (create-event
+     'test-ev (lambda (sim time)
+                (pp `(,i : now it is ,time))
+                (if (< i 10)
+                    (schedule-event! sim (make-test-ev (+ i 1)) (+ time 1))))))
+  
+  (schedule-event! sim (make-test-ev 0) 12.5421)
+  (start-simulation! sim 50))

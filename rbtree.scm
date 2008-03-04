@@ -396,77 +396,78 @@
 
 ;; Define constructors and accessors for "heap-rbtree" and "heap-node".
 
-(define (make-heap-rbtree color parent left leftmost)
+(define (make-event-heap-rbtree color parent left leftmost)
   (vector color parent left leftmost))
 
-(define (make-heap-node color parent left right value content)
-  (vector color parent left right value content))
+(define (make-event-heap-node color parent left right time actions)
+  (vector color parent left right time actions))
 
-(define (heap-color x)            (vector-ref x 0))
-(define (heap-color-set! x y)     (vector-set! x 0 y))
-(define (heap-parent x)           (vector-ref x 1))
-(define (heap-parent-set! x y)    (vector-set! x 1 y))
-(define (heap-left x)             (vector-ref x 2))
-(define (heap-left-set! x y)      (vector-set! x 2 y))
-(define (heap-right x)            (vector-ref x 3))
-(define (heap-right-set! x y)     (vector-set! x 3 y))
-(define (heap-leftmost x)         (vector-ref x 3))
-(define (heap-leftmost-set! x y)  (vector-set! x 3 y))
-(define (heap-value x)            (vector-ref x 4))
-(define (heap-value-set! x y)     (vector-set! x 4 y))
-(define (heap-content x)          (vector-ref x 5))
-(define (heap-content-set! x y)        (vector-set! x 5 y))
+(define (event-heap-color x)            (vector-ref x 0))
+(define (event-heap-color-set! x y)     (vector-set! x 0 y))
+(define (event-heap-parent x)           (vector-ref x 1))
+(define (event-heap-parent-set! x y)    (vector-set! x 1 y))
+(define (event-heap-left x)             (vector-ref x 2))
+(define (event-heap-left-set! x y)      (vector-set! x 2 y))
+(define (event-heap-right x)            (vector-ref x 3))
+(define (event-heap-right-set! x y)     (vector-set! x 3 y))
+(define (event-heap-leftmost x)         (vector-ref x 3))
+(define (event-heap-leftmost-set! x y)  (vector-set! x 3 y))
+(define (event-heap-time x)             (vector-ref x 4))
+(define (event-heap-time-set! x y)      (vector-set! x 4 y))
+(define (event-heap-actions x)          (vector-ref x 5))
+(define (event-heap-actions-set! x y)   (vector-set! x 5 y))
 
-(define (heap-before? node1 node2) ;; ordering function
-  (< (heap-value node1) (heap-value node2)))
+(define (event-heap-before? node1 node2) ;; ordering function
+  (< (event-heap-time node1) (event-heap-time node2)))
 
 (define-rbtree
-  heap-rbtree-init!  ;; defined by define-rbtree
-  heap-node->rbtree  ;; defined by define-rbtree
-  heap-insert!       ;; defined by define-rbtree
-  heap-remove!       ;; defined by define-rbtree
-  heap-reposition!   ;; defined by define-rbtree
-  heap-empty?        ;; defined by define-rbtree
-  heap-singleton?    ;; defined by define-rbtree
-  heap-before?
-  heap-color
-  heap-color-set!
-  heap-parent
-  heap-parent-set!
-  heap-left
-  heap-left-set!
-  heap-right
-  heap-right-set!
-  heap-leftmost
-  heap-leftmost-set!
+  event-heap-rbtree-init!  ;; defined by define-rbtree
+  event-heap-node->rbtree  ;; defined by define-rbtree
+  event-heap-insert!       ;; defined by define-rbtree
+  event-heap-remove!       ;; defined by define-rbtree
+  event-heap-reposition!   ;; defined by define-rbtree
+  event-heap-empty?        ;; defined by define-rbtree
+  event-heap-singleton?    ;; defined by define-rbtree
+  event-heap-before?
+  event-heap-color
+  event-heap-color-set!
+  event-heap-parent
+  event-heap-parent-set!
+  event-heap-left
+  event-heap-left-set!
+  event-heap-right
+  event-heap-right-set!
+  event-heap-leftmost
+  event-heap-leftmost-set!
   #f
   #f)
 
 
-;; Some higher lvl functions to interact with the heap
-(define (heap-create)
-  (heap-rbtree-init! (make-heap-rbtree #f #f #f #f)))
+;; Some higher lvl functions to interact with the event-heap
+(define (event-heap-create)
+  (event-heap-rbtree-init! (make-event-heap-rbtree #f #f #f #f)))
 
-(define (heap-node-create value content)
-  (make-heap-node #f #f #f #f value content))
+(define (event-heap-node-create time actions)
+  (make-event-heap-node #f #f #f #f time actions))
 
-(define (heap-retrieve-top! h)
-  (let ((top (heap-leftmost h)))
-    (heap-remove! top)
+(define (event-heap-retrieve-top! h)
+  (let ((top (event-heap-leftmost h)))
+    (event-heap-remove! top)
     top))
 
 ;; A simple usage example which sorts a list of numbers
-(define (heap-sort lst)
-  (let ((t (heap-create)))
-    (for-each (lambda (value) (heap-insert! t (heap-node-create value 'dummy)))
+(define (event-heap-sort lst)
+  (let ((t (event-heap-create)))
+    (for-each (lambda (time)
+                (event-heap-insert! t (event-heap-node-create time 'dummy)))
               lst)
     (let loop ((result '()))
-      (if (heap-empty? t)
+      (if (event-heap-empty? t)
           result
-          (let* ((smallest (heap-leftmost t))
-                 (value (heap-value smallest)))
-            (heap-remove! smallest)
-            (loop (cons value result)))))))
+          (let* ((smallest (event-heap-leftmost t))
+                 (time (event-heap-time smallest)))
+            (event-heap-remove! smallest)
+            (loop (cons time result)))))))
 
 
 ;;;----------------------------------------------------------------------------
@@ -476,52 +477,52 @@
 
 (define (test)
   
-  (define t (heap-create)) ;; start with an empty tree
-  (define n1 (heap-node-create 1 'allo))
-  (define n2 (heap-node-create 2 'bonjour))
-  (define n3 (heap-node-create 3 'salut))
+  (define t (event-heap-create)) ;; start with an empty tree
+  (define n1 (event-heap-node-create 1 'allo))
+  (define n2 (event-heap-node-create 2 'bonjour))
+  (define n3 (event-heap-node-create 3 'salut))
 
-  (pp (equal? #t (heap-empty? t)))
-  (pp (equal? #f (heap-singleton? t)))
+  (pp (equal? #t (event-heap-empty? t)))
+  (pp (equal? #f (event-heap-singleton? t)))
 
-  (heap-insert! t n2)
+  (event-heap-insert! t n2)
 
-  (pp (equal? #f (heap-empty? t)))
-  (pp (equal? #t (heap-singleton? t)))
-  (pp (equal? n2 (heap-leftmost t)))
+  (pp (equal? #f (event-heap-empty? t)))
+  (pp (equal? #t (event-heap-singleton? t)))
+  (pp (equal? n2 (event-heap-leftmost t)))
 
-  (heap-insert! t n1)
+  (event-heap-insert! t n1)
 
-  (pp (equal? #f (heap-empty? t)))
-  (pp (equal? #f (heap-singleton? t)))
-  (pp (equal? n1 (heap-leftmost t)))
+  (pp (equal? #f (event-heap-empty? t)))
+  (pp (equal? #f (event-heap-singleton? t)))
+  (pp (equal? n1 (event-heap-leftmost t)))
 
-  (heap-insert! t n3)
+  (event-heap-insert! t n3)
 
-  (pp (equal? #f (heap-empty? t)))
-  (pp (equal? #f (heap-singleton? t)))
-  (pp (equal? n1 (heap-leftmost t)))
+  (pp (equal? #f (event-heap-empty? t)))
+  (pp (equal? #f (event-heap-singleton? t)))
+  (pp (equal? n1 (event-heap-leftmost t)))
 
-  (heap-remove! n1)
+  (event-heap-remove! n1)
 
-  (pp (equal? #f (heap-empty? t)))
-  (pp (equal? #f (heap-singleton? t)))
-  (pp (equal? n2 (heap-leftmost t)))
+  (pp (equal? #f (event-heap-empty? t)))
+  (pp (equal? #f (event-heap-singleton? t)))
+  (pp (equal? n2 (event-heap-leftmost t)))
 
-  (heap-remove! n2)
+  (event-heap-remove! n2)
 
-  (pp (equal? #f (heap-empty? t)))
-  (pp (equal? #t (heap-singleton? t)))
-  (pp (equal? n3 (heap-leftmost t)))
+  (pp (equal? #f (event-heap-empty? t)))
+  (pp (equal? #t (event-heap-singleton? t)))
+  (pp (equal? n3 (event-heap-leftmost t)))
 
-  (heap-remove! n3)
+  (event-heap-remove! n3)
 
-  (pp (equal? #t (heap-empty? t)))
-  (pp (equal? #f (heap-singleton? t)))
+  (pp (equal? #t (event-heap-empty? t)))
+  (pp (equal? #f (event-heap-singleton? t)))
 
   ;; implement a sorting function with a priority queue:
 
 
-  (pp (heap-sort '(5 12 8 1 9 10 3 2 7 6 4 11)))
+  (pp (event-heap-sort '(5 12 8 1 9 10 3 2 7 6 4 11)))
   )
 ;;;============================================================================

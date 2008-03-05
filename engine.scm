@@ -23,7 +23,7 @@
                (* y-fact (pos2d-y dir)))))
 
 (define-type ship type pos)
-(define (new-spaceship type pos) (make-ship type pos))
+(define new-spaceship make-ship)
 (define spaceship-type ship-type)
 (define spaceship-pos ship-pos)
 (define spaceship-set-pos! ship-pos-set!)
@@ -49,13 +49,18 @@
 (define type-width ship-type-width)
 
 
-(define-type wall-struct start-point end-point)
-(define new-wall make-wall-struct)
-(define wall-start wall-struct-start-point)
-(define wall-end wall-struct-end-point)
+(define-type wall-struct rect)
+(define (new-wall x y width height)
+  (make-wall-struct (make-rect x y width height)))
+(define wall-rect wall-struct-rect)
 
-; normally 5 x 11
-(define-type level-struct height max-x invaders player walls)
+(define-type level-struct height width invaders player walls)
+(define level-height level-struct-height)
+(define level-width level-struct-width)
+(define level-invaders level-struct-invaders)
+(define level-player level-struct-player)
+(define level-walls level-struct-walls)
+
 (define (new-level)
   (define invaders '())
   (define max-x 200)
@@ -82,56 +87,70 @@
              (+ h invader-spacing))))))
   
   ;Warning: todo... must change the new player gen...
-  (let ((walls (list (new-wall (new-pos2d 0 0) (new-pos2d 0 max-y))
-                     (new-wall (new-pos2d 0 max-y) (new-pos2d max-x max-y))
-                     (new-wall (new-pos2d max-x max-y) (new-pos2d max-x 0))
-                     (new-wall (new-pos2d max-x 0) (new-pos2d 0 0))))
+  (let ((walls (list (new-wall 0 -inf.0 -inf.0 +inf.0)
+                     (new-wall -inf.0 0 +inf.0 -inf.0)
+                     (new-wall max-x -inf.0 +inf.0 +inf.0)
+                     (new-wall -inf.0 max-y +inf.0 +inf.0)))
         (player-ship (new-spaceship (get-type 'player)
                                     (new-pos2d 40 (- max-y 30)))))
     (make-level-struct max-y max-x invaders player-ship walls)))
 
-(define level-height level-struct-height)
-(define level-width level-struct-width)
-(define level-invaders level-struct-invaders)
-(define level-player level-struct-player)
 
 (define (detect-collision? ship level)
   (define (detect-ship-col? ship1 ship2)
     (let* ((ship1-pos (spaceship-pos ship1))
-           (ship2-pos (spaceship-pos ship2))
-           (ship1-x-min (pos2d-x ship1-pos))
-           (ship1-y-min (pos2d-y ship1-pos))
-           (ship1-x-max (+ ship1-x-min
-                           (- (type-width (spaceship-type ship1)) 1)))
-           (ship1-y-may (+ ship1-y-min
-                           (- (type-height (spaceship-type ship1)) 1)))
-           (ship2-x-min (pos2d-x ship2-pos))
-           (ship2-y-min (pos2d-y ship2-pos))
-           (ship2-x-max (+ ship2-x-min
-                           (- (type-width (spaceship-type ship2)) 2)))
-           (ship2-y-may (+ ship2-y-min
-                           (- (type-height (spaceship-type ship2)) 2))))
-      #t))
-                
+           (ship2-pos (spaceship-pos ship2)))
+      (and (not (eq? ship1 ship2))
+           (rectangle-collision?
+            (make-rect (pos2d-x ship1-pos) (pos2d-y ship1-pos)
+                       (type-width (spaceship-type ship1))
+                       (type-height (spaceship-type ship1)))
+            (make-rect (pos2d-x ship2-pos) (pos2d-y ship2-pos)
+                       (type-width (spaceship-type ship2))
+                       (type-height (spaceship-type ship2)))))))
+  
   (let ((ship-pos (spaceship-pos ship)))
     (or (exists (lambda (inv) (detect-ship-col? ship inv))
                 (level-invaders level))
         
-        (exists (lambda (wall) detect-ship-col? ship wall)
+        (exists (lambda (wall) (rectangle-collision?
+                                (make-rect (pos2d-x (spaceship-pos ship))
+                                           (pos2d-y (spaceship-pos ship))
+                                           (type-width (spaceship-type ship))
+                                           (type-height (spaceship-type ship)))
+                                (wall-rect wall)))
                 (level-walls level)))))
 
-(define (step! level dir)
-  (let ((used-dir
-         (if (exists (lambda (inv) (detect-collision? inv level))
-                     (level-invaders level))
-             (inverse-dir dir 'x)
-             dir)))
-    (for-each (lambda (inv)
-                (let ((next-pos (new-pos2d (* (pos2d-x used-dir)
-                                              (pos2d-x (spaceship-pos inv)))
-                                           (* (pos2d-y used-dir)
-                                              (pos2d-y (spaceship-pos inv))))))
-                  (spaceship-set-pos! inv next-pos)))
-              (level-invaders level))
-    used-dir))
+(define-type rect x y width height)
+(define (rectangle-collision? r1 r2)
+  (let* ((r1-x-min (rect-x r1))
+         (r1-x-max (+ r1-x-min (rect-width r1)))
+         (r1-y-min (rect-y r1))
+         (r1-y-max (+ r1-y-min (rect-height r1)))
+         (r2-x-min (rect-x r2))
+         (r2-x-max (+ r2-x-min (rect-width r2)))
+         (r2-y-min (rect-y r2))
+         (r2-y-max (+ r2-y-min (rect-height r2))))
+    (if (or (< r1-x-max r2-x-min)
+            (> r1-x-min r2-x-max)
+            (< r1-y-max r2-y-min)
+            (> r1-y-min r2-y-max))
+        #f
+        #t)))
+                              
+
+;; (define (step! level dir)
+;;   (let ((used-dir
+;;          (if (exists (lambda (inv) (detect-collision? inv level))
+;;                      (level-invaders level))
+;;              (inverse-dir dir 'x)
+;;              dir)))
+;;     (for-each (lambda (inv)
+;;                 (let ((next-pos (new-pos2d (* (pos2d-x used-dir)
+;;                                               (pos2d-x (spaceship-pos inv)))
+;;                                            (* (pos2d-y used-dir)
+;;                                               (pos2d-y (spaceship-pos inv))))))
+;;                   (spaceship-set-pos! inv next-pos)))
+;;               (level-invaders level))
+;;     used-dir))
 

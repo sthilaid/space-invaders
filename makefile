@@ -1,6 +1,6 @@
 GLUT_FILES = scm-lib.scm opengl.scm opengl-header.scm glu.scm glu-header.scm glut.scm glut-header.scm
 
-SPACE_INVADERS_FILES = engine.scm user-interface.scm
+SPACE_INVADERS_FILES = engine.scm user-interface.scm 
 
 PATH_TO_GAMBIT=/opt/gambit-c/current
 GAMBIT_LIB=$(PATH_TO_GAMBIT)/lib
@@ -16,7 +16,7 @@ LD_OPTIONS =-lglut -lgambc -lutil -L$(GAMBIT_LIB)
 
 all: space-invaders #opengl-test opengl-test2
 
-space-invaders: $(GLUT_FILES:.scm=.c) $(SPACE_INVADERS_FILES:.scm=.c) space-invaders_.c
+space-invaders: $(GLUT_FILES:.scm=.c) $(SPACE_INVADERS_FILES:.scm=.c) space-invaders_.c 
 	$(CC) $(INCLUDE_OPTIONS) -o $@ $^ $(LD_OPTIONS)
 
 space-invaders_.c: $(GLUT_FILES:.scm=.c) $(SPACE_INVADERS_FILES:.scm=.c)
@@ -63,4 +63,4 @@ opengl-test2_.c: $(GLUT_FILES:.scm=.c) opengl-test2.c
 
 
 clean:
-	rm -f *.c *.o* opengl-test opengl-test2 space-invaders
+	rm -f $(GLUT_FILES:.scm=.c) $(SPACE_INVADERS_FILES:.scm=.c) *.o* opengl-test opengl-test2 space-invaders

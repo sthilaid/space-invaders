@@ -1,12 +1,4 @@
 
-;;
-;;                     
-;;                        by David St-Hilaire
-;;
-;;
-;;
-;;
-
 (include "scm-lib.scm")
 
 ;;;;;;;;;;;;;;;;;;;;;;; Global state variables  ;;;;;;;;;;;;;;;;;;;;;;;
@@ -48,22 +40,29 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;; Render-Sceneing function ;;;;;;;;;;;;;;;;;;;;;;;
 
+(include "opengl-header.scm")
+(c-declare "#include \"bitmaps.c\"")
+
+(define-macro (get-bitmap-param name param)
+  (let ((result-type (cond ((string=? param "pointer")     'GLubyte*)
+                           ((or (string=? param "width")
+                                (string=? param "height")) 'GLsizei)
+                           (else                           'GLfloat)))
+        (result (if (string=? param "pointer")
+                    "___result_voidstar"
+                    "___result")))
+    `((c-lambda () ,result-type
+                ,(string-append result " = " name "." param ";")))))
+
 (define ship-rendering-list
-  `((easy ,(let ((state1 (list #x0F #x00
-                               #x7F #xD0
-                               #xFF #xF0
-                               #xD6 #x70
-                               #xFF #xF0
-                               #x39 #xC0
-                               #x66 #x60
-                               #x30 #xC0))
-                 (state2 'todo))
-             (lambda (x y state)
-               (glColor3f 1. 1. 1.)
-               (glRasterPos2i x y)
-               (glBitmap 12 8 0. 0. 12. 8. state1))))))
-             
-             
+  `((easy ,(lambda (x y state)
+             (glColor3f 1. 1. 1.)
+             (glRasterPos2i x y)
+             (if (eq? state 'state1)
+                 (glBitmap 12 8 0. 0. 12. 8.
+                           (get-bitmap-param "easy1" "pointer"))
+                 (glBitmap 12 8 0. 0. 12. 8.
+                           (get-bitmap-param "easy2" "pointer")))))))
 
 (define (display-message x y msg)
   (let ((chars (map char->integer (string->list msg)))
@@ -83,7 +82,7 @@
   (for-each (lambda (inv)
               (let ((x (pos2d-x (spaceship-pos inv)))
                     (y (pos2d-y (spaceship-pos inv))))
-                ((cadr (assq 'easy ship-rendering-list)) x y 'dummy)))
+                ((cadr (assq 'easy ship-rendering-list)) x y 'state1)))
             (level-invaders current-level))
 
 

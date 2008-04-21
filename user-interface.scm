@@ -147,30 +147,21 @@
 
 (c-define (keyboard key x y) (unsigned-char int int) void "keyboard" ""
  (case key
-;;    ((#\0) (set-octave! 0))
-;;    ((#\1) (set-octave! 1))
-;;    ((#\2) (set-octave! 2))
-;;    ((#\3) (set-octave! 3))
-;;    ((#\4) (set-octave! 4))
-;;    ((#\5) (set-octave! 5))
-;;    ((#\6) (set-octave! 6))
-;;    ((#\7) (set-octave! 7))
-;;    ((#\8) (set-octave! 8))
-;;    ((#\9) (set-octave! 9))
-
-   ;; On Escape, Ctl-q, q -> terminate the program
-   ((#\x1b #\x11 #\q) (quit))
+   ;; On Escape, Ctl-q, Ctl-c, Ctl-w, q -> terminate the program
+   ((#\x1b #\x11 #\x03 #\x17 #\q) (quit))
    (else (pp `(received keyboard input ,key ,x ,y)))))
 
 (c-define (special-keyboard key x y)
           (unsigned-char int int) void "special_keyboard" ""
- (case key
-;;    ((#\e) (move-image! 0 animation-velocity))
-;;    ((#\g) (move-image! 0 (- animation-velocity)))
-;;    ((#\f) (move-image! animation-velocity 0))
-;;    ((#\d) (move-image! (- animation-velocity) 0))
-   
-   (else (pp `(received special keyboard input ,key ,x ,y)))))
+ (let ((player (level-player current-level))
+       (speed 4))
+   (case key
+     ((#\e) (pp 'up))
+     ((#\g) (pp 'down))
+     ((#\f) (move-player! player speed 0))
+     ((#\d) (move-player! player (- speed) 0))
+     
+     (else (pp `(received special keyboard input ,key ,x ,y))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;; Idle function (animation) ;;;;;;;;;;;;;;;;;;;;;;;
 

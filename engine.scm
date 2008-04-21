@@ -75,7 +75,6 @@
                     (loop-w (+ w 1)))))
             (loop-h (+ h 1))))))
   
-  ;Warning: todo... must change the new player generation...
   (let ((walls (list (new-wall 0 -inf.0 -inf.0 +inf.0)
                      (new-wall -inf.0 0 +inf.0 -inf.0)
                      (new-wall max-x -inf.0 +inf.0 +inf.0)
@@ -85,8 +84,12 @@
     (make-level-struct max-y max-x invaders player-ship walls)))
 
 
-
-
+(define (move-player! player delta-x delta-y)
+  (let* ((pos (spaceship-pos player) )
+         (x (pos2d-x pos))
+         (y (pos2d-y pos)))
+    (pos2d-x-set! pos (+ x delta-x))
+    (pos2d-y-set! pos (+ y delta-y))))
 
 (define (detect-collision? ship level)
   (define (detect-ship-col? ship1 ship2)

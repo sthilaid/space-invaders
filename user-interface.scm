@@ -56,22 +56,41 @@
                                 (symbol->string name) "."
                                 (symbol->string param) ";")))))
 
-(define-macro (draw-sprite id)
-  `(glBitmap (get-bitmap-param ,id width)
-             (get-bitmap-param ,id height)
-             (get-bitmap-param ,id xorig)
-             (get-bitmap-param ,id yorig)
-             (get-bitmap-param ,id xmove)
-             (get-bitmap-param ,id ymove)
-             (get-bitmap-param ,id pointer)))
+(define-macro (draw-sprite ship-type sprite-index)
+  (let ((id (string->symbol (string-append (symbol->string ship-type)
+                                           (number->string sprite-index)))))
+    `(glBitmap (get-bitmap-param ,id width)
+               (get-bitmap-param ,id height)
+               (get-bitmap-param ,id xorig)
+               (get-bitmap-param ,id yorig)
+               (get-bitmap-param ,id xmove)
+               (get-bitmap-param ,id ymove)
+               (get-bitmap-param ,id pointer))))
 
-(define ship-rendering-list
-  `((easy ,(lambda (x y state)
-             (glColor3f (random-real) (random-real) (random-real))
-             (glRasterPos2i x y)
-             (if (eq? state 'state1)
-                 (draw-sprite easy1)
-                 (draw-sprite easy2))))))
+(define-macro (ship-renderer ship-type)
+  `(lambda (x y state)
+     (glColor3f (random-real) (random-real) (random-real))
+     (glRasterPos2i x y)
+     (if (eq? state 'state1)
+         (draw-sprite ,ship-type 1)
+         (draw-sprite ,ship-type 2))))
+
+(define render-ship
+  (let ((easy-renderer (ship-renderer easy))
+        (medium-renderer (ship-renderer medium))
+        (hard-renderer (ship-renderer hard))
+        (player-renderer (ship-renderer player)))
+    (lambda (invader)
+      (define x (pos2d-x (spaceship-pos invader)))
+      (define y (pos2d-y (spaceship-pos invader)))
+      (define type (spaceship-type invader))
+      (define state (spaceship-state invader))
+      (case type
+        ((easy) (easy-renderer x y state))
+        ((medium) (medium-renderer x y state))
+        ((hard) (hard-renderer x y state))
+        ((player) (player-renderer x y state))
+        (else (error "Cannor render unknown ship type."))))))
 
 (define (display-message x y msg)
   (let ((chars (map char->integer (string->list msg)))
@@ -86,11 +105,7 @@
   (glClear GL_COLOR_BUFFER_BIT)
 
   ;; Draw invaders
-  (for-each (lambda (inv)
-              (let ((x (pos2d-x (spaceship-pos inv)))
-                    (y (pos2d-y (spaceship-pos inv))))
-                ((cadr (assq 'easy ship-rendering-list)) x y 'state1)))
-            (level-invaders current-level))
+  (for-each render-ship (level-invaders current-level))
 
 ;;   (if status-message
 ;;       (display-message 0 0 status-message))

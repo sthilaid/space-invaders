@@ -10,12 +10,10 @@
     (make-pos2d (* x-fact (pos2d-x dir))
                (* y-fact (pos2d-y dir)))))
 
-(define-type ship type pos)
-(define new-spaceship make-ship)
-(define spaceship-type ship-type)
-(define spaceship-pos ship-pos)
-(define spaceship-set-pos! ship-pos-set!)
+(define-type spaceship type pos state)
 
+
+;;;;; todo: Should we remove this  ship-type data or not?
 (define-type ship-type id height width)
 (define types
   `( (easy ,(make-ship-type 'easy 8 12))
@@ -23,8 +21,8 @@
      (hard ,(make-ship-type 'hard 8 8))
      (mothership ,(make-ship-type 'mothership 7 16))
      (player ,(make-ship-type 'player 8 13))
-;;      (side-wall ,(make-ship-type 'side-wall 125 1))
-;;      (horiz-wall ,(make-ship-type 'horiz-wall 1 200))
+     (side-wall ,(make-ship-type 'side-wall 125 1))
+     (horiz-wall ,(make-ship-type 'horiz-wall 1 200))
    ))
 (define (get-type type-name)
   (let ((type (assq type-name types)))
@@ -51,8 +49,10 @@
 
 (define (new-level)
   (define invaders '())
-  (define max-x 200)
-  (define max-y 125)
+  (define x-offset 30)
+  (define y-offset (- 265 152))
+  (define max-x 228)
+  (define max-y 265)
   (define invader-spacing 16)
   
   (define (determine-type-id max-y)
@@ -60,28 +60,32 @@
           ((< max-y 4) 'medium)
           (else 'hard)))
 
-  (let loop-h ((h invader-spacing))
-    (let ((current-type (get-type (determine-type-id h))))
-      (if (< h (- max-y invader-spacing))
+  (let loop-h ((h 0))
+    (let ((current-type (determine-type-id h)))
+      (if (< h 5)
           (begin
-            (let loop-w ((w invader-spacing))
-              (if (< w (- max-x invader-spacing))
-                  (begin
+            (let loop-w ((w 0))
+              (if (< w 11)
+                  (let ((x (+ x-offset (* w invader-spacing)))
+                        (y (+ y-offset (* h invader-spacing))))
                     (set! invaders
-                          (cons (new-spaceship current-type (make-pos2d w h))
+                          (cons (make-spaceship current-type (make-pos2d x y)
+                                                'state1)
                                 invaders))
-                    (loop-w (+ w invader-spacing)))))
-            (loop-h
-             (+ h invader-spacing))))))
+                    (loop-w (+ w 1)))))
+            (loop-h (+ h 1))))))
   
   ;Warning: todo... must change the new player generation...
   (let ((walls (list (new-wall 0 -inf.0 -inf.0 +inf.0)
                      (new-wall -inf.0 0 +inf.0 -inf.0)
                      (new-wall max-x -inf.0 +inf.0 +inf.0)
                      (new-wall -inf.0 max-y +inf.0 +inf.0)))
-        (player-ship (new-spaceship (get-type 'player)
-                                    (make-pos2d 40 (- max-y 30)))))
+        (player-ship (make-spaceship 'player (make-pos2d 22 (- max-y 240))
+                                     'state1)))
     (make-level-struct max-y max-x invaders player-ship walls)))
+
+
+
 
 
 (define (detect-collision? ship level)

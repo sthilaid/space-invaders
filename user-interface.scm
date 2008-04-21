@@ -69,7 +69,6 @@
 
 (define-macro (ship-renderer ship-type)
   `(lambda (x y state)
-     (glColor3f (random-real) (random-real) (random-real))
      (glRasterPos2i x y)
      (if (eq? state 'state1)
          (draw-sprite ,ship-type 1)
@@ -86,10 +85,18 @@
       (define type (spaceship-type invader))
       (define state (spaceship-state invader))
       (case type
-        ((easy) (easy-renderer x y state))
-        ((medium) (medium-renderer x y state))
-        ((hard) (hard-renderer x y state))
-        ((player) (player-renderer x y state))
+        ((easy)
+         (glColor3f (random-real) (random-real) (random-real))
+         (easy-renderer x y state))
+        ((medium)
+         (glColor3f (random-real) (random-real) (random-real))
+         (medium-renderer x y state))
+        ((hard)
+         (glColor3f (random-real) (random-real) (random-real))
+         (hard-renderer x y state))
+        ((player)
+         (glColor3f 0. 1. 0.)
+         (player-renderer x y state))
         (else (error "Cannor render unknown ship type."))))))
 
 (define (display-message x y msg)
@@ -106,6 +113,8 @@
 
   ;; Draw invaders
   (for-each render-ship (level-invaders current-level))
+
+  (render-ship (level-player current-level))
 
 ;;   (if status-message
 ;;       (display-message 0 0 status-message))

@@ -81,7 +81,8 @@ GLubyte player_bitmap[16] = {0xFF, 0xF8,
                              0x07, 0x00,
                              0x07, 0x00,
                              0x02, 0x00};
-bitmap player1,player2 = {13, 8, 0., 0., 14., 0., player_bitmap};
+bitmap player1 = {13, 8, 0., 0., 14., 0., player_bitmap};
+bitmap player2 = {13, 8, 0., 0., 14., 0., player_bitmap};
 
 
 

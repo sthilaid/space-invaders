@@ -20,6 +20,17 @@
 ;;          (not safe)
 ;;          (fixnum))
 
+;;;;;;;;;;;;;;;;;;;;;;; Display and Debug display ;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(define ___scm-lib-debug___ #t)
+
+(define (show . args)
+  (for-each (lambda (x) (if (string? x) (display x) (write x))) args))
+
+(define (debug-show . args)
+  (if (and ___scm-lib-debug___ (not (null? args)))
+      (apply show args)))
+  
 
 ;;;;;;;;;;;;;;;;;;;;;;; list operations ;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -75,6 +86,39 @@
             (loop (cdr l1) acc)
             (loop (cdr l1) (cons (car l1) acc))))))
 
+(define (take lst n)
+  (if (< n 1)
+      '()
+      (cons (car lst) (take (cdr lst) (- n 1)))))
+
+(define (drop lst n)
+  (if (or (< n 1) (not (pair? lst)))
+      lst
+      (drop (cdr lst) (- n 1))))
+
+(define (take-right lst n)
+  (let lp ((lag lst)  (lead (drop lst n)))
+    (if (pair? lead)
+        (lp (cdr lag) (cdr lead))
+        lag)))
+
+(define (drop-right lst n)
+  (let recur ((lag lst) (lead (drop lst n)))
+    (if (pair? lead)
+        (cons (car lag) (recur (cdr lag) (cdr lead)))
+        '())))
+
+
+(define (quick-sort smaller? equal? greater? lst)
+  (if (or (not (pair? lst))
+          (null? (cdr lst)))
+      lst
+      (let ((pivot (car lst)))
+        (append (quick-sort smaller? equal? greater?
+                            (filter (lambda (x) (smaller? x pivot)) lst))
+                (filter (lambda (x) (equal? x pivot)) lst)
+                (quick-sort smaller? equal? greater?
+                            (filter (lambda (x) (greater? x pivot)) lst))))))
 
 (define-macro (extremum-fonction comparator opposite-extremum)
   (let ((lst-sym (gensym 'lst-sym))
@@ -96,18 +140,56 @@
 (define maximum (extremum-fonction > -inf.0))
 (define minimum (extremum-fonction < +inf.0))
 
+(define (sum numbers)
+  (if (not (pair? numbers)) (error "sum: must sum a list of arguments"))
+  (let loop ((numbers numbers) (acc 0))
+    (if (not (pair? numbers))
+        acc
+        (loop (cdr numbers) (+ acc (car numbers))))))
+      
 (define (average sample)
-  (/ (apply + sample) (length sample)))
+  (if (not (pair? sample)) (error "Average sample must be a list."))
+  (/ (sum sample) (length sample)))
 
 (define (variance sample)
   (define mean (average sample))
   (define N (length sample))
+  (if (not (pair? sample)) (error "Variance sample must be a list."))
   (/ (fold-l (lambda (acc n) (+ (expt (- n mean) 2) acc))
              0
              sample)
      N))
 
 (define (standard-deviation sample) (sqrt (variance sample)))
+(define (create-simple-moving-avg working-set-size)
+  (define working-set '())
+  (define SMA 0)
+  (define current-mode #f)
+  
+  (define (gather-init-data new-val)
+    (set! working-set (cons new-val working-set))
+    (if (< (length working-set) working-set-size)
+        gather-init-data
+        (begin
+          (set! SMA (average working-set))
+          (set! current-mode sma-calculator))))
+  
+  (define (sma-calculator new-val)
+    (set! SMA (+ SMA
+                 (- (/ (car (take-right working-set 1)) working-set-size))
+                 (/ new-val working-set-size)))
+    (set! working-set (cons new-val (drop-right working-set 1)))
+    SMA)
+  
+  (define (dispatcher . arg)
+    (if (not (pair? arg))
+        (if (eq? current-mode sma-calculator)
+            SMA
+            'N/A)
+        (current-mode (car arg))))
+
+  (set! current-mode gather-init-data)
+  dispatcher)
 
 (define (complex-conjugate z)
   (make-rectangular (real-part z) (- (imag-part z))))
@@ -169,3 +251,17 @@
 
 ; Randomize current mrg's seed
 (random-source-randomize! default-random-source)
+;;;;;;;;;;;;;;;;;;;;;;;; Data Structures ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+;; (push element stack) -> new stack
+;; (peek stack)         -> top stack element
+;; (pop stack)          -> new stack
+(define make-stack '())
+(define push cons)   
+(define peek car)    
+(define (pop stack)  
+  (if (null? stack)
+      (error "cannot pop from empty stack")
+      (cdr stack)))
+

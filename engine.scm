@@ -1,25 +1,13 @@
 (include "scm-lib.scm")
 
-(define (generic-member comparator el list)
-  (cond
-   ((not (pair? list)) #f)
-   ((comparator el (car list)) list)
-   (else (generic-member comparator el (cdr list)))))
 
 
-(define-type 2dcoord x y)
-(define (new-pos2d x y) (make-2dcoord x y))
-; todo: could be optimised
-(define pos2d-x 2dcoord-x)
-(define pos2d-y 2dcoord-y)
-(define pos2d-set-x! 2dcoord-x-set!)
-(define pos2d-set-y! 2dcoord-y-set!)
-(define (pos2d-eq? p1 p2) equal?)
+(define-type pos2d x y)
 
 (define (inverse-dir dir . options)
   (let ((x-fact (if (memq 'x options) -1 1))
         (y-fact (if (memq 'y options) -1 1)))
-    (new-pos2d (* x-fact (pos2d-x dir))
+    (make-pos2d (* x-fact (pos2d-x dir))
                (* y-fact (pos2d-y dir)))))
 
 (define-type ship type pos)
@@ -80,19 +68,19 @@
               (if (< w (- max-x invader-spacing))
                   (begin
                     (set! invaders
-                          (cons (new-spaceship current-type (new-pos2d w h))
+                          (cons (new-spaceship current-type (make-pos2d w h))
                                 invaders))
                     (loop-w (+ w invader-spacing)))))
             (loop-h
              (+ h invader-spacing))))))
   
-  ;Warning: todo... must change the new player gen...
+  ;Warning: todo... must change the new player generation...
   (let ((walls (list (new-wall 0 -inf.0 -inf.0 +inf.0)
                      (new-wall -inf.0 0 +inf.0 -inf.0)
                      (new-wall max-x -inf.0 +inf.0 +inf.0)
                      (new-wall -inf.0 max-y +inf.0 +inf.0)))
         (player-ship (new-spaceship (get-type 'player)
-                                    (new-pos2d 40 (- max-y 30)))))
+                                    (make-pos2d 40 (- max-y 30)))))
     (make-level-struct max-y max-x invaders player-ship walls)))
 
 
@@ -146,7 +134,7 @@
 ;;              (inverse-dir dir 'x)
 ;;              dir)))
 ;;     (for-each (lambda (inv)
-;;                 (let ((next-pos (new-pos2d (* (pos2d-x used-dir)
+;;                 (let ((next-pos (make-pos2d (* (pos2d-x used-dir)
 ;;                                               (pos2d-x (spaceship-pos inv)))
 ;;                                            (* (pos2d-y used-dir)
 ;;                                               (pos2d-y (spaceship-pos inv))))))

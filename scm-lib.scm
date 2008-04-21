@@ -23,6 +23,12 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;; list operations ;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(define (generic-member comparator el list)
+  (cond
+   ((not (pair? list)) #f)
+   ((comparator el (car list)) list)
+   (else (generic-member comparator el (cdr list)))))
+
 (define (list-remove comparator el list)
   (let loop ((list list)
              (acc '()))

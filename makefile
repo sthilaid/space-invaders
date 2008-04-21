@@ -1,5 +1,7 @@
 GLUT_FILES = scm-lib.scm opengl.scm opengl-header.scm glu.scm glu-header.scm glut.scm glut-header.scm
 
+GRAPHICS_FILES = bitmaps.c
+
 SPACE_INVADERS_FILES = engine.scm user-interface.scm 
 
 PATH_TO_GAMBIT=/opt/gambit-c/current
@@ -34,7 +36,8 @@ profile_.c: $(GLUT_FILES:.scm=.o1) Question2.o1 Question2-ui.o1 profile.c
 profile.c: statprof.scm profile.scm
 	$(GSC) -c $*.scm
 
-
+user-interface.c: user-interface.scm $(GRAPHICS_FILES)
+	$(GSC) -c user-interface.scm
 
 .scm.c:
 	$(GSC) -c $*

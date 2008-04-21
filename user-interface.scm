@@ -44,25 +44,34 @@
 (c-declare "#include \"bitmaps.c\"")
 
 (define-macro (get-bitmap-param name param)
-  (let ((result-type (cond ((string=? param "pointer")     'GLubyte*)
-                           ((or (string=? param "width")
-                                (string=? param "height")) 'GLsizei)
-                           (else                           'GLfloat)))
-        (result (if (string=? param "pointer")
+  (let ((result-type (cond ((eq? param 'pointer)     'GLubyte*)
+                           ((or (eq? param 'width)
+                                (eq? param 'height)) 'GLsizei)
+                           (else                     'GLfloat)))
+        (result (if (eq? param 'pointer)
                     "___result_voidstar"
                     "___result")))
     `((c-lambda () ,result-type
-                ,(string-append result " = " name "." param ";")))))
+                ,(string-append result " = "
+                                (symbol->string name) "."
+                                (symbol->string param) ";")))))
+
+(define-macro (draw-sprite id)
+  `(glBitmap (get-bitmap-param ,id width)
+             (get-bitmap-param ,id height)
+             (get-bitmap-param ,id xorig)
+             (get-bitmap-param ,id yorig)
+             (get-bitmap-param ,id xmove)
+             (get-bitmap-param ,id ymove)
+             (get-bitmap-param ,id pointer)))
 
 (define ship-rendering-list
   `((easy ,(lambda (x y state)
-             (glColor3f 1. 1. 1.)
+             (glColor3f (random-real) (random-real) (random-real))
              (glRasterPos2i x y)
              (if (eq? state 'state1)
-                 (glBitmap 12 8 0. 0. 12. 8.
-                           (get-bitmap-param "easy1" "pointer"))
-                 (glBitmap 12 8 0. 0. 12. 8.
-                           (get-bitmap-param "easy2" "pointer")))))))
+                 (draw-sprite easy1)
+                 (draw-sprite easy2))))))
 
 (define (display-message x y msg)
   (let ((chars (map char->integer (string->list msg)))
@@ -76,8 +85,6 @@
   (glClearColor 0. 0. 0. 0.)
   (glClear GL_COLOR_BUFFER_BIT)
 
-  (glColor3f 0.0 1.0 0.0)
-
   ;; Draw invaders
   (for-each (lambda (inv)
               (let ((x (pos2d-x (spaceship-pos inv)))
@@ -85,15 +92,20 @@
                 ((cadr (assq 'easy ship-rendering-list)) x y 'state1)))
             (level-invaders current-level))
 
-
-  (if status-message
-      (display-message 0 0 status-message))
+;;   (if status-message
+;;       (display-message 0 0 status-message))
 
   (glutSwapBuffers))
 
 ;;;;;;;;;;;;;;;;;;;;;;; Viewport and projection ;;;;;;;;;;;;;;;;;;;;;;;
 
 (c-define (reshape w h) (int int) void "reshape" ""
+;;    (glViewport 0 0 w h)
+;;    (glMatrixMode GL_PROJECTION)
+;;    (glLoadIdentity)
+;;    (glOrtho 0. (exact->inexact w) 0. (exact->inexact h) -1.0 1.0)
+;;    (glMatrixMode GL_MODELVIEW))
+
   (let ((zoom-x (/ w image-width))
         (zoom-y (/ h image-height)))
     (glPointSize (exact->inexact (+ (max zoom-x zoom-y) 1)))
@@ -111,16 +123,16 @@
 
 (c-define (keyboard key x y) (unsigned-char int int) void "keyboard" ""
  (case key
-   ((#\0) (set-octave! 0))
-   ((#\1) (set-octave! 1))
-   ((#\2) (set-octave! 2))
-   ((#\3) (set-octave! 3))
-   ((#\4) (set-octave! 4))
-   ((#\5) (set-octave! 5))
-   ((#\6) (set-octave! 6))
-   ((#\7) (set-octave! 7))
-   ((#\8) (set-octave! 8))
-   ((#\9) (set-octave! 9))
+;;    ((#\0) (set-octave! 0))
+;;    ((#\1) (set-octave! 1))
+;;    ((#\2) (set-octave! 2))
+;;    ((#\3) (set-octave! 3))
+;;    ((#\4) (set-octave! 4))
+;;    ((#\5) (set-octave! 5))
+;;    ((#\6) (set-octave! 6))
+;;    ((#\7) (set-octave! 7))
+;;    ((#\8) (set-octave! 8))
+;;    ((#\9) (set-octave! 9))
 
    ;; On Escape, Ctl-q, q -> terminate the program
    ((#\x1b #\x11 #\q) (quit))
@@ -129,10 +141,10 @@
 (c-define (special-keyboard key x y)
           (unsigned-char int int) void "special_keyboard" ""
  (case key
-   ((#\e) (move-image! 0 animation-velocity))
-   ((#\g) (move-image! 0 (- animation-velocity)))
-   ((#\f) (move-image! animation-velocity 0))
-   ((#\d) (move-image! (- animation-velocity) 0))
+;;    ((#\e) (move-image! 0 animation-velocity))
+;;    ((#\g) (move-image! 0 (- animation-velocity)))
+;;    ((#\f) (move-image! animation-velocity 0))
+;;    ((#\d) (move-image! (- animation-velocity) 0))
    
    (else (pp `(received special keyboard input ,key ,x ,y)))))
 
@@ -155,10 +167,12 @@
     (glutInit argc '())
     (glutInitDisplayMode (bitwise-ior GLUT_DOUBLE GLUT_RGB))
     (glutInitWindowSize image-width image-height)
-    (glutCreateWindow "Question 2: Perlin Noise")
+    (glutCreateWindow "Space Invaders")
     
     (glPointSize 1.)
     (glDisable GL_POINT_SMOOTH)
+
+    (glPixelStorei GL_UNPACK_ALIGNMENT 1)
 
     ;(create-menu)
     

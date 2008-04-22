@@ -10,6 +10,7 @@
 
 ;; Game instance
 (define current-level #f)
+(define game-loop-thunk #f)
 
 ;;;;;;;;;;;;;;;;;;;;;;; State modification functions ;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -56,7 +57,7 @@
                                 (symbol->string name) "."
                                 (symbol->string param) ";")))))
 
-(define-macro (draw-sprite ship-type sprite-index)
+(define-macro (render-sprite ship-type sprite-index)
   (let ((id (string->symbol (string-append (symbol->string ship-type)
                                            (number->string sprite-index)))))
     `(glBitmap (get-bitmap-param ,id width)
@@ -70,20 +71,21 @@
 (define-macro (ship-renderer ship-type)
   `(lambda (x y state)
      (glRasterPos2i x y)
-     (if (eq? state 'state1)
-         (draw-sprite ,ship-type 1)
-         (draw-sprite ,ship-type 2))))
+     (case state
+       ((0) (render-sprite ,ship-type 0))
+       ((1) (render-sprite ,ship-type 1))
+       (else
+        (error "cannot draw sprite: invalid state.")))))
 
-(define render-ship
+(define render-invader-ship
   (let ((easy-renderer (ship-renderer easy))
         (medium-renderer (ship-renderer medium))
-        (hard-renderer (ship-renderer hard))
-        (player-renderer (ship-renderer player)))
+        (hard-renderer (ship-renderer hard)))
     (lambda (invader)
-      (define x (pos2d-x (spaceship-pos invader)))
-      (define y (pos2d-y (spaceship-pos invader)))
-      (define type (spaceship-type invader))
-      (define state (spaceship-state invader))
+      (define x (pos2d-x (invader-ship-pos invader)))
+      (define y (pos2d-y (invader-ship-pos invader)))
+      (define type (invader-ship-type invader))
+      (define state (invader-ship-state invader))
       (case type
         ((easy)
          (glColor3f (random-real) (random-real) (random-real))
@@ -94,10 +96,21 @@
         ((hard)
          (glColor3f (random-real) (random-real) (random-real))
          (hard-renderer x y state))
+        (else (error "Cannor render unknown ship type."))))))
+
+(define render-player-ship
+  (let ((player-renderer (ship-renderer player)))
+    (lambda (player)
+      (define x (pos2d-x (player-ship-pos player)))
+      (define y (pos2d-y (player-ship-pos player)))
+      (define type (player-ship-type player))
+      (define state (player-ship-state player))
+      (case type
         ((player)
          (glColor3f 0. 1. 0.)
          (player-renderer x y state))
         (else (error "Cannor render unknown ship type."))))))
+      
 
 (define (display-message x y msg)
   (let ((chars (map char->integer (string->list msg)))
@@ -112,9 +125,9 @@
   (glClear GL_COLOR_BUFFER_BIT)
 
   ;; Draw invaders
-  (for-each render-ship (level-invaders current-level))
+  (for-each render-invader-ship (level-invaders current-level))
 
-  (render-ship (level-player current-level))
+  (render-player-ship (level-player current-level))
 
 ;;   (if status-message
 ;;       (display-message 0 0 status-message))
@@ -149,7 +162,7 @@
  (case key
    ;; On Escape, Ctl-q, Ctl-c, Ctl-w, q -> terminate the program
    ((#\x1b #\x11 #\x03 #\x17 #\q) (quit))
-   (else (pp `(received keyboard input ,key ,x ,y)))))
+   (else (show "received keyboard input: " key ". Mouse is @ ("x","y")\n"))))
 
 (c-define (special-keyboard key x y)
           (unsigned-char int int) void "special_keyboard" ""
@@ -158,14 +171,16 @@
    (case key
      ((#\e) (pp 'up))
      ((#\g) (pp 'down))
-     ((#\f) (move-player! player speed 0))
-     ((#\d) (move-player! player (- speed) 0))
+     ((#\f) (move-player-ship! player speed 0))
+     ((#\d) (move-player-ship! player (- speed) 0))
      
-     (else (pp `(received special keyboard input ,key ,x ,y))))))
+     (else (show "received special keyboard input: " key
+                 ". Mouse is @ ("x","y")\n")))))
 
 ;;;;;;;;;;;;;;;;;;;;;;; Idle function (animation) ;;;;;;;;;;;;;;;;;;;;;;;
 
 (c-define (idle-callback) () void "idle_callback" ""
+  (game-loop-thunk)
   (thread-sleep! 0.05)
   (render-scene))
 
@@ -178,6 +193,7 @@
     (set! current-level (new-level))
     (set! image-height (level-height current-level))
     (set! image-width (level-width current-level))
+    (set! game-loop-thunk (create-game-loop-thunk current-level))
     
     (glutInit argc '())
     (glutInitDisplayMode (bitwise-ior GLUT_DOUBLE GLUT_RGB))

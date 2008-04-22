@@ -48,22 +48,6 @@ user-interface.c: user-interface.scm $(GRAPHICS_FILES)
 	$(GSC) -ld-options "-lglut" -debug-source -o $*.o1 $*.scm
 
 
-
-
-opengl-test: $(GLUT_FILES:.scm=.c) opengl-test.c opengl-test_.c
-	$(CC) $(INCLUDE_OPTIONS) -o $@ $^ $(LD_OPTIONS)
-
-opengl-test_.c: $(GLUT_FILES:.scm=.c) opengl-test.c
-	$(GSC) -link $^
-
-
-opengl-test2: $(GLUT_FILES:.scm=.c) opengl-test2.c opengl-test2_.c
-	$(CC) $(INCLUDE_OPTIONS) -o $@ $^ $(LD_OPTIONS)
-
-opengl-test2_.c: $(GLUT_FILES:.scm=.c) opengl-test2.c
-	$(GSC) -link $^
-
-
-
 clean:
 	rm -f $(GLUT_FILES:.scm=.c) $(SPACE_INVADERS_FILES:.scm=.c) *.o* opengl-test opengl-test2 space-invaders
+

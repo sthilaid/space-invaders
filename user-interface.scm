@@ -77,15 +77,16 @@
        (else
         (error "cannot draw sprite: invalid state.")))))
 
-(define render-invader-ship
+(define render-ship
   (let ((easy-renderer (ship-renderer easy))
         (medium-renderer (ship-renderer medium))
-        (hard-renderer (ship-renderer hard)))
+        (hard-renderer (ship-renderer hard))
+        (player-renderer (ship-renderer player)))
     (lambda (invader)
-      (define x (pos2d-x (invader-ship-pos invader)))
-      (define y (pos2d-y (invader-ship-pos invader)))
-      (define type (invader-ship-type invader))
-      (define state (invader-ship-state invader))
+      (define x (pos2d-x (ship-pos invader)))
+      (define y (pos2d-y (ship-pos invader)))
+      (define type (type-id (ship-type invader)))
+      (define state (ship-state invader))
       (case type
         ((easy)
          (glColor3f (random-real) (random-real) (random-real))
@@ -96,21 +97,10 @@
         ((hard)
          (glColor3f (random-real) (random-real) (random-real))
          (hard-renderer x y state))
-        (else (error "Cannor render unknown ship type."))))))
-
-(define render-player-ship
-  (let ((player-renderer (ship-renderer player)))
-    (lambda (player)
-      (define x (pos2d-x (player-ship-pos player)))
-      (define y (pos2d-y (player-ship-pos player)))
-      (define type (player-ship-type player))
-      (define state (player-ship-state player))
-      (case type
         ((player)
          (glColor3f 0. 1. 0.)
          (player-renderer x y state))
         (else (error "Cannor render unknown ship type."))))))
-      
 
 (define (display-message x y msg)
   (let ((chars (map char->integer (string->list msg)))
@@ -125,9 +115,9 @@
   (glClear GL_COLOR_BUFFER_BIT)
 
   ;; Draw invaders
-  (for-each render-invader-ship (level-invaders current-level))
+  (for-each render-ship (level-invaders current-level))
 
-  (render-player-ship (level-player current-level))
+  (render-ship (level-player current-level))
 
 ;;   (if status-message
 ;;       (display-message 0 0 status-message))
@@ -171,8 +161,8 @@
    (case key
      ((#\e) (pp 'up))
      ((#\g) (pp 'down))
-     ((#\f) (move-player-ship! player speed 0))
-     ((#\d) (move-player-ship! player (- speed) 0))
+     ((#\f) (move-ship! player speed 0))
+     ((#\d) (move-ship! player (- speed) 0))
      
      (else (show "received special keyboard input: " key
                  ". Mouse is @ ("x","y")\n")))))

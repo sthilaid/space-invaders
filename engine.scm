@@ -3,6 +3,9 @@
 
 (define invader-row-number 5)
 (define invader-col-number 11)
+(define ship-movement-speed 2)
+(define invader-spacing 16)
+
 
 (define-type pos2d x y)
 
@@ -57,7 +60,6 @@
   (define y-offset (- 265 152))
   (define max-x 228)
   (define max-y 265)
-  (define invader-spacing 16)
   
   (define (determine-type-id max-y)
     (cond ((< max-y 2) 'easy)
@@ -71,7 +73,7 @@
                (y (+ y-offset (* h invader-spacing)))
                (pos (make-pos2d x y))
                (state 1)
-               (speed (make-pos2d 0 0))
+               (speed (make-pos2d ship-movement-speed 0))
                (row h)
                (col w))
           (set! invaders
@@ -103,16 +105,24 @@
     (pos2d-x-set! pos (+ x delta-x))
     (pos2d-y-set! pos (+ y delta-y))))
 
-(define (move-ship-row! invaders row-index delta-x delta-y)
-  (for-each
-   (lambda (inv) (move-ship! inv delta-x delta-y))
-   (filter (lambda (inv) (= (invader-ship-row inv) row-index)) invaders)))
+(define (move-ship-row! level row-index)
+  (let* ((row-invaders
+          (filter (lambda (inv) (= (invader-ship-row inv) row-index))
+                  (level-invaders level)))
+         (collision? (exists (lambda (inv) (detect-collision? inv level))
+                             row-invaders))
+         (old-dx (pos2d-x (ship-speed (car row-invaders))))
+         (dx (if collision? (* old-dx -1) old-dx))
+         (dy (if collision? (- invader-spacing) 0)))
+
+    (for-each (lambda (inv) (move-ship! inv dx dy))
+              row-invaders)))
 
 (define (create-invader-event level)
   (define event-time-interval 1)
   (define (next-event row-index)
     (lambda ()
-      (move-ship-row! (level-invaders level) row-index 2 0)
+      (move-ship-row! level row-index)
       (in event-time-interval
           (next-event (modulo (+ row-index 1) invader-row-number)))))
   (next-event 0))
@@ -141,18 +151,16 @@
                        (type-width (ship-type ship2))
                        (type-height (ship-type ship2)))))))
   
-  (let ((ship-pos (ship-pos ship)))
-    (or (exists (lambda (inv) (detect-ship-col? ship inv))
-                (level-invaders level))
-        
-        (exists (lambda (wall)
-                  (rectangle-collision?
-                   (make-rect (pos2d-x (ship-pos ship))
-                              (pos2d-y (ship-pos ship))
-                              (type-width (ship-type ship))
-                              (type-height (ship-type ship)))
-                   (wall-rect wall)))
-                (level-walls level)))))
+  (or (exists (lambda (inv) (detect-ship-col? ship inv))
+              (level-invaders level))
+      (exists (lambda (wall)
+                (rectangle-collision?
+                 (make-rect (pos2d-x (ship-pos ship))
+                            (pos2d-y (ship-pos ship))
+                            (type-width (ship-type ship))
+                            (type-height (ship-type ship)))
+                 (wall-rect wall)))
+              (level-walls level))))
 
 
 (define (rectangle-collision? r1 r2)

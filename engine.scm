@@ -64,33 +64,29 @@
           ((< max-y 4) 'medium)
           (else 'hard)))
 
-  (let loop-h ((h 0))
+  (for h 0 (< h invader-row-number)
     (let ((current-type (get-type (determine-type-id h))))
-      (if (< h invader-row-number)
-          (begin
-            (let loop-w ((w 0))
-              (if (< w invader-col-number)
-                  (let ((x (+ x-offset (* w invader-spacing)))
-                        (y (+ y-offset (* h invader-spacing))))
-                    (set! invaders
-                          (cons (make-invader-ship current-type
-                                                   (make-pos2d x y)
-                                                   1
-                                                   (make-pos2d 0 0)
-                                                   h
-                                                   w)
-                                invaders))
-                    (loop-w (+ w 1)))))
-            (loop-h (+ h 1))))))
-  
-  (let ((walls (list (new-wall 0 -inf.0 -inf.0 +inf.0)
+      (for w 0 (< w invader-col-number)
+        (let* ((x (+ x-offset (* w invader-spacing)))
+               (y (+ y-offset (* h invader-spacing)))
+               (pos (make-pos2d x y))
+               (state 1)
+               (speed (make-pos2d 0 0))
+               (row h)
+               (col w))
+          (set! invaders
+                (cons (make-invader-ship current-type pos state speed row col)
+                      invaders))))))
+
+  (let* ((walls (list (new-wall 0 -inf.0 -inf.0 +inf.0)
                      (new-wall -inf.0 0 +inf.0 -inf.0)
                      (new-wall max-x -inf.0 +inf.0 +inf.0)
                      (new-wall -inf.0 max-y +inf.0 +inf.0)))
-        (player-ship (make-player-ship (get-type 'player)
-                                       (make-pos2d 22 (- max-y 240))
-                                       1
-                                       (make-pos2d 0 0))))
+         (player-type (get-type 'player))
+         (pos (make-pos2d 22 (- max-y 240)))
+         (state 1)
+         (speed (make-pos2d 0 0))
+         (player-ship (make-player-ship player-type pos state speed)))
     (make-level-struct max-y max-x invaders player-ship walls)))
 
 (define (cycle-state state) (modulo (+ state 1) 2))

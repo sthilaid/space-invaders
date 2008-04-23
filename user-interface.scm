@@ -42,9 +42,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;; Render-Sceneing function ;;;;;;;;;;;;;;;;;;;;;;;
 
 (include "opengl-header.scm")
+(include "ppm-reader.scm")
 (c-declare "#include \"bitmaps.c\"")
 
-(c-declare (generate-C-buffer-from-ppm-image "sprites/laser1.ppm"))
+(include-ppm-pixel-sprite "sprites/laser1.ppm")
 
 (define-macro (get-bitmap-param name param)
   (let ((result-type (cond ((eq? param 'pointer)     'GLubyte*)
@@ -59,6 +60,26 @@
                                 (symbol->string name) "."
                                 (symbol->string param) ";")))))
 
+(define-macro (cast-pointer new-type old-type val)
+  `((c-lambda (,old-type) ,new-type
+              ,(string-append "___result_voidstar = ("
+                              (symbol->string new-type)
+                              ")___arg1;"))
+    ,val))
+
+(define-macro (get-pixelmap-param name param)
+  (let ((result-type (cond ((eq? param 'pointer)     'GLint*)
+                           ((or (eq? param 'width)
+                                (eq? param 'height)) 'GLsizei)))
+        (result (if (eq? param 'pointer)
+                    "___result_voidstar"
+                    "___result")))
+    `((c-lambda () ,result-type
+                ,(string-append result " = "
+                                (symbol->string name) "."
+                                (symbol->string param) ";")))))
+
+
 (define-macro (render-sprite ship-type sprite-index)
   (let ((id (string->symbol (string-append (symbol->string ship-type)
                                            (number->string sprite-index)))))
@@ -69,6 +90,17 @@
                (get-bitmap-param ,id xmove)
                (get-bitmap-param ,id ymove)
                (get-bitmap-param ,id pointer))))
+
+(define-macro (render-pixel-sprite name sprite-index)
+  (let ((id (string->symbol (string-append (symbol->string name)
+                                           (number->string sprite-index)))))
+    `(glDrawPixels (get-pixelmap-param ,id width)
+                   (get-pixelmap-param ,id height)
+                   GL_RGB
+                   GL_INT
+                   (cast-pointer
+                    GLvoid* GLint* (get-pixelmap-param ,id pointer)))))
+
 
 (define-macro (ship-renderer ship-type)
   `(lambda (x y state)
@@ -83,21 +115,22 @@
   (lambda (x y state)
     (glRasterPos2i x y)
      (case state
-       ((0) (render-sprite ,ship-type 0))
-       ((1) (render-sprite ,ship-type 1))
+;       ((0) (render-pixel-sprite laser 0))
+       ((1) (render-pixel-sprite laser 1))
        (else
         (error "cannot draw sprite: invalid state.")))))
 
-(define render-ship
-  (let ((easy-renderer (ship-renderer easy))
+(define render-object
+  (let ((easy-renderer   (ship-renderer easy))
         (medium-renderer (ship-renderer medium))
-        (hard-renderer (ship-renderer hard))
-        (player-renderer (ship-renderer player)))
+        (hard-renderer   (ship-renderer hard))
+        (player-renderer (ship-renderer player))
+        (laser-renderer  (laser-renderer)))
     (lambda (invader)
-      (define x (pos2d-x (ship-pos invader)))
-      (define y (pos2d-y (ship-pos invader)))
-      (define type (type-id (ship-type invader)))
-      (define state (ship-state invader))
+      (define x (pos2d-x (game-object-pos invader)))
+      (define y (pos2d-y (game-object-pos invader)))
+      (define type (type-id (game-object-type invader)))
+      (define state (game-object-state invader))
       (case type
         ((easy)
          (glColor3f 1. 1. 1.)
@@ -111,6 +144,9 @@
         ((player)
          (glColor3f 0. 1. 0.)
          (player-renderer x y state))
+        ((laser)
+         (glColor3f 0. 1. 0.)
+         (laser-renderer x y state))
         (else (error "Cannor render unknown ship type."))))))
 
 (define (display-message x y msg)
@@ -126,9 +162,14 @@
   (glClear GL_COLOR_BUFFER_BIT)
 
   ;; Draw invaders
-  (for-each render-ship (level-invaders current-level))
+  (for-each render-object (level-invaders current-level))
 
-  (render-ship (level-player current-level))
+  (render-object (level-player current-level))
+
+  (render-object (make-game-object (make-ship-type 'laser 0 0)
+                                   (make-pos2d 50 50)
+                                   1
+                                   (make-pos2d 0 0)))
 
 ;;   (if status-message
 ;;       (display-message 0 0 status-message))

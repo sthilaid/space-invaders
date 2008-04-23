@@ -272,13 +272,13 @@
 ;; (push element stack) -> new stack
 ;; (peek stack)         -> top stack element
 ;; (pop stack)          -> new stack
-(define make-stack '())
-(define push cons)   
-(define peek car)    
-(define (pop stack)  
-  (if (null? stack)
-      (error "cannot pop from empty stack")
-      (cdr stack)))
+;; (define make-stack '())
+;; (define push cons)   
+;; (define peek car)    
+;; (define (pop stack)  
+;;   (if (null? stack)
+;;       (error "cannot pop from empty stack")
+;;       (cdr stack)))
 
 
 

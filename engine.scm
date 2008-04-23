@@ -15,11 +15,11 @@
     (make-pos2d (* x-fact (pos2d-x dir))
                (* y-fact (pos2d-y dir)))))
 
-(define-type ship type pos state speed
-  extender: define-type-of-ship)
+(define-type game-object type pos state speed
+  extender: define-type-of-game-object)
 
-(define-type-of-ship invader-ship row col)
-(define-type-of-ship player-ship)
+(define-type-of-game-object invader-ship row col)
+(define-type-of-game-object player-ship)
 
 (define-type ship-type id height width)
 (define types
@@ -96,12 +96,12 @@
 (define (cycle-state state) (modulo (+ state 1) 2))
 
 (define (move-ship! ship delta-x delta-y)
-  (let* ((pos (ship-pos ship) )
+  (let* ((pos (game-object-pos ship) )
          (x (pos2d-x pos))
          (y (pos2d-y pos))
-         (speed (ship-speed ship))
-         (state (ship-state ship)))
-    (ship-state-set! ship (cycle-state state))
+         (speed (game-object-speed ship))
+         (state (game-object-state ship)))
+    (game-object-state-set! ship (cycle-state state))
     (pos2d-x-set! speed delta-x)
     (pos2d-y-set! speed delta-y)
     (pos2d-x-set! pos (+ x delta-x))
@@ -113,7 +113,7 @@
                   (level-invaders level)))
          (collision? (exists (lambda (inv) (detect-collision? inv level))
                              row-invaders))
-         (old-dx (pos2d-x (ship-speed (car row-invaders))))
+         (old-dx (pos2d-x (game-object-speed (car row-invaders))))
          (dx (if collision? (* old-dx -1) old-dx))
          (dy (if collision? (- invader-spacing) 0)))
 
@@ -142,25 +142,25 @@
 
 (define (detect-collision? ship level)
   (define (detect-ship-col? ship1 ship2)
-    (let* ((ship1-pos (ship-pos ship1))
-           (ship2-pos (ship-pos ship2)))
+    (let* ((ship1-pos (game-object-pos ship1))
+           (ship2-pos (game-object-pos ship2)))
       (and (not (eq? ship1 ship2))
            (rectangle-collision?
             (make-rect (pos2d-x ship1-pos) (pos2d-y ship1-pos)
-                       (type-width (ship-type ship1))
-                       (type-height (ship-type ship1)))
+                       (type-width (game-object-type ship1))
+                       (type-height (game-object-type ship1)))
             (make-rect (pos2d-x ship2-pos) (pos2d-y ship2-pos)
-                       (type-width (ship-type ship2))
-                       (type-height (ship-type ship2)))))))
+                       (type-width (game-object-type ship2))
+                       (type-height (game-object-type ship2)))))))
   
   (or (exists (lambda (inv) (detect-ship-col? ship inv))
               (level-invaders level))
       (exists (lambda (wall)
                 (rectangle-collision?
-                 (make-rect (pos2d-x (ship-pos ship))
-                            (pos2d-y (ship-pos ship))
-                            (type-width (ship-type ship))
-                            (type-height (ship-type ship)))
+                 (make-rect (pos2d-x (game-object-pos ship))
+                            (pos2d-y (game-object-pos ship))
+                            (type-width (game-object-type ship))
+                            (type-height (game-object-type ship)))
                  (wall-rect wall)))
               (level-walls level))))
 

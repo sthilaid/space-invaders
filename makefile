@@ -2,7 +2,7 @@ GLUT_FILES = scm-lib.scm opengl.scm opengl-header.scm glu.scm glu-header.scm glu
 
 GRAPHICS_FILES = bitmaps.c
 
-SPACE_INVADERS_FILES = engine.scm user-interface.scm 
+SPACE_INVADERS_FILES = engine.scm user-interface.scm ppm-reader.scm
 
 PATH_TO_GAMBIT=/opt/gambit-c/current
 GAMBIT_LIB=$(PATH_TO_GAMBIT)/lib
@@ -16,7 +16,7 @@ LD_OPTIONS =-lglut -lgambc -lutil -L$(GAMBIT_LIB)
 .SUFFIXES: .c .scm .o .o1
 .PHONY: all clean shared-objects tarball welcome
 
-all: welcome space-invaders #opengl-test opengl-test2
+all: welcome space-invaders 
 
 space-invaders: $(GLUT_FILES:.scm=.c) $(SPACE_INVADERS_FILES:.scm=.c) space-invaders_.c 
 	$(CC) $(INCLUDE_OPTIONS) -o $@ $^ $(LD_OPTIONS)
@@ -25,18 +25,7 @@ space-invaders_.c: $(GLUT_FILES:.scm=.c) $(SPACE_INVADERS_FILES:.scm=.c)
 	$(GSC) -o $@ -link $^ 
 
 
-
-## Optionnal version which helps to see bottlenecks in code execution
-profile: profile.c profile_.c
-	$(CC) $(INCLUDE_OPTIONS) -o $@ $^ $(LD_OPTIONS)
-
-profile_.c: $(GLUT_FILES:.scm=.o1) Question2.o1 Question2-ui.o1 profile.c
-	$(GSC) -link profile.c
-
-profile.c: statprof.scm profile.scm
-	$(GSC) -c $*.scm
-
-user-interface.c: user-interface.scm $(GRAPHICS_FILES)
+user-interface.c: user-interface.scm $(GRAPHICS_FILES) ppm-reader.scm
 	$(GSC) -c user-interface.scm
 
 .scm.c: 

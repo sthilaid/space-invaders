@@ -12,6 +12,12 @@ typedef struct{
   GLfloat ymove;
   GLubyte* pointer;} bitmap;
 
+typedef struct{
+  GLsizei width;
+  GLsizei height;
+  GLint* pointer;} pixelmap;
+
+
 GLubyte easy0_bitmap[16] = {0x30, 0xC0,
                             0x66, 0x60,
                             0x39, 0xC0,

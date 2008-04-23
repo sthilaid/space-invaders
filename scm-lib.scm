@@ -30,6 +30,15 @@
 (define (debug-show . args)
   (if (and ___scm-lib-debug___ (not (null? args)))
       (apply show args)))
+
+(define (pipe p c)
+  (receive (out in) (open-string-pipe '(direction: output))
+    (let ((t
+           (thread-start!
+            (make-thread
+             (lambda ()
+               (with-output-to-port out p))))))
+      (with-input-from-port in c)))) 
   
 
 ;;;;;;;;;;;;;;;;;;;;;;; list operations ;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -39,6 +48,12 @@
    ((not (pair? list)) #f)
    ((comparator el (car list)) list)
    (else (generic-member comparator el (cdr list)))))
+
+(define (find-first-index comp list)
+  (cond
+   ((not (pair? list)) (error "object not found in the list"))
+   ((comp (car list)) 0)
+   (else (+ 1 (find-first-index comp (cdr list))))))
 
 (define (list-remove comparator el list)
   (let loop ((list list)
@@ -264,4 +279,6 @@
   (if (null? stack)
       (error "cannot pop from empty stack")
       (cdr stack)))
+
+
 

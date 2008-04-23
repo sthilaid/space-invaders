@@ -44,6 +44,8 @@
 (include "opengl-header.scm")
 (c-declare "#include \"bitmaps.c\"")
 
+(c-declare (generate-C-buffer-from-ppm-image "sprites/laser1.ppm"))
+
 (define-macro (get-bitmap-param name param)
   (let ((result-type (cond ((eq? param 'pointer)     'GLubyte*)
                            ((or (eq? param 'width)
@@ -77,6 +79,15 @@
        (else
         (error "cannot draw sprite: invalid state.")))))
 
+(define (laser-renderer)
+  (lambda (x y state)
+    (glRasterPos2i x y)
+     (case state
+       ((0) (render-sprite ,ship-type 0))
+       ((1) (render-sprite ,ship-type 1))
+       (else
+        (error "cannot draw sprite: invalid state.")))))
+
 (define render-ship
   (let ((easy-renderer (ship-renderer easy))
         (medium-renderer (ship-renderer medium))
@@ -89,13 +100,13 @@
       (define state (ship-state invader))
       (case type
         ((easy)
-         (glColor3f (random-real) (random-real) (random-real))
+         (glColor3f 1. 1. 1.)
          (easy-renderer x y state))
         ((medium)
-         (glColor3f (random-real) (random-real) (random-real))
+         (glColor3f 1. 1. 1.)
          (medium-renderer x y state))
         ((hard)
-         (glColor3f (random-real) (random-real) (random-real))
+         (glColor3f 1. 1. 1.)
          (hard-renderer x y state))
         ((player)
          (glColor3f 0. 1. 0.)

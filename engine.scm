@@ -3,7 +3,7 @@
 
 (define invader-row-number 5)
 (define invader-col-number 11)
-(define ship-movement-speed 2)
+(define ship-movement-speed 4)
 (define invader-spacing 16)
 
 
@@ -23,9 +23,11 @@
 
 (define-type ship-type id height width)
 (define types
+  ;; Bounding boxes for all ship types must be equal such that they
+  ;; behave the same way in the level.
   `( (easy ,(make-ship-type 'easy 8 12))
-     (medium ,(make-ship-type 'medium 8 11))
-     (hard ,(make-ship-type 'hard 8 8))
+     (medium ,(make-ship-type 'medium 8 12))
+     (hard ,(make-ship-type 'hard 8 12))
      (mothership ,(make-ship-type 'mothership 7 16))
      (player ,(make-ship-type 'player 8 13))
      (side-wall ,(make-ship-type 'side-wall 125 1))

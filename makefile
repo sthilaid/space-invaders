@@ -14,9 +14,9 @@ LD_OPTIONS =-lglut -lgambc -lutil -L$(GAMBIT_LIB)
 
 .SUFFIXES:
 .SUFFIXES: .c .scm .o .o1
-.PHONY: all clean shared-objects 
+.PHONY: all clean shared-objects tarball welcome
 
-all: space-invaders #opengl-test opengl-test2
+all: welcome space-invaders #opengl-test opengl-test2
 
 space-invaders: $(GLUT_FILES:.scm=.c) $(SPACE_INVADERS_FILES:.scm=.c) space-invaders_.c 
 	$(CC) $(INCLUDE_OPTIONS) -o $@ $^ $(LD_OPTIONS)
@@ -39,7 +39,7 @@ profile.c: statprof.scm profile.scm
 user-interface.c: user-interface.scm $(GRAPHICS_FILES)
 	$(GSC) -c user-interface.scm
 
-.scm.c:
+.scm.c: 
 	$(GSC) -c $*
 #	$(GSC) -expansion -c $*
 
@@ -47,7 +47,18 @@ user-interface.c: user-interface.scm $(GRAPHICS_FILES)
 .scm.o1:
 	$(GSC) -ld-options "-lglut" -debug-source -o $*.o1 $*.scm
 
+welcome:
+ifeq ($(PATH_TO_GAMBIT), /opt/gambit-c/current)
+	@echo Please set the PATH_TO_GAMBIT variable to your gambit\'s current installation path.
+	@echo ex: make PATH_TO_GAMBIT=/opt/gambit/current
+endif
+	@echo
 
+ALL_SCM = $(wildcard *.scm)
 clean:
-	rm -f $(GLUT_FILES:.scm=.c) $(SPACE_INVADERS_FILES:.scm=.c) *.o* opengl-test opengl-test2 space-invaders
+	rm -f $(ALL_SCM:.scm=.c) *_.c *.o* space-invaders
+
+tarball: $(wildcard *.scm) bitmaps.c makefile 
+	tar cvzf space-invaders.tar.gz $(foreach file, $^, ../space-invaders/$(file))
+
 

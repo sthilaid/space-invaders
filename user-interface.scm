@@ -171,7 +171,12 @@
 
 (c-define (idle-callback) () void "idle_callback" ""
   (game-loop-thunk)
-  (thread-sleep! 0.05)
+  ;; the sleep delay is a function such that when the level is full of
+  ;; invaders (55 invaders) then the delay is 0.15 and when there is
+  ;; no invader left, it is 0.01. Thus the equation system:
+  ;; 55x + xy = 15/100 and 0x + xy = 1/100 was solved.
+  (let ((invader-nb (length (level-invaders current-level))))
+    (thread-sleep! (+ (* 7/2750 invader-nb) 1/100)))
   (render-scene))
 
 ;;;;;;;;;;;;;;;;;;;;;;; Gui Initialization ;;;;;;;;;;;;;;;;;;;;;;;

@@ -43,22 +43,26 @@
 
 (include "opengl-header.scm")
 (include "ppm-reader.scm")
-(c-declare "#include \"bitmaps.c\"")
+(c-declare #<<end
+  #include <GL/gl.h>
+  
+  typedef struct{
+    GLsizei width;
+    GLsizei height;
+    GLubyte* pointer;} pixelmap;
+end
+)
 
 (include-ppm-pixel-sprite "sprites/laser1.ppm")
-
-(define-macro (get-bitmap-param name param)
-  (let ((result-type (cond ((eq? param 'pointer)     'GLubyte*)
-                           ((or (eq? param 'width)
-                                (eq? param 'height)) 'GLsizei)
-                           (else                     'GLfloat)))
-        (result (if (eq? param 'pointer)
-                    "___result_voidstar"
-                    "___result")))
-    `((c-lambda () ,result-type
-                ,(string-append result " = "
-                                (symbol->string name) "."
-                                (symbol->string param) ";")))))
+(include-ppm-pixel-sprite "sprites/shield0.ppm")
+(include-ppm-pixel-sprite "sprites/easy0.ppm")
+(include-ppm-pixel-sprite "sprites/easy1.ppm")
+(include-ppm-pixel-sprite "sprites/medium0.ppm")
+(include-ppm-pixel-sprite "sprites/medium1.ppm")
+(include-ppm-pixel-sprite "sprites/hard0.ppm")
+(include-ppm-pixel-sprite "sprites/hard1.ppm")
+(include-ppm-pixel-sprite "sprites/player0.ppm")
+(include-ppm-pixel-sprite "sprites/player1.ppm")
 
 (define-macro (cast-pointer new-type old-type val)
   `((c-lambda (,old-type) ,new-type
@@ -68,7 +72,7 @@
     ,val))
 
 (define-macro (get-pixelmap-param name param)
-  (let ((result-type (cond ((eq? param 'pointer)     'GLint*)
+  (let ((result-type (cond ((eq? param 'pointer)     'GLubyte*)
                            ((or (eq? param 'width)
                                 (eq? param 'height)) 'GLsizei)))
         (result (if (eq? param 'pointer)
@@ -79,35 +83,22 @@
                                 (symbol->string name) "."
                                 (symbol->string param) ";")))))
 
-
-(define-macro (render-sprite ship-type sprite-index)
-  (let ((id (string->symbol (string-append (symbol->string ship-type)
-                                           (number->string sprite-index)))))
-    `(glBitmap (get-bitmap-param ,id width)
-               (get-bitmap-param ,id height)
-               (get-bitmap-param ,id xorig)
-               (get-bitmap-param ,id yorig)
-               (get-bitmap-param ,id xmove)
-               (get-bitmap-param ,id ymove)
-               (get-bitmap-param ,id pointer))))
-
 (define-macro (render-pixel-sprite name sprite-index)
   (let ((id (string->symbol (string-append (symbol->string name)
                                            (number->string sprite-index)))))
     `(glDrawPixels (get-pixelmap-param ,id width)
                    (get-pixelmap-param ,id height)
                    GL_RGB
-                   GL_INT
-                   (cast-pointer
-                    GLvoid* GLint* (get-pixelmap-param ,id pointer)))))
-
+                   GL_UNSIGNED_BYTE
+                   (cast-pointer GLvoid* GLubyte*
+                                 (get-pixelmap-param ,id pointer)))))
 
 (define-macro (ship-renderer ship-type)
   `(lambda (x y state)
      (glRasterPos2i x y)
      (case state
-       ((0) (render-sprite ,ship-type 0))
-       ((1) (render-sprite ,ship-type 1))
+       ((0) (render-pixel-sprite ,ship-type 0))
+       ((1) (render-pixel-sprite ,ship-type 1))
        (else
         (error "cannot draw sprite: invalid state.")))))
 

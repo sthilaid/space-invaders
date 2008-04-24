@@ -52,7 +52,7 @@
         (if (eof-object? data)
             (if (not (= index 0))
                 (error "bad image format detected...")
-                (make-ppm-image width height color-depth (reverse pixels)))
+                (make-ppm-image width height color-depth pixels))
             (if (= index 2)
                 (loop 0 (read) '() (cons (reverse (cons data current-pixel))
                                          pixels))
@@ -70,7 +70,8 @@
          (c-code
           (with-output-to-string ""
             (lambda ()
-              (show "GLint " image-name "_pixelmap[" (* 3 width height) "] = {")
+              (show "GLubyte "
+                    image-name "_pixelmap[" (* 3 width height) "] = {")
               (for index 0 (< index pixel-number)
                    (let ((pixel (list-ref (ppm-image-pixels ppm-data) index)))
                      (show (car pixel) "," (cadr pixel) "," (caddr pixel))

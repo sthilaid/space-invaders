@@ -53,7 +53,13 @@
 end
 )
 
-(include-ppm-pixel-sprite "sprites/laser1.ppm")
+(include-ppm-pixel-sprite "sprites/laserA0.ppm")
+(include-ppm-pixel-sprite "sprites/laserA1.ppm")
+(include-ppm-pixel-sprite "sprites/laserB0.ppm")
+(include-ppm-pixel-sprite "sprites/laserB1.ppm")
+(include-ppm-pixel-sprite "sprites/laserB2.ppm")
+(include-ppm-pixel-sprite "sprites/laserB3.ppm")
+(include-ppm-pixel-sprite "sprites/laserB4.ppm")
 (include-ppm-pixel-sprite "sprites/shield0.ppm")
 (include-ppm-pixel-sprite "sprites/easy0.ppm")
 (include-ppm-pixel-sprite "sprites/easy1.ppm")
@@ -93,7 +99,7 @@ end
                    (cast-pointer GLvoid* GLubyte*
                                  (get-pixelmap-param ,id pointer)))))
 
-(define-macro (ship-renderer ship-type)
+(define-macro (create-ship-renderer ship-type)
   `(lambda (x y state)
      (glRasterPos2i x y)
      (case state
@@ -102,26 +108,38 @@ end
        (else
         (error "cannot draw sprite: invalid state.")))))
 
-(define (laser-renderer)
+(define (create-laserA-renderer)
   (lambda (x y state)
     (glRasterPos2i x y)
      (case state
-;       ((0) (render-pixel-sprite laser 0))
-       ((1) (render-pixel-sprite laser 1))
+       ((0) (render-pixel-sprite laserA 0))
+       ((1) (render-pixel-sprite laserA 1))
+       (else
+        (error "cannot draw sprite: invalid state.")))))
+
+(define (create-laserB-renderer)
+  (lambda (x y state)
+    (glRasterPos2i x y)
+     (case state
+       ((0) (render-pixel-sprite laserB 0))
+       ((1) (render-pixel-sprite laserB 1))
+       ((2) (render-pixel-sprite laserB 2))
+       ((3) (render-pixel-sprite laserB 3))
        (else
         (error "cannot draw sprite: invalid state.")))))
 
 (define render-object
-  (let ((easy-renderer   (ship-renderer easy))
-        (medium-renderer (ship-renderer medium))
-        (hard-renderer   (ship-renderer hard))
-        (player-renderer (ship-renderer player))
-        (laser-renderer  (laser-renderer)))
-    (lambda (invader)
-      (define x (pos2d-x (game-object-pos invader)))
-      (define y (pos2d-y (game-object-pos invader)))
-      (define type (type-id (game-object-type invader)))
-      (define state (game-object-state invader))
+  (let ((easy-renderer   (create-ship-renderer easy))
+        (medium-renderer (create-ship-renderer medium))
+        (hard-renderer   (create-ship-renderer hard))
+        (player-renderer (create-ship-renderer player))
+        (laserA-renderer  (create-laserA-renderer))
+        (laserB-renderer  (create-laserB-renderer)))
+    (lambda (obj)
+      (define x (pos2d-x (game-object-pos obj)))
+      (define y (pos2d-y (game-object-pos obj)))
+      (define type (type-id (game-object-type obj)))
+      (define state (game-object-state obj))
       (case type
         ((easy)
          (glColor3f 1. 1. 1.)
@@ -135,9 +153,12 @@ end
         ((player)
          (glColor3f 0. 1. 0.)
          (player-renderer x y state))
-        ((laser)
+        ((laserA)
          (glColor3f 0. 1. 0.)
-         (laser-renderer x y state))
+         (laserA-renderer x y state))
+        ((laserB)
+         (glColor3f 0. 1. 0.)
+         (laserB-renderer x y state))
         (else (error "Cannor render unknown ship type."))))))
 
 (define (display-message x y msg)
@@ -156,11 +177,6 @@ end
   (for-each render-object (level-invaders current-level))
 
   (render-object (level-player current-level))
-
-  (render-object (make-game-object (make-ship-type 'laser 0 0)
-                                   (make-pos2d 50 50)
-                                   1
-                                   (make-pos2d 0 0)))
 
 ;;   (if status-message
 ;;       (display-message 0 0 status-message))

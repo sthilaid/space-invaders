@@ -20,41 +20,47 @@
 
 (define-type-of-game-object invader-ship row col)
 (define-type-of-game-object player-ship)
+(define-type-of-game-object laser-obj id)
 
-(define-type ship-type id height width)
+(define-type object-type id height width)
+(define type-id object-type-id)
+(define type-height object-type-height)
+(define type-width object-type-width)
+
 (define types
   ;; Bounding boxes for all ship types must be equal such that they
   ;; behave the same way in the level.
-  `( (easy ,(make-ship-type 'easy 8 12))
-     (medium ,(make-ship-type 'medium 8 12))
-     (hard ,(make-ship-type 'hard 8 12))
-     (mothership ,(make-ship-type 'mothership 7 16))
-     (player ,(make-ship-type 'player 8 13))
-     (side-wall ,(make-ship-type 'side-wall 125 1))
-     (horiz-wall ,(make-ship-type 'horiz-wall 1 200))
+  `( (easy ,(make-object-type 'easy 8 12))
+     (medium ,(make-object-type 'medium 8 12))
+     (hard ,(make-object-type 'hard 8 12))
+     (mothership ,(make-object-type 'mothership 7 16))
+     (player ,(make-object-type 'player 8 13))
+;;      (side-wall ,(make-object-type 'side-wall 125 1))
+;;      (horiz-wall ,(make-object-type 'horiz-wall 1 200))
+     (laserA ,(make-object-type 'laserA 3 6))
+     (laserB ,(make-object-type 'laserB 3 6))
+     (laserP ,(make-object-type 'laserB 1 5))
+     (shield ,(make-object-type 'shield 22 16))
    ))
+
 (define (get-type type-name)
   (let ((type (assq type-name types)))
   (if type
       (cadr type)
       (error (string-append "no such type: " type-name)))))
 
-(define type-id ship-type-id)
-(define type-height ship-type-height)
-(define type-width ship-type-width)
-
-
 (define-type wall-struct rect)
 (define (new-wall x y width height)
   (make-wall-struct (make-rect x y width height)))
 (define wall-rect wall-struct-rect)
 
-(define-type level-struct height width invaders player walls)
-(define level-height level-struct-height)
-(define level-width level-struct-width)
-(define level-invaders level-struct-invaders)
-(define level-player level-struct-player)
-(define level-walls level-struct-walls)
+(define-type level height width invaders player walls lasers)
+;; (define level-height level-struct-height)
+;; (define level-width level-struct-width)
+;; (define level-invaders level-struct-invaders)
+;; (define level-player level-struct-player)
+;; (define level-walls level-struct-walls)
+;; (define level-lasers level-struct-lasers)
 
 (define (new-level)
   (define invaders '())
@@ -90,8 +96,9 @@
          (pos (make-pos2d 22 (- max-y 240)))
          (state 1)
          (speed (make-pos2d 0 0))
-         (player-ship (make-player-ship player-type pos state speed)))
-    (make-level-struct max-y max-x invaders player-ship walls)))
+         (player-ship (make-player-ship player-type pos state speed))
+         (lasers '()))
+    (make-level max-y max-x invaders player-ship walls lasers)))
 
 (define (cycle-state state) (modulo (+ state 1) 2))
 
@@ -119,6 +126,18 @@
 
     (for-each (lambda (inv) (move-ship! inv dx dy))
               row-invaders)))
+
+(define (shoot-laser! level laser-type shooter-obj dy)
+  (let ((x (ceiling (/ (pos2d-x (game-object-pos shooter-obj)) 2)))
+        (y (+ (pos2d-y (game-object-pos shooter-obj))
+                          (type-height (game-object-type shooter-obj)))))
+    (level-lasers-set!
+     (cons (make-laser-obj (get-type laser-type)
+                           (make-pos2d x y)
+                           0
+                           (make-pos2d 0 dy)
+                           (gensym 'laser-obj))
+           (level-lasers level)))))
 
 (define (create-invader-event level)
   (define event-time-interval 1)

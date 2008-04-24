@@ -11,6 +11,7 @@
 ;; Game instance
 (define current-level #f)
 (define game-loop-thunk #f)
+(define simulation-thread #f)
 
 ;;;;;;;;;;;;;;;;;;;;;;; State modification functions ;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -174,7 +175,7 @@ end
   (glClear GL_COLOR_BUFFER_BIT)
 
   ;; Draw invaders
-  (for-each render-object (level-invaders current-level))
+  (for-each render-object (level-all-objects current-level))
 
   (render-object (level-player current-level))
 
@@ -209,6 +210,8 @@ end
 
 (c-define (keyboard key x y) (unsigned-char int int) void "keyboard" ""
  (case key
+   ((#\space) (shoot-laser! current-level 'laserP
+                            (level-player current-level) 4))
    ;; On Escape, Ctl-q, Ctl-c, Ctl-w, q -> terminate the program
    ((#\x1b #\x11 #\x03 #\x17 #\q) (quit))
    (else (show "received keyboard input: " key ". Mouse is @ ("x","y")\n"))))
@@ -229,13 +232,7 @@ end
 ;;;;;;;;;;;;;;;;;;;;;;; Idle function (animation) ;;;;;;;;;;;;;;;;;;;;;;;
 
 (c-define (idle-callback) () void "idle_callback" ""
-  (game-loop-thunk)
-  ;; the sleep delay is a function such that when the level is full of
-  ;; invaders (55 invaders) then the delay is 0.15 and when there is
-  ;; no invader left, it is 0.01. Thus the equation system:
-  ;; 55x + xy = 15/100 and 0x + xy = 1/100 was solved.
-  (let ((invader-nb (length (level-invaders current-level))))
-    (thread-sleep! (+ (* 7/2750 invader-nb) 1/100)))
+  (thread-sleep! 0.01) ;; ~100 fps?
   (render-scene))
 
 ;;;;;;;;;;;;;;;;;;;;;;; Gui Initialization ;;;;;;;;;;;;;;;;;;;;;;;
@@ -247,7 +244,9 @@ end
     (set! current-level (new-level))
     (set! image-height (level-height current-level))
     (set! image-width (level-width current-level))
-    (set! game-loop-thunk (create-game-loop-thunk current-level))
+
+    (set! simulation-thread (make-thread (game-loop current-level)))
+    (thread-start! simulation-thread)
     
     (glutInit argc '())
     (glutInitDisplayMode (bitwise-ior GLUT_DOUBLE GLUT_RGB))

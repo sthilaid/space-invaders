@@ -61,6 +61,7 @@ end
 (include-ppm-pixel-sprite "sprites/laserB2.ppm")
 (include-ppm-pixel-sprite "sprites/laserB3.ppm")
 (include-ppm-pixel-sprite "sprites/laserB4.ppm")
+(include-ppm-pixel-sprite "sprites/laserP0.ppm")
 (include-ppm-pixel-sprite "sprites/shield0.ppm")
 (include-ppm-pixel-sprite "sprites/easy0.ppm")
 (include-ppm-pixel-sprite "sprites/easy1.ppm")
@@ -129,38 +130,38 @@ end
        (else
         (error "cannot draw sprite: invalid state.")))))
 
+(define (create-laserP-renderer)
+  (lambda (x y state)
+    (glRasterPos2i x y)
+     (case state
+       ((0) (render-pixel-sprite laserP 0))
+       (else
+        (error "cannot draw sprite: invalid state.")))))
+
+
 (define render-object
   (let ((easy-renderer   (create-ship-renderer easy))
         (medium-renderer (create-ship-renderer medium))
         (hard-renderer   (create-ship-renderer hard))
         (player-renderer (create-ship-renderer player))
         (laserA-renderer  (create-laserA-renderer))
-        (laserB-renderer  (create-laserB-renderer)))
+        (laserB-renderer  (create-laserB-renderer))
+        (laserP-renderer  (create-laserP-renderer)))
+        
     (lambda (obj)
       (define x (pos2d-x (game-object-pos obj)))
       (define y (pos2d-y (game-object-pos obj)))
       (define type (type-id (game-object-type obj)))
       (define state (game-object-state obj))
       (case type
-        ((easy)
-         (glColor3f 1. 1. 1.)
-         (easy-renderer x y state))
-        ((medium)
-         (glColor3f 1. 1. 1.)
-         (medium-renderer x y state))
-        ((hard)
-         (glColor3f 1. 1. 1.)
-         (hard-renderer x y state))
-        ((player)
-         (glColor3f 0. 1. 0.)
-         (player-renderer x y state))
-        ((laserA)
-         (glColor3f 0. 1. 0.)
-         (laserA-renderer x y state))
-        ((laserB)
-         (glColor3f 0. 1. 0.)
-         (laserB-renderer x y state))
-        (else (error "Cannor render unknown ship type."))))))
+        ((easy)   (easy-renderer x y state))
+        ((medium) (medium-renderer x y state))
+        ((hard)   (hard-renderer x y state))
+        ((player) (player-renderer x y state))
+        ((laserA) (laserA-renderer x y state))
+        ((laserB) (laserB-renderer x y state))
+        ((laserP) (laserP-renderer x y state))
+        (else (error "Cannor render unknown object type."))))))
 
 (define (display-message x y msg)
   (let ((chars (map char->integer (string->list msg)))
@@ -208,26 +209,26 @@ end
 
 ;;;;;;;;;;;;;;;;;;;;;;; User I/O ;;;;;;;;;;;;;;;;;;;;;;;
 
+(define (register-user-action action)
+  (thread-send simulation-thread action))
+
 (c-define (keyboard key x y) (unsigned-char int int) void "keyboard" ""
  (case key
-   ((#\space) (shoot-laser! current-level 'laserP
-                            (level-player current-level) 4))
+   ((#\space) (register-user-action 'shoot-laser))
    ;; On Escape, Ctl-q, Ctl-c, Ctl-w, q -> terminate the program
    ((#\x1b #\x11 #\x03 #\x17 #\q) (quit))
    (else (show "received keyboard input: " key ". Mouse is @ ("x","y")\n"))))
 
 (c-define (special-keyboard key x y)
           (unsigned-char int int) void "special_keyboard" ""
- (let ((player (level-player current-level))
-       (speed 4))
-   (case key
-     ((#\e) (pp 'up))
-     ((#\g) (pp 'down))
-     ((#\f) (move-ship! player speed 0))
-     ((#\d) (move-ship! player (- speed) 0))
-     
-     (else (show "received special keyboard input: " key
-                 ". Mouse is @ ("x","y")\n")))))
+ (case key
+   ((#\e) (pp 'up))
+   ((#\g) (pp 'down))
+   ((#\f) (register-user-action 'move-right))
+   ((#\d) (register-user-action 'move-left))
+   
+   (else (show "received special keyboard input: " key
+               ". Mouse is @ ("x","y")\n"))))
 
 ;;;;;;;;;;;;;;;;;;;;;;; Idle function (animation) ;;;;;;;;;;;;;;;;;;;;;;;
 

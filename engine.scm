@@ -5,6 +5,8 @@
 (define invader-col-number 11)
 (define ship-movement-speed 4)
 (define invader-spacing 16)
+(define player-laser-speed 4)
+(define player-movement-speed 4)
 
 
 (define-type pos2d x y)
@@ -39,7 +41,7 @@
 ;;      (horiz-wall ,(make-object-type 'horiz-wall 1 200))
      (laserA ,(make-object-type 'laserA 3 6))
      (laserB ,(make-object-type 'laserB 3 6))
-     (laserP ,(make-object-type 'laserB 1 5))
+     (laserP ,(make-object-type 'laserP 1 5))
      (shield ,(make-object-type 'shield 22 16))
    ))
 
@@ -115,7 +117,7 @@
 
 (define (cycle-state state) (modulo (+ state 1) 2))
 
-(define (move-ship! ship delta-x delta-y)
+(define (move-object! ship delta-x delta-y)
   (let* ((pos (game-object-pos ship) )
          (x (pos2d-x pos))
          (y (pos2d-y pos))
@@ -137,15 +139,18 @@
          (dx (if collision? (* old-dx -1) old-dx))
          (dy (if collision? (- invader-spacing) 0)))
 
-    (for-each (lambda (inv) (move-ship! inv dx dy))
+    (for-each (lambda (inv) (move-object! inv dx dy))
               row-invaders)))
 
 (define (shoot-laser! level laser-type shooter-obj dy)
   (let* ((shooter-x (pos2d-x (game-object-pos shooter-obj)))
-         (x (+ shooter-x (ceiling (/ (type-width (game-object-type shooter-obj))
-                                     2))))
-         (y (+ (pos2d-y (game-object-pos shooter-obj))
-               (type-height (game-object-type shooter-obj)))))
+         (shooter-y (pos2d-y (game-object-pos shooter-obj)))
+         (x (+ shooter-x (floor (/ (type-width (game-object-type shooter-obj))
+                                   2))))
+         (y (if (< dy 0)
+                shooter-y
+                (+ shooter-y
+                   (type-height (game-object-type shooter-obj))))))
     (level-add-object level
                       (make-laser-obj (gensym 'laser-obj)
                                       (get-type laser-type)
@@ -154,7 +159,7 @@
                                       (make-pos2d 0 dy)))))
 
 (define (create-invader-event level)
-  (define event-time-interval 1)
+  (define event-time-interval 10)
   (define (next-event row-index)
     (lambda ()
       (move-ship-row! level row-index)
@@ -169,17 +174,35 @@
           (next-event (modulo (+ row-index 1) invader-row-number)))))
   (next-event 0))
 
-(define (manager-event)
+;; (define (create-laser-event level)
+;;   (define (laser-event)
+;;     (move-left
+
+(define (create-manager-event current-level)
   (define manager-time-interfal 1)
-  'read-mailbox
-  'manage-stuff
-  (in manager-time-interfal manager-event))
+  (define player (level-player current-level))
+
+  (define (manager-event)
+    (define msg (thread-receive 0 #f))
+    (if msg
+        (case msg
+          ((shoot-laser) (shoot-laser! current-level 'laserP
+                                       (level-player current-level)
+                                       player-laser-speed))
+          ((move-right)  (move-object! player player-movement-speed 0))
+          ((move-left)   (move-object! player (- player-movement-speed) 0))
+          (else (error "Unknown message received in manager event."))))
+    
+    (in manager-time-interfal manager-event))
+
+  manager-event)
 
 (define (game-loop level)
   (define sim (create-simulation))
 
   (lambda ()
     (schedule-event! sim 0 (create-invader-event level))
+    (schedule-event! sim 0 (create-manager-event level))
     (start-simulation! sim +inf.0)))
 
 

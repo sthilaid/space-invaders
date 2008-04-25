@@ -58,6 +58,9 @@
                                          pixels))
                 (loop (+ index 1) (read) (cons data current-pixel) pixels))))))
 
+  (if (not (file-exists? filename))
+      (error (string-append "Image " filename " does not exists.")))
+  
   (let* ((image-name (path-strip-directory
                       (path-strip-extension filename)))
          (ppm-data

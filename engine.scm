@@ -229,10 +229,13 @@
     (move-object! laser-obj 0 dy)
     (let ((collision-obj (detect-collision? laser-obj level)))
       (if collision-obj
-          (cond
-           ((invader-ship? collision-obj)
-            (level-remove-object level collision-obj)
-            (level-remove-object level laser-obj)))
+          (begin
+            (cond
+             ((or (invader-ship? collision-obj)
+                  (laser-obj? collision-obj))
+              (level-remove-object level collision-obj)))
+             (level-remove-object level laser-obj))
+          
           (in laser-update-interval laser-event))))
 
   laser-event)

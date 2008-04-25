@@ -71,16 +71,16 @@
    (else (filter pred (cdr list)))))
 
 (define (exists pred list)
-  (let loop ((list list) (acc #f))
-    (if (not (pair? list))
-        acc
-        (loop (cdr list) (or acc (pred (car list)))))))
+  (cond
+   ((not (pair? list)) #f)
+   ((pred (car list)) (car list))
+   (else  (exists pred (cdr list)))))
 
 (define (forall pred list)
-  (let loop ((list list) (acc #t))
-    (if (not (pair? list))
-        acc
-        (loop (cdr list) (and acc (pred (car list)))))))
+  (cond
+   ((not (pair? list)) #t)
+   ((not (pred (car list))) #f)
+   (else (forall pred (cdr list)))))
 
 (define (fold-l f acc list)
   (if (not (pair? list))

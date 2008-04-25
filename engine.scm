@@ -3,10 +3,12 @@
 
 (define invader-row-number 5)
 (define invader-col-number 11)
-(define ship-movement-speed 4)
 (define invader-spacing 16)
-(define player-laser-speed 4)
-(define player-movement-speed 4)
+
+(define ship-movement-speed 4)
+(define player-movement-speed 1)
+(define player-laser-speed 1)
+(define invader-laser-speed 1)
 
 
 (define-type pos2d x y)
@@ -24,7 +26,7 @@
 (define-type-of-game-object player-ship)
 (define-type-of-game-object laser-obj)
 
-(define-type object-type id height width)
+(define-type object-type id height width state-num)
 (define type-id object-type-id)
 (define type-height object-type-height)
 (define type-width object-type-width)
@@ -32,17 +34,17 @@
 (define types
   ;; Bounding boxes for all ship types must be equal such that they
   ;; behave the same way in the level.
-  `( (easy ,(make-object-type 'easy 8 12))
-     (medium ,(make-object-type 'medium 8 12))
-     (hard ,(make-object-type 'hard 8 12))
-     (mothership ,(make-object-type 'mothership 7 16))
-     (player ,(make-object-type 'player 8 13))
+  `( (easy ,(make-object-type 'easy 8 12 2))
+     (medium ,(make-object-type 'medium 8 12 2))
+     (hard ,(make-object-type 'hard 8 12 2))
+     (mothership ,(make-object-type 'mothership 7 16 1))
+     (player ,(make-object-type 'player 8 13 1))
 ;;      (side-wall ,(make-object-type 'side-wall 125 1))
 ;;      (horiz-wall ,(make-object-type 'horiz-wall 1 200))
-     (laserA ,(make-object-type 'laserA 3 6))
-     (laserB ,(make-object-type 'laserB 3 6))
-     (laserP ,(make-object-type 'laserP 1 5))
-     (shield ,(make-object-type 'shield 22 16))
+     (laserA ,(make-object-type 'laserA 3 6 2))
+     (laserB ,(make-object-type 'laserB 3 6 3))
+     (laserP ,(make-object-type 'laserP 1 5 1))
+     (shield ,(make-object-type 'shield 22 16 1))
    ))
 
 (define (get-type type-name)
@@ -56,20 +58,66 @@
   (make-wall-struct (make-rect x y width height)))
 (define wall-rect wall-struct-rect)
 
-(define-type level height width object-table walls) ;invaders player lasers
+
+(define-type rec-mutex owner sem mutex)
+(define (make-recursive-mutex)
+  (make-rec-mutex (current-thread) 0 (make-mutex)))
+  
+(define (recursive-mutex-lock! rec-mut)
+  (if (not (eq? (rec-mutex-owner rec-mut) (current-thread)))
+      (mutex-lock! (rec-mutex-mutex rec-mut))
+      (begin
+        (rec-mutex-sem-set! rec-mut (+ (rec-mutex-sem rec-mut) 1))
+        #t)))
+
+(define (recursive-mutex-unlock! rec-mut)
+  (define sem (rec-mutex-sem rec-mut))
+    (if (or (not (eq? (rec-mutex-owner rec-mut) (current-thread)))
+            (= sem 1))
+      (mutex-unlock! (rec-mutex-mutex rec-mut))
+      (begin
+        (rec-mutex-sem-set! rec-mut (- (rec-mutex-sem rec-mut) 1))
+        #t)))
+
+(define-macro (critical-section mutex . body)
+  (let ((result (gensym 'result)))
+  `(begin
+     (pp `(thread ,(current-thread) tries to take the mutex))
+     (recursive-mutex-lock! ,mutex)
+     (pp `(thread ,(current-thread) inside CRIT SECT))
+     (let ((,result (begin ,@body)))
+       (pp `(thread ,(current-thread) released the mutex))
+       (recursive-mutex-unlock! ,mutex)
+       ,result))))
+
+(define-macro (level-critical-section lvl . body)
+  `(critical-section (level-mutex ,lvl) ,@body))
+
+(define-type level height width object-table walls mutex)
 (define (level-add-object lvl obj)
-  (table-set! (level-object-table lvl) (game-object-id obj) obj))
+;;   (level-critical-section
+;;    lvl
+   (table-set! (level-object-table lvl) (game-object-id obj) obj))
+
 (define (level-remove-object lvl obj)
-  (table-set! (level-object-table lvl) (game-object-id obj)))
+;;   (level-critical-section
+;;    lvl
+   (table-set! (level-object-table lvl) (game-object-id obj)))
 
 (define (level-all-objects lvl)
-  (map cdr (table->list (level-object-table lvl))))
+;;   (level-critical-section
+;;    lvl
+   (map cdr (table->list (level-object-table lvl))))
 
 (define (level-invaders lvl)
-  (filter invader-ship? (level-all-objects lvl)))
+;;   (level-critical-section
+;;    lvl
+   (filter invader-ship? (level-all-objects lvl)))
           
 (define (level-player lvl)
-  (table-ref (level-object-table lvl) 'player))
+;;   (level-critical-section
+;;    lvl
+   (table-ref (level-object-table lvl) 'player))
 
 (define (new-level)
   (define invaders '())
@@ -108,39 +156,41 @@
          (speed (make-pos2d 0 0))
          (player-ship (make-player-ship 'player
                                         player-type pos state speed))
-         (lasers '())
-         (lvl (make-level max-y max-x (make-table) walls)))
+         (lvl (make-level max-y max-x (make-table)
+                          walls (make-recursive-mutex))))
     (for-each (lambda (x) (level-add-object lvl x)) invaders)
     (level-add-object lvl player-ship)
     lvl))
               
 
-(define (cycle-state state) (modulo (+ state 1) 2))
+(define (cycle-state! obj)
+  (game-object-state-set!
+   obj (modulo (+ (game-object-state obj) 1)
+               (object-type-state-num (game-object-type obj)))))
 
-(define (move-object! ship delta-x delta-y)
-  (let* ((pos (game-object-pos ship) )
+(define (move-object! obj delta-x delta-y)
+  (let* ((pos (game-object-pos obj) )
          (x (pos2d-x pos))
          (y (pos2d-y pos))
-         (speed (game-object-speed ship))
-         (state (game-object-state ship)))
-    (game-object-state-set! ship (cycle-state state))
+         (speed (game-object-speed obj)))
+    (cycle-state! obj)
     (pos2d-x-set! speed delta-x)
     (pos2d-y-set! speed delta-y)
     (pos2d-x-set! pos (+ x delta-x))
     (pos2d-y-set! pos (+ y delta-y))))
 
 (define (move-ship-row! level row-index)
-  (let* ((row-invaders
-          (filter (lambda (inv) (= (invader-ship-row inv) row-index))
-                  (level-invaders level)))
-         (collision? (exists (lambda (inv) (detect-collision? inv level))
-                             row-invaders))
-         (old-dx (pos2d-x (game-object-speed (car row-invaders))))
-         (dx (if collision? (* old-dx -1) old-dx))
-         (dy (if collision? (- invader-spacing) 0)))
-
-    (for-each (lambda (inv) (move-object! inv dx dy))
-              row-invaders)))
+  (define row-invaders
+    (filter (lambda (inv) (= (invader-ship-row inv) row-index))
+            (level-invaders level)))
+  (if (not (null? row-invaders))
+      (let* ((collision? (exists (lambda (inv) (detect-collision? inv level))
+                                 row-invaders))
+             (old-dx (pos2d-x (game-object-speed (car row-invaders))))
+             (dx (if collision? (* old-dx -1) old-dx))
+             (dy (if collision? (- invader-spacing) 0)))
+        (for-each (lambda (inv) (move-object! inv dx dy))
+                  row-invaders))))
 
 (define (shoot-laser! level laser-type shooter-obj dy)
   (let* ((shooter-x (pos2d-x (game-object-pos shooter-obj)))
@@ -150,36 +200,45 @@
          (y (if (< dy 0)
                 shooter-y
                 (+ shooter-y
-                   (type-height (game-object-type shooter-obj))))))
-    (level-add-object level
-                      (make-laser-obj (gensym 'laser-obj)
+                   (type-height (game-object-type shooter-obj)))))
+         (laser-obj (make-laser-obj (gensym 'laser-obj)
                                       (get-type laser-type)
                                       (make-pos2d x y)
                                       0
-                                      (make-pos2d 0 dy)))))
+                                      (make-pos2d 0 dy))))
+    (in 0 (create-laser-event laser-obj level dy))
+    (level-add-object level laser-obj)))
 
 (define (create-invader-event level)
-  (define event-time-interval 10)
   (define (next-event row-index)
     (lambda ()
       (move-ship-row! level row-index)
-      (if (= row-index (- invader-row-number 1))
-          ;; the sleep delay is a function such that when the level is full of
-          ;; invaders (55 invaders) then the delay is 0.15 and when there is
-          ;; no invader left, it is 0.01. Thus the equation system:
-          ;; 55x + xy = 15/100 and 0x + xy = 1/100 was solved.
-          (let ((invader-nb (length (level-invaders current-level))))
-             (thread-sleep! (+ (* 7/2750 invader-nb) 1/100))))
-      (in event-time-interval
-          (next-event (modulo (+ row-index 1) invader-row-number)))))
-  (next-event 0))
+      ;; the sleep delay is a function such that when the level is full of
+      ;; invaders (55 invaders) then the delay is 0.15 and when there is
+      ;; no invader left, it is 0.01. Thus the equation system:
+      ;; 55x + xy = 15/100 and 0x + xy = 1/100 was solved.
+      (let* ((invader-nb (length (level-invaders current-level)))
+             (next-event-delay (+ (* 7/2750 invader-nb) 1/100)))
+        (in next-event-delay
+            (next-event (modulo (+ row-index 1) invader-row-number))))))
+    (next-event 0))
 
-;; (define (create-laser-event level)
-;;   (define (laser-event)
-;;     (move-left
+(define (create-laser-event laser-obj level dy)
+  (define laser-update-interval 0.01)
+  (define (laser-event)
+    (move-object! laser-obj 0 dy)
+    (let ((collision-obj (detect-collision? laser-obj level)))
+      (if collision-obj
+          (cond
+           ((invader-ship? collision-obj)
+            (level-remove-object level collision-obj)
+            (level-remove-object level laser-obj)))
+          (in laser-update-interval laser-event))))
+
+  laser-event)
 
 (define (create-manager-event current-level)
-  (define manager-time-interfal 1)
+  (define manager-time-interfal 0.01)
   (define player (level-player current-level))
 
   (define (manager-event)
@@ -192,7 +251,6 @@
           ((move-right)  (move-object! player player-movement-speed 0))
           ((move-left)   (move-object! player (- player-movement-speed) 0))
           (else (error "Unknown message received in manager event."))))
-    
     (in manager-time-interfal manager-event))
 
   manager-event)
@@ -220,9 +278,8 @@
             (make-rect (pos2d-x obj2-pos) (pos2d-y obj2-pos)
                        (type-width (game-object-type obj2))
                        (type-height (game-object-type obj2)))))))
-  
   (or (exists (lambda (inv) (detect-obj-col? ship inv))
-              (level-invaders level))
+              (level-all-objects level))
       (exists (lambda (wall)
                 (rectangle-collision?
                  (make-rect (pos2d-x (game-object-pos ship))
@@ -251,9 +308,7 @@
          (r2-y2 (+ r2-y1 (rect-height r2)))
          (r2-y-min (min r2-y1 r2-y2))
          (r2-y-max (max r2-y1 r2-y2)))
-    (if (or (< r1-x-max r2-x-min)
-            (> r1-x-min r2-x-max)
-            (< r1-y-max r2-y-min)
-            (> r1-y-min r2-y-max))
-        #f
-        #t)))
+    (not (or (< r1-x-max r2-x-min)
+             (> r1-x-min r2-x-max)
+             (< r1-y-max r2-y-min)
+             (> r1-y-min r2-y-max)))))

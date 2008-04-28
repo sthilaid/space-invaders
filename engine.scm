@@ -45,6 +45,7 @@
      (laserB ,(make-object-type 'laserB 3 6 3))
      (laserP ,(make-object-type 'laserP 1 5 1))
      (shield ,(make-object-type 'shield 22 16 1))
+     (explodeI ,(make-object-type 'explodeI 13 8 1))
    ))
 
 (define (get-type type-name)
@@ -259,6 +260,12 @@
       (shoot-laser! level (list-ref (list 'laserA 'laserB) (random-integer 2))
                     shooting-invader (- invader-laser-speed)))))
 
+(define (explode-invader! inv)
+  (game-object-type-set! inv (get-type 'explodeI))
+  (game-object-state-set! inv 0)
+  (thread-sleep! 0.3)
+  (level-remove-object! level inv))
+
 (define (create-laser-event laser-obj level dy)
   (define laser-update-interval 0.01)
   (define (laser-event)
@@ -268,14 +275,17 @@
           (begin
             (cond
              ((invader-ship? collision-obj) 
-              'todo-get-points
-              (level-remove-object! level collision-obj))
+              (pp 'todo-get-points)
+              (explode-invader! collision-obj))
+              
              ((and (laser-obj? collision-obj)
                    (not (eq? collision-obj (level-player-laser level))))
               (level-remove-object! level collision-obj)
               (in laser-update-interval (create-invader-laser-event level)))
+             
              ((player-ship? collision-obj)
-              (pp 'lose-one-life-and-restart)))
+              (pp 'todo-lose-one-life-and-restart)))
+            
             (if (not (eq? laser-obj (level-player-laser level)))
                 (in laser-update-interval (create-invader-laser-event level)))
             (level-remove-object! level laser-obj))

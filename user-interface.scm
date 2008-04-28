@@ -71,6 +71,7 @@ end
 (include-ppm-pixel-sprite "sprites/hard1.ppm")
 (include-ppm-pixel-sprite "sprites/player0.ppm")
 (include-ppm-pixel-sprite "sprites/player1.ppm")
+(include-ppm-pixel-sprite "sprites/explodeI0.ppm")
 
 (define-macro (cast-pointer new-type old-type val)
   `((c-lambda (,old-type) ,new-type
@@ -138,6 +139,13 @@ end
        (else
         (error "cannot draw sprite: invalid state.")))))
 
+(define (create-explodeI-renderer)
+  (lambda (x y state)
+    (glRasterPos2i x y)
+     (case state
+       ((0) (render-pixel-sprite explodeI 0))
+       (else
+        (error "cannot draw sprite: invalid state.")))))
 
 (define render-object
   (let ((easy-renderer   (create-ship-renderer easy))
@@ -146,7 +154,8 @@ end
         (player-renderer (create-ship-renderer player))
         (laserA-renderer  (create-laserA-renderer))
         (laserB-renderer  (create-laserB-renderer))
-        (laserP-renderer  (create-laserP-renderer)))
+        (laserP-renderer  (create-laserP-renderer))
+        (explodeI-renderer (create-explodeI-renderer)))
         
     (lambda (obj)
       (define x (pos2d-x (game-object-pos obj)))
@@ -161,6 +170,7 @@ end
         ((laserA) (laserA-renderer x y state))
         ((laserB) (laserB-renderer x y state))
         ((laserP) (laserP-renderer x y state))
+        ((explodeI) (explodeI-renderer x y state))
         (else (error "Cannor render unknown object type."))))))
 
 (define (display-message x y msg)

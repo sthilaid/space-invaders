@@ -48,7 +48,7 @@ endif
 
 ALL_SCM = $(wildcard *.scm)
 clean:
-	rm -f $(ALL_SCM:.scm=.c) *_.c *.o* space-invaders
+	rm -f $(ALL_SCM:.scm=.c) *_.c *.o* space-invaders *.tar.gz
 
 tarball: $(wildcard *.scm) $(GRAPHICS_FILES) makefile 
 	tar cvzf space-invaders.tar.gz $(foreach file, $^, ../space-invaders/$(file))

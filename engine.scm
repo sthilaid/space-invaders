@@ -260,7 +260,7 @@
       (shoot-laser! level (list-ref (list 'laserA 'laserB) (random-integer 2))
                     shooting-invader (- invader-laser-speed)))))
 
-(define (explode-invader! inv)
+(define (explode-invader! level inv)
   (game-object-type-set! inv (get-type 'explodeI))
   (game-object-state-set! inv 0)
   (thread-sleep! 0.3)
@@ -276,7 +276,7 @@
             (cond
              ((invader-ship? collision-obj) 
               (pp 'todo-get-points)
-              (explode-invader! collision-obj))
+              (explode-invader! level collision-obj))
               
              ((and (laser-obj? collision-obj)
                    (not (eq? collision-obj (level-player-laser level))))

@@ -38,7 +38,7 @@
                  (current-actions (event-heap-actions top-node))
                  (wake-time (- (time->seconds (current-time))
                                simulation-start-time)))
-            (pp `(sleeping for ,(- current-event-time wake-time)))
+;            (pp `(sleeping for ,(- current-event-time wake-time)))
             (thread-sleep! (- current-event-time wake-time))
 
             (parameterize ((!!-event-queue-!! sim)

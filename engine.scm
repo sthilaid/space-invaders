@@ -6,7 +6,7 @@
 (define invader-spacing 16)
 
 (define ship-movement-speed 4)
-(define player-movement-speed 1)
+(define player-movement-speed 5)
 (define player-laser-speed 1)
 (define invader-laser-speed 1)
 
@@ -99,7 +99,7 @@
 ;;    lvl
    (table-set! (level-object-table lvl) (game-object-id obj) obj))
 
-(define (level-remove-object lvl obj)
+(define (level-remove-object! lvl obj)
 ;;   (level-critical-section
 ;;    lvl
    (table-set! (level-object-table lvl) (game-object-id obj)))
@@ -118,6 +118,12 @@
 ;;   (level-critical-section
 ;;    lvl
    (table-ref (level-object-table lvl) 'player))
+
+(define (level-player-laser lvl)
+;;   (level-critical-section
+;;    lvl
+   (table-ref (level-object-table lvl) 'player-laser #f))
+
 
 (define (new-level)
   (define invaders '())
@@ -193,21 +199,25 @@
                   row-invaders))))
 
 (define (shoot-laser! level laser-type shooter-obj dy)
-  (let* ((shooter-x (pos2d-x (game-object-pos shooter-obj)))
-         (shooter-y (pos2d-y (game-object-pos shooter-obj)))
-         (x (+ shooter-x (floor (/ (type-width (game-object-type shooter-obj))
-                                   2))))
-         (y (if (< dy 0)
-                shooter-y
-                (+ shooter-y
-                   (type-height (game-object-type shooter-obj)))))
-         (laser-obj (make-laser-obj (gensym 'laser-obj)
-                                      (get-type laser-type)
-                                      (make-pos2d x y)
-                                      0
-                                      (make-pos2d 0 dy))))
-    (in 0 (create-laser-event laser-obj level dy))
-    (level-add-object level laser-obj)))
+  (if (not (level-player-laser level))
+      (let* ((shooter-x (pos2d-x (game-object-pos shooter-obj)))
+             (shooter-y (pos2d-y (game-object-pos shooter-obj)))
+             (x (+ shooter-x
+                   (floor (/ (type-width (game-object-type shooter-obj)) 2))))
+             (y (if (< dy 0)
+                    (- shooter-y (type-height (get-type laser-type)))
+                    (+ shooter-y
+                       (type-height (game-object-type shooter-obj)))))
+             (laser-obj (make-laser-obj
+                         (if (eq? laser-type 'laserP)
+                             'player-laser
+                             (gensym 'inv-laser))
+                         (get-type laser-type)
+                         (make-pos2d x y)
+                         0
+                         (make-pos2d 0 dy))))
+        (in 0 (create-laser-event laser-obj level dy))
+        (level-add-object level laser-obj))))
 
 (define (create-invader-event level)
   (define (next-event row-index)
@@ -223,6 +233,32 @@
             (next-event (modulo (+ row-index 1) invader-row-number))))))
     (next-event 0))
 
+(define (create-invader-laser-event level)
+  (define (rect-inv-collision? rect)
+    (lambda (inv)
+      (let* ((pos (game-object-pos inv))
+             (type (game-object-type inv))
+             (width (type-width type))
+             (heigth (type-height type))
+             (inv-rect (make-rect (pos2d-x pos) (pos2d-y pos) width heigth)))
+        (rectangle-collision? rect inv-rect))))
+                                  
+  (define (bottom-invader? inv)
+    (let* ((pos (game-object-pos inv))
+           (rect (make-rect (pos2d-x pos) (- (pos2d-y pos) 1)
+                            invader-spacing (- (pos2d-y pos)))))
+      (not (exists (rect-inv-collision? rect) (level-invaders level)))))
+                       
+  (define (get-candidates)
+    (filter bottom-invader? (level-invaders level)))
+
+  (lambda ()
+    (let* ((candidates (get-candidates))
+           (shooting-invader (list-ref candidates
+                                       (random-integer (length candidates)))))
+      (shoot-laser! level (list-ref (list 'laserA 'laserB) (random-integer 2))
+                    shooting-invader (- invader-laser-speed)))))
+
 (define (create-laser-event laser-obj level dy)
   (define laser-update-interval 0.01)
   (define (laser-event)
@@ -231,11 +267,20 @@
       (if collision-obj
           (begin
             (cond
-             ((or (invader-ship? collision-obj)
-                  (laser-obj? collision-obj))
-              (level-remove-object level collision-obj)))
-             (level-remove-object level laser-obj))
+             ((invader-ship? collision-obj) 
+              'todo-get-points
+              (level-remove-object! level collision-obj))
+             ((and (laser-obj? collision-obj)
+                   (not (eq? collision-obj (level-player-laser level))))
+              (level-remove-object! level collision-obj)
+              (in laser-update-interval (create-invader-laser-event level)))
+             ((player-ship? collision-obj)
+              (pp 'lose-one-life-and-restart)))
+            (if (not (eq? laser-obj (level-player-laser level)))
+                (in laser-update-interval (create-invader-laser-event level)))
+            (level-remove-object! level laser-obj))
           
+          ;; if no collisions, continue on with the laser motion
           (in laser-update-interval laser-event))))
 
   laser-event)
@@ -264,6 +309,7 @@
   (lambda ()
     (schedule-event! sim 0 (create-invader-event level))
     (schedule-event! sim 0 (create-manager-event level))
+    (schedule-event! sim 1 (create-invader-laser-event level))
     (start-simulation! sim +inf.0)))
 
 

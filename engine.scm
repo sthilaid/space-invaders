@@ -1,6 +1,10 @@
 (include "scm-lib.scm")
 (include "event-simulation.scm")
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Global constants
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (define invader-row-number 5)
 (define invader-col-number 11)
 (define invader-spacing 16)
@@ -11,6 +15,12 @@
 (define invader-laser-speed 1)
 
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Data Structures definitions and operations
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;; 2d position coordinate ;;;;
 (define-type pos2d x y)
 
 (define (inverse-dir dir . options)
@@ -19,18 +29,43 @@
     (make-pos2d (* x-fact (pos2d-x dir))
                (* y-fact (pos2d-y dir)))))
 
+
+;;;; Rectangle structure used in collision detection ;;;;
+(define-type rect x y width height)
+
+
+;;;; General game object description ;;;;
 (define-type game-object id type pos state speed
   extender: define-type-of-game-object)
 
+(define (cycle-state! obj)
+  (game-object-state-set!
+   obj (modulo (+ (game-object-state obj) 1)
+               (object-type-state-num (game-object-type obj)))))
+
+
+;;;; Specific game object descriptions ;;;;
 (define-type-of-game-object invader-ship row col)
 (define-type-of-game-object player-ship)
 (define-type-of-game-object laser-obj)
+(define-type-of-game-object shield-obj)
 
+(define (generate-shields)
+  (define shield-type (get-type 'shield))
+  (define speed (make-pos2d 0 0))
+  (list (make-shield-obj 'shield1 shield-type (make-pos2d  36 40) 0 speed)
+        (make-shield-obj 'shield2 shield-type (make-pos2d  81 40) 0 speed)
+        (make-shield-obj 'shield3 shield-type (make-pos2d 126 40) 0 speed)
+        (make-shield-obj 'shield4 shield-type (make-pos2d 171 40) 0 speed)))
+        
+
+;;;; Game object type definition ;;;;
 (define-type object-type id height width state-num)
 (define type-id object-type-id)
 (define type-height object-type-height)
 (define type-width object-type-width)
 
+;; Global associative list of all object types
 (define types
   ;; Bounding boxes for all ship types must be equal such that they
   ;; behave the same way in the level.
@@ -39,8 +74,6 @@
      (hard ,(make-object-type 'hard 8 12 2))
      (mothership ,(make-object-type 'mothership 7 16 1))
      (player ,(make-object-type 'player 8 13 1))
-;;      (side-wall ,(make-object-type 'side-wall 125 1))
-;;      (horiz-wall ,(make-object-type 'horiz-wall 1 200))
      (laserA ,(make-object-type 'laserA 3 6 2))
      (laserB ,(make-object-type 'laserB 3 6 3))
      (laserP ,(make-object-type 'laserP 1 5 1))
@@ -54,12 +87,15 @@
       (cadr type)
       (error (string-append "no such type: " type-name)))))
 
+
+;;;; Wall or game boundary structure ;;;;
 (define-type wall-struct rect)
 (define (new-wall x y width height)
   (make-wall-struct (make-rect x y width height)))
 (define wall-rect wall-struct-rect)
 
 
+;;;; Recursive mutex implementation ;;;;
 (define-type rec-mutex owner sem mutex)
 (define (make-recursive-mutex)
   (make-rec-mutex (current-thread) 0 (make-mutex)))
@@ -94,6 +130,8 @@
 (define-macro (level-critical-section lvl . body)
   `(critical-section (level-mutex ,lvl) ,@body))
 
+
+;;;; Game level description ;;;;
 (define-type level height width object-table walls mutex)
 (define (level-add-object lvl obj)
 ;;   (level-critical-section
@@ -125,6 +163,11 @@
 ;;    lvl
    (table-ref (level-object-table lvl) 'player-laser #f))
 
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Game Level Creation
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define (new-level)
   (define invaders '())
@@ -166,14 +209,15 @@
          (lvl (make-level max-y max-x (make-table)
                           walls (make-recursive-mutex))))
     (for-each (lambda (x) (level-add-object lvl x)) invaders)
+    (for-each (lambda (x) (level-add-object lvl x)) (generate-shields))
     (level-add-object lvl player-ship)
     lvl))
-              
 
-(define (cycle-state! obj)
-  (game-object-state-set!
-   obj (modulo (+ (game-object-state obj) 1)
-               (object-type-state-num (game-object-type obj)))))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Gameplay procedures
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define (move-object! obj delta-x delta-y)
   (let* ((pos (game-object-pos obj) )
@@ -220,6 +264,12 @@
         (in 0 (create-laser-event laser-obj level dy))
         (level-add-object level laser-obj))))
 
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Simulation Events and Game Logic
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (define (create-invader-event level)
   (define (next-event row-index)
     (lambda ()
@@ -234,6 +284,11 @@
             (next-event (modulo (+ row-index 1) invader-row-number))))))
     (next-event 0))
 
+;; An invader laser event wraps up a laser-event such that it will
+;; create a new laser that will come from a candidate invader (one
+;; that is in front of the player).
+;;
+;; The current implementation is very innefficient (O(n^2)).
 (define (create-invader-laser-event level)
   (define (rect-inv-collision? rect)
     (lambda (inv)
@@ -260,12 +315,9 @@
       (shoot-laser! level (list-ref (list 'laserA 'laserB) (random-integer 2))
                     shooting-invader (- invader-laser-speed)))))
 
-(define (explode-invader! level inv)
-  (game-object-type-set! inv (get-type 'explodeI))
-  (game-object-state-set! inv 0)
-  (thread-sleep! 0.3)
-  (level-remove-object! level inv))
-
+;; Will generate the events associated with a laser object such that
+;; it will be moved regularly dy pixels on the y axis. The game logic
+;; of a laser is thus defined by the returned event.
 (define (create-laser-event laser-obj level dy)
   (define laser-update-interval 0.01)
   (define (laser-event)
@@ -273,18 +325,22 @@
     (let ((collision-obj (detect-collision? laser-obj level)))
       (if collision-obj
           (begin
-            (cond
-             ((invader-ship? collision-obj) 
-              (pp 'todo-get-points)
-              (explode-invader! level collision-obj))
+            ;;(show "collision occured with " collision-obj "\n")
+            (cond ((invader-ship? collision-obj) 
+                   (pp 'todo-get-points)
+                   (explode-invader! level collision-obj))
               
-             ((and (laser-obj? collision-obj)
-                   (not (eq? collision-obj (level-player-laser level))))
-              (level-remove-object! level collision-obj)
-              (in laser-update-interval (create-invader-laser-event level)))
+                  ((and (laser-obj? collision-obj)
+                        (not (eq? collision-obj (level-player-laser level))))
+                   (level-remove-object! level collision-obj)
+                   (in laser-update-interval
+                       (create-invader-laser-event level)))
              
-             ((player-ship? collision-obj)
-              (pp 'todo-lose-one-life-and-restart)))
+                  ((player-ship? collision-obj)
+                   (pp 'todo-lose-one-life-and-restart))
+
+                  ((shield-obj? collision-obj)
+                   (pp 'damage-shield)))
             
             (if (not (eq? laser-obj (level-player-laser level)))
                 (in laser-update-interval (create-invader-laser-event level)))
@@ -295,6 +351,20 @@
 
   laser-event)
 
+;; dispalys an explosion where the invader was and removes it from the
+;; level. This will freeze the game events, as it seem to do in the
+;; original game.
+(define (explode-invader! level inv)
+  (define animation-duration 0.3)
+  (game-object-type-set! inv (get-type 'explodeI))
+  (game-object-state-set! inv 0)
+  (thread-sleep! animation-duration)
+  (level-remove-object! level inv))
+
+;; the manager event is a regular event that polls and handle user
+;; input by looking into the thread's mailbox. It is assumed that the
+;; discrete event simulation is perfomed in it's own thread and that
+;; user input is passed to the simulation via this mechanism.
 (define (create-manager-event current-level)
   (define manager-time-interfal 0.01)
   (define player (level-player current-level))
@@ -313,6 +383,7 @@
 
   manager-event)
 
+;; Setup of initial game events and start the simulation.
 (define (game-loop level)
   (define sim (create-simulation))
 
@@ -323,9 +394,16 @@
     (start-simulation! sim +inf.0)))
 
 
-(define-type rect x y width height)
 
-(define (detect-collision? ship level)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Collision detection
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Returns #f is the object is not colliding, else returns an object
+;; which is in collision with obj. Only one object is return, even if
+;; multiple collision are occurring.
+(define (detect-collision? obj level)
+  ;; collision detection between 2 game objects
   (define (detect-obj-col? obj1 obj2)
     (let* ((obj1-pos (game-object-pos obj1))
            (obj2-pos (game-object-pos obj2)))
@@ -337,18 +415,19 @@
             (make-rect (pos2d-x obj2-pos) (pos2d-y obj2-pos)
                        (type-width (game-object-type obj2))
                        (type-height (game-object-type obj2)))))))
-  (or (exists (lambda (inv) (detect-obj-col? ship inv))
+  ;; exists is exptected to return the object that satisfy the condition
+  (or (exists (lambda (collision-obj) (detect-obj-col? obj collision-obj))
               (level-all-objects level))
       (exists (lambda (wall)
                 (rectangle-collision?
-                 (make-rect (pos2d-x (game-object-pos ship))
-                            (pos2d-y (game-object-pos ship))
-                            (type-width (game-object-type ship))
-                            (type-height (game-object-type ship)))
+                 (make-rect (pos2d-x (game-object-pos obj))
+                            (pos2d-y (game-object-pos obj))
+                            (type-width (game-object-type obj))
+                            (type-height (game-object-type obj)))
                  (wall-rect wall)))
               (level-walls level))))
 
-
+;; Simple rectangular collision detection. Not optimized.
 (define (rectangle-collision? r1 r2)
   (let* ((r1-x1 (rect-x r1))
          (r1-x2 (+ r1-x1 (rect-width r1)))

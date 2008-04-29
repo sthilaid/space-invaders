@@ -147,6 +147,15 @@ end
        (else
         (error "cannot draw sprite: invalid state.")))))
 
+(define (create-shield-renderer)
+  (lambda (x y state)
+    (glRasterPos2i x y)
+     (case state
+       ((0) (render-pixel-sprite shield 0))
+       (else
+        (error "cannot draw sprite: invalid state.")))))
+
+
 (define render-object
   (let ((easy-renderer   (create-ship-renderer easy))
         (medium-renderer (create-ship-renderer medium))
@@ -155,7 +164,8 @@ end
         (laserA-renderer  (create-laserA-renderer))
         (laserB-renderer  (create-laserB-renderer))
         (laserP-renderer  (create-laserP-renderer))
-        (explodeI-renderer (create-explodeI-renderer)))
+        (explodeI-renderer (create-explodeI-renderer))
+        (shield-renderer (create-shield-renderer)))
         
     (lambda (obj)
       (define x (pos2d-x (game-object-pos obj)))
@@ -171,7 +181,9 @@ end
         ((laserB) (laserB-renderer x y state))
         ((laserP) (laserP-renderer x y state))
         ((explodeI) (explodeI-renderer x y state))
-        (else (error "Cannor render unknown object type."))))))
+        ((shield) (shield-renderer x y state))
+        (else (error (string-append "Cannot render unknown object type:"
+                                    (symbol->string type))))))))
 
 (define (display-message x y msg)
   (let ((chars (map char->integer (string->list msg)))

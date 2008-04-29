@@ -60,7 +60,7 @@
         
 
 ;;;; Game object type definition ;;;;
-(define-type object-type id height width state-num)
+(define-type object-type id width height state-num)
 (define type-id object-type-id)
 (define type-height object-type-height)
 (define type-width object-type-width)
@@ -69,11 +69,11 @@
 (define types
   ;; Bounding boxes for all ship types must be equal such that they
   ;; behave the same way in the level.
-  `( (easy ,(make-object-type 'easy 8 12 2))
-     (medium ,(make-object-type 'medium 8 12 2))
-     (hard ,(make-object-type 'hard 8 12 2))
-     (mothership ,(make-object-type 'mothership 7 16 1))
-     (player ,(make-object-type 'player 8 13 1))
+  `( (easy ,(make-object-type 'easy 12 8 2))
+     (medium ,(make-object-type 'medium 12 8 2))
+     (hard ,(make-object-type 'hard 12 8 2))
+     (mothership ,(make-object-type 'mothership 16 7 1))
+     (player ,(make-object-type 'player 13 8 1))
      (laserA ,(make-object-type 'laserA 3 6 2))
      (laserB ,(make-object-type 'laserB 3 6 3))
      (laserP ,(make-object-type 'laserP 1 5 1))
@@ -403,18 +403,6 @@
 ;; which is in collision with obj. Only one object is return, even if
 ;; multiple collision are occurring.
 (define (detect-collision? obj level)
-  ;; collision detection between 2 game objects
-  (define (detect-obj-col? obj1 obj2)
-    (let* ((obj1-pos (game-object-pos obj1))
-           (obj2-pos (game-object-pos obj2)))
-      (and (not (eq? obj1 obj2))
-           (rectangle-collision?
-            (make-rect (pos2d-x obj1-pos) (pos2d-y obj1-pos)
-                       (type-width (game-object-type obj1))
-                       (type-height (game-object-type obj1)))
-            (make-rect (pos2d-x obj2-pos) (pos2d-y obj2-pos)
-                       (type-width (game-object-type obj2))
-                       (type-height (game-object-type obj2)))))))
   ;; exists is exptected to return the object that satisfy the condition
   (or (exists (lambda (collision-obj) (detect-obj-col? obj collision-obj))
               (level-all-objects level))
@@ -426,6 +414,19 @@
                             (type-height (game-object-type obj)))
                  (wall-rect wall)))
               (level-walls level))))
+
+;; collision detection between 2 game objects
+(define (detect-obj-col? obj1 obj2)
+  (let* ((obj1-pos (game-object-pos obj1))
+         (obj2-pos (game-object-pos obj2)))
+    (and (not (eq? obj1 obj2))
+         (rectangle-collision?
+          (make-rect (pos2d-x obj1-pos) (pos2d-y obj1-pos)
+                     (type-width (game-object-type obj1))
+                     (type-height (game-object-type obj1)))
+          (make-rect (pos2d-x obj2-pos) (pos2d-y obj2-pos)
+                     (type-width (game-object-type obj2))
+                     (type-height (game-object-type obj2)))))))
 
 ;; Simple rectangular collision detection. Not optimized.
 (define (rectangle-collision? r1 r2)

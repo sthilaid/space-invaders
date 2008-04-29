@@ -291,6 +291,7 @@
     (let* ((candidates (get-candidates))
            (shooting-invader (list-ref candidates
                                        (random-integer (length candidates)))))
+      (pp `(next-in vader-shooting ,(game-object-id shooting-invader)))
       (shoot-laser! level (list-ref (list 'laserA 'laserB) (random-integer 2))
                     shooting-invader (- invader-laser-speed)))))
 
@@ -298,27 +299,25 @@
 ;; laser object instance of specifiex type and place it correctly next
 ;; to the shooting object.
 (define (shoot-laser! level laser-type shooter-obj dy)
-  (if (not (level-player-laser level))
-      (let* ((shooter-x (pos2d-x (game-object-pos shooter-obj)))
-             (shooter-y (pos2d-y (game-object-pos shooter-obj)))
-             (x (+ shooter-x
-                   (floor (/ (type-width (game-object-type shooter-obj)) 2))))
-             (y (if (< dy 0)
-                    (- shooter-y (type-height (get-type laser-type)))
-                    (+ shooter-y
-                       (type-height (game-object-type shooter-obj)))))
-             (laser-obj (make-laser-obj
-                         (if (eq? laser-type 'laserP)
-                             'player-laser
-                             (gensym 'inv-laser))
-                         (get-type laser-type)
-                         (make-pos2d x y)
-                         0
-                         (make-pos2d 0 dy))))
-        (in 0 (create-laser-event laser-obj level dy))
-        (level-add-object level laser-obj))))
-
-
+  (let* ((shooter-x (pos2d-x (game-object-pos shooter-obj)))
+         (shooter-y (pos2d-y (game-object-pos shooter-obj)))
+         (x (+ shooter-x
+               (floor (/ (type-width (game-object-type shooter-obj)) 2))))
+         (y (if (< dy 0)
+                (- shooter-y (type-height (get-type laser-type)))
+                (+ shooter-y
+                   (type-height (game-object-type shooter-obj)))))
+         (laser-id (if (eq? laser-type 'laserP)
+                       'player-laser
+                       (gensym 'inv-laser)))
+         (laser-obj (make-laser-obj
+                     laser-id
+                     (get-type laser-type)
+                     (make-pos2d x y)
+                     0
+                     (make-pos2d 0 dy))))
+    (in 0 (create-laser-event laser-obj level dy))
+    (level-add-object level laser-obj)))
 
 ;; Will generate the events associated with a laser object such that
 ;; it will be moved regularly dy pixels on the y axis. The game logic
@@ -333,6 +332,7 @@
             ;;(show "collision occured with " collision-obj "\n")
             (cond ((invader-ship? collision-obj) 
                    (pp 'todo-get-points)
+                   (pp `(killed invader ,(game-object-id collision-obj)))
                    (explode-invader! level collision-obj))
               
                   ((and (laser-obj? collision-obj)
@@ -392,6 +392,7 @@
 
   manager-event)
 
+;; Event that will send a message to the ui asking for a redraw.
 (define (create-redraw-event ui-thread level)
   (define refresh-rate 0.01)
   (define (duplicate obj) obj) ;;TODO: Dummy duplication!!

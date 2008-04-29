@@ -193,19 +193,29 @@ end
     (for-each (lambda (char) (glutBitmapCharacter font char))
               chars)))
 
-(c-define (render-scene) () void "render_scene" ""
+(define (render-scene level)
   (glClearColor 0. 0. 0. 0.)
   (glClear GL_COLOR_BUFFER_BIT)
 
-  ;; Draw invaders
-  (for-each render-object (level-all-objects current-level))
-
-  (render-object (level-player current-level))
+  ;; Draw all objects
+  (for-each render-object (level-all-objects level))
 
 ;;   (if status-message
 ;;       (display-message 0 0 status-message))
 
   (glutSwapBuffers))
+
+;; (c-define (render-scene) () void "render_scene" ""
+;;   (glClearColor 0. 0. 0. 0.)
+;;   (glClear GL_COLOR_BUFFER_BIT)
+
+;;   ;; Draw all objects
+;;   (for-each render-object (level-all-objects current-level))
+
+;; ;;   (if status-message
+;; ;;       (display-message 0 0 status-message))
+
+;;   (glutSwapBuffers))
 
 ;;;;;;;;;;;;;;;;;;;;;;; Viewport and projection ;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -255,8 +265,8 @@ end
 ;;;;;;;;;;;;;;;;;;;;;;; Idle function (animation) ;;;;;;;;;;;;;;;;;;;;;;;
 
 (c-define (idle-callback) () void "idle_callback" ""
-  (thread-sleep! 0.01) ;; ~100 fps?
-  (render-scene))
+  (let ((level (thread-receive)))
+    (render-scene level)))
 
 ;;;;;;;;;;;;;;;;;;;;;;; Gui Initialization ;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -268,7 +278,8 @@ end
     (set! image-height (level-height current-level))
     (set! image-width (level-width current-level))
 
-    (set! simulation-thread (make-thread (game-loop current-level)))
+    (set! simulation-thread
+          (make-thread (game-loop (current-thread) current-level)))
     (thread-start! simulation-thread)
     
     (glutInit argc '())
@@ -286,8 +297,8 @@ end
     (glutReshapeFunc reshape)
     (glutKeyboardFunc keyboard)
     (glutSpecialFunc special-keyboard)
-    (glutIdleFunc idle-callback)
-    (glutDisplayFunc render-scene)))
+    (glutIdleFunc idle-callback)))
+;    (glutDisplayFunc render-scene)))
 
 (define (usage-message) "TODO: Usage msg...\n\n")
 

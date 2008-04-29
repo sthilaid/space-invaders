@@ -243,27 +243,6 @@
         (for-each (lambda (inv) (move-object! inv dx dy))
                   row-invaders))))
 
-(define (shoot-laser! level laser-type shooter-obj dy)
-  (if (not (level-player-laser level))
-      (let* ((shooter-x (pos2d-x (game-object-pos shooter-obj)))
-             (shooter-y (pos2d-y (game-object-pos shooter-obj)))
-             (x (+ shooter-x
-                   (floor (/ (type-width (game-object-type shooter-obj)) 2))))
-             (y (if (< dy 0)
-                    (- shooter-y (type-height (get-type laser-type)))
-                    (+ shooter-y
-                       (type-height (game-object-type shooter-obj)))))
-             (laser-obj (make-laser-obj
-                         (if (eq? laser-type 'laserP)
-                             'player-laser
-                             (gensym 'inv-laser))
-                         (get-type laser-type)
-                         (make-pos2d x y)
-                         0
-                         (make-pos2d 0 dy))))
-        (in 0 (create-laser-event laser-obj level dy))
-        (level-add-object level laser-obj))))
-
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -284,7 +263,7 @@
             (next-event (modulo (+ row-index 1) invader-row-number))))))
     (next-event 0))
 
-;; An invader laser event wraps up a laser-event such that it will
+;; An invader laser event wraps up a shoot-laser! such that it will
 ;; create a new laser that will come from a candidate invader (one
 ;; that is in front of the player).
 ;;
@@ -314,6 +293,32 @@
                                        (random-integer (length candidates)))))
       (shoot-laser! level (list-ref (list 'laserA 'laserB) (random-integer 2))
                     shooting-invader (- invader-laser-speed)))))
+
+;; Wrapper function over create-laser-event which will create a new
+;; laser object instance of specifiex type and place it correctly next
+;; to the shooting object.
+(define (shoot-laser! level laser-type shooter-obj dy)
+  (if (not (level-player-laser level))
+      (let* ((shooter-x (pos2d-x (game-object-pos shooter-obj)))
+             (shooter-y (pos2d-y (game-object-pos shooter-obj)))
+             (x (+ shooter-x
+                   (floor (/ (type-width (game-object-type shooter-obj)) 2))))
+             (y (if (< dy 0)
+                    (- shooter-y (type-height (get-type laser-type)))
+                    (+ shooter-y
+                       (type-height (game-object-type shooter-obj)))))
+             (laser-obj (make-laser-obj
+                         (if (eq? laser-type 'laserP)
+                             'player-laser
+                             (gensym 'inv-laser))
+                         (get-type laser-type)
+                         (make-pos2d x y)
+                         0
+                         (make-pos2d 0 dy))))
+        (in 0 (create-laser-event laser-obj level dy))
+        (level-add-object level laser-obj))))
+
+
 
 ;; Will generate the events associated with a laser object such that
 ;; it will be moved regularly dy pixels on the y axis. The game logic
@@ -358,8 +363,12 @@
   (define animation-duration 0.3)
   (game-object-type-set! inv (get-type 'explodeI))
   (game-object-state-set! inv 0)
-  (thread-sleep! animation-duration)
-  (level-remove-object! level inv))
+  (in animation-duration (create-explode-invader-end-event! level inv)))
+
+;; Event that will stop an invader explosion animation
+(define (create-explode-invader-end-event! level inv)
+  (lambda ()
+    (level-remove-object! level inv)))
 
 ;; the manager event is a regular event that polls and handle user
 ;; input by looking into the thread's mailbox. It is assumed that the
@@ -383,14 +392,23 @@
 
   manager-event)
 
+(define (create-redraw-event ui-thread level)
+  (define refresh-rate 0.01)
+  (define (duplicate obj) obj) ;;TODO: Dummy duplication!!
+  (define (redraw-event)
+    (thread-send ui-thread (duplicate level))
+    (in refresh-rate redraw-event))
+  redraw-event)
+
 ;; Setup of initial game events and start the simulation.
-(define (game-loop level)
+(define (game-loop ui-thread level)
   (define sim (create-simulation))
 
   (lambda ()
     (schedule-event! sim 0 (create-invader-event level))
     (schedule-event! sim 0 (create-manager-event level))
     (schedule-event! sim 1 (create-invader-laser-event level))
+    (schedule-event! sim 0 (create-redraw-event ui-thread level))
     (start-simulation! sim +inf.0)))
 
 

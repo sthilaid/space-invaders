@@ -5,6 +5,9 @@
 ;; Global constants
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(define max-x 228)
+(define max-y 265)
+
 (define invader-row-number 5)
 (define invader-col-number 11)
 (define invader-spacing 16)
@@ -94,6 +97,13 @@
   (make-wall-struct (make-rect x y width height)))
 (define wall-rect wall-struct-rect)
 
+(define (generate-walls)
+  (define wall-offset 14)
+  (list (new-wall wall-offset 0 +inf.0 -inf.0)
+        (new-wall wall-offset 0 -inf.0 +inf.0)
+        (new-wall (- max-x wall-offset) max-y -inf.0 +inf.0)
+        (new-wall (- max-x wall-offset) max-y +inf.0 -inf.0)))
+
 
 ;;;; Recursive mutex implementation ;;;;
 (define-type rec-mutex owner sem mutex)
@@ -173,9 +183,6 @@
   (define invaders '())
   (define x-offset 30)
   (define y-offset (- 265 152))
-  (define max-x 228)
-  (define max-y 265)
-  
   (define (determine-type-id max-y)
     (cond ((< max-y 2) 'easy)
           ((< max-y 4) 'medium)
@@ -196,10 +203,7 @@
                                          current-type pos state speed row col)
                       invaders))))))
 
-  (let* ((walls (list (new-wall 0 0 +inf.0 -inf.0)
-                      (new-wall 0 0 -inf.0 +inf.0)
-                      (new-wall max-x max-y -inf.0 +inf.0)
-                      (new-wall max-x max-y +inf.0 -inf.0)))
+  (let* ((walls (generate-walls))
          (player-type (get-type 'player))
          (pos (make-pos2d 22 (- max-y 240)))
          (state 1)
@@ -254,11 +258,11 @@
     (lambda ()
       (move-ship-row! level row-index)
       ;; the sleep delay is a function such that when the level is full of
-      ;; invaders (55 invaders) then the delay is 0.15 and when there is
+      ;; invaders (55 invaders) then the delay is 0.3 and when there is
       ;; no invader left, it is 0.01. Thus the equation system:
-      ;; 55x + xy = 15/100 and 0x + xy = 1/100 was solved.
+      ;; 55x + xy = 3/10 and 0x + xy = 1/100 was solved.
       (let* ((invader-nb (length (level-invaders current-level)))
-             (next-event-delay (+ (* 7/2750 invader-nb) 1/100)))
+             (next-event-delay (+ (* 29/5500 invader-nb) 1/100)))
         (in next-event-delay
             (next-event (modulo (+ row-index 1) invader-row-number))))))
     (next-event 0))

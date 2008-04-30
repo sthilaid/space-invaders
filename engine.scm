@@ -21,8 +21,6 @@
 (define player-laser-speed 1)
 (define invader-laser-speed 1)
 
-
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Data Structures definitions and operations
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -50,7 +48,6 @@
    obj (modulo (+ (game-object-state obj) 1)
                (object-type-state-num (game-object-type obj)))))
 
-
 ;;;; Specific game object descriptions ;;;;
 (define-type-of-game-object invader-ship row col)
 (define-type-of-game-object player-ship)
@@ -68,7 +65,7 @@
         
 
 ;;;; Game object type definition ;;;;
-(define-type object-type id width height state-num)
+(define-type object-type id width height state-num value)
 (define type-id object-type-id)
 (define type-height object-type-height)
 (define type-width object-type-width)
@@ -77,16 +74,16 @@
 (define types
   ;; Bounding boxes for all ship types must be equal such that they
   ;; behave the same way in the level.
-  `( (easy ,(make-object-type 'easy 12 8 2))
-     (medium ,(make-object-type 'medium 12 8 2))
-     (hard ,(make-object-type 'hard 12 8 2))
-     (mothership ,(make-object-type 'mothership 16 7 1))
-     (player ,(make-object-type 'player 13 8 1))
-     (laserA ,(make-object-type 'laserA 3 6 2))
-     (laserB ,(make-object-type 'laserB 3 6 3))
-     (laserP ,(make-object-type 'laserP 1 5 1))
-     (shield ,(make-object-type 'shield 22 16 1))
-     (explodeI ,(make-object-type 'explodeI 13 8 1))
+  `( (easy ,(make-object-type 'easy 12 8 2 10))
+     (medium ,(make-object-type 'medium 12 8 2 20))
+     (hard ,(make-object-type 'hard 12 8 2 30))
+     (mothership ,(make-object-type 'mothership 16 7 1 100))
+     (player ,(make-object-type 'player 13 8 1 0))
+     (laserA ,(make-object-type 'laserA 3 6 2 0))
+     (laserB ,(make-object-type 'laserB 3 6 3 0))
+     (laserP ,(make-object-type 'laserP 1 5 1 0))
+     (shield ,(make-object-type 'shield 22 16 1 0))
+     (explodeI ,(make-object-type 'explodeI 13 8 1 0))
    ))
 
 (define (get-type type-name)
@@ -110,77 +107,27 @@
         (new-wall gamefield-max-x screen-max-y +inf.0 -inf.0)))
 
 
-;;;; Recursive mutex implementation ;;;;
-(define-type rec-mutex owner sem mutex)
-(define (make-recursive-mutex)
-  (make-rec-mutex (current-thread) 0 (make-mutex)))
-  
-(define (recursive-mutex-lock! rec-mut)
-  (if (not (eq? (rec-mutex-owner rec-mut) (current-thread)))
-      (mutex-lock! (rec-mutex-mutex rec-mut))
-      (begin
-        (rec-mutex-sem-set! rec-mut (+ (rec-mutex-sem rec-mut) 1))
-        #t)))
-
-(define (recursive-mutex-unlock! rec-mut)
-  (define sem (rec-mutex-sem rec-mut))
-    (if (or (not (eq? (rec-mutex-owner rec-mut) (current-thread)))
-            (= sem 1))
-      (mutex-unlock! (rec-mutex-mutex rec-mut))
-      (begin
-        (rec-mutex-sem-set! rec-mut (- (rec-mutex-sem rec-mut) 1))
-        #t)))
-
-(define-macro (critical-section mutex . body)
-  (let ((result (gensym 'result)))
-  `(begin
-     (pp `(thread ,(current-thread) tries to take the mutex))
-     (recursive-mutex-lock! ,mutex)
-     (pp `(thread ,(current-thread) inside CRIT SECT))
-     (let ((,result (begin ,@body)))
-       (pp `(thread ,(current-thread) released the mutex))
-       (recursive-mutex-unlock! ,mutex)
-       ,result))))
-
-(define-macro (level-critical-section lvl . body)
-  `(critical-section (level-mutex ,lvl) ,@body))
-
-
 ;;;; Game level description ;;;;
-(define-type level height width object-table walls mutex)
+(define-type level height width object-table walls score)
 (define (level-add-object! lvl obj)
-;;   (level-critical-section
-;;    lvl
    (table-set! (level-object-table lvl) (game-object-id obj) obj))
 
 (define (level-remove-object! lvl obj)
-;;   (level-critical-section
-;;    lvl
    (table-set! (level-object-table lvl) (game-object-id obj)))
 
 (define (level-all-objects lvl)
-;;   (level-critical-section
-;;    lvl
    (map cdr (table->list (level-object-table lvl))))
 
 (define (level-invaders lvl)
-;;   (level-critical-section
-;;    lvl
    (filter invader-ship? (level-all-objects lvl)))
           
 (define (level-player lvl)
-;;   (level-critical-section
-;;    lvl
    (table-ref (level-object-table lvl) 'player))
 
 (define (level-player-laser lvl)
-;;   (level-critical-section
-;;    lvl
    (table-ref (level-object-table lvl) 'player-laser #f))
 
 (define (level-mothership lvl)
-;;   (level-critical-section
-;;    lvl
    (table-ref (level-object-table lvl) 'mothership #f))
 
 
@@ -219,8 +166,7 @@
          (speed (make-pos2d 0 0))
          (player-ship (make-player-ship 'player
                                         player-type pos state speed))
-         (lvl (make-level screen-max-y screen-max-x (make-table)
-                          walls (make-recursive-mutex))))
+         (lvl (make-level screen-max-y screen-max-x (make-table) walls 0)))
     (for-each (lambda (x) (level-add-object! lvl x)) invaders)
     (for-each (lambda (x) (level-add-object! lvl x)) (generate-shields))
     (level-add-object! lvl player-ship)
@@ -280,7 +226,7 @@
              (next-event-delay (+ (* 9/5500 invader-nb) 1/100)))
         (in next-event-delay
             (next-event (modulo (+ row-index 1) invader-row-number))))))
-    (next-event 0))
+  (next-event 0))
 
 ;; Creates a new mothership and schedules its first move event.
 (define (create-new-mothership-event level)
@@ -304,7 +250,11 @@
             (begin (cond ((wall? collision-obj)
                           (level-remove-object! level mothership))
                          ((laser-obj? collision-obj)
-                          (pp 'todo-get-lots-of-points)
+                          (level-score-set!
+                           level
+                           (+ (level-score level)
+                              (object-type-value
+                               (game-object-type mothership))))
                           (explode-invader! level mothership)))
                    ;; Schedule next mothership
                    (let ((delta-t (+ (random-integer 3) 1)))
@@ -390,7 +340,10 @@
           (begin
             ;;(show "collision occured with " collision-obj "\n")
             (cond ((invader-ship? collision-obj) 
-                   (pp 'todo-get-points)
+                   (level-score-set!
+                    level (+ (level-score level)
+                             (object-type-value
+                              (game-object-type collision-obj))))
                    (explode-invader! level collision-obj))
               
                   ((and (laser-obj? collision-obj)
@@ -403,7 +356,16 @@
                    (pp 'todo-lose-one-life-and-restart))
 
                   ((shield-obj? collision-obj)
-                   (pp 'damage-shield)))
+                   (pp 'damage-shield))
+
+                  ((mothership? collision-obj)
+                   (level-score-set!
+                    level (+ (level-score level)
+                             (object-type-value
+                              (game-object-type collision-obj))))
+                   (explode-invader! level collision-obj)
+                   (let ((delta-t (+ (random-integer 3) 1)))
+                     (in delta-t (create-new-mothership-event level)))))
             
             (if (not (eq? laser-obj (level-player-laser level)))
                 (in next-invader-laser-interval
@@ -449,6 +411,7 @@
                                        player-laser-speed))
           ((move-right)  (move-object! player player-movement-speed 0))
           ((move-left)   (move-object! player (- player-movement-speed) 0))
+          ((show-score) (pp `(score is ,(level-score current-level))))
           (else (error "Unknown message received in manager event."))))
     (in manager-time-interfal manager-event))
 

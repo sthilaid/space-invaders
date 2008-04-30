@@ -223,6 +223,7 @@ end
 
 (c-define (keyboard key x y) (unsigned-char int int) void "keyboard" ""
  (case key
+   ((#\s #\S) (register-user-action 'show-score))
    ((#\space) (register-user-action 'shoot-laser))
    ;; On Escape, Ctl-q, Ctl-c, Ctl-w, q -> terminate the program
    ((#\x1b #\x11 #\x03 #\x17 #\q) (quit))

@@ -16,7 +16,7 @@
 (define invader-col-number 11)
 (define invader-spacing 16)
 
-(define ship-movement-speed 4)
+(define ship-movement-speed 1)
 (define player-movement-speed 5)
 (define player-laser-speed 1)
 (define invader-laser-speed 1)
@@ -248,12 +248,16 @@
     (filter (lambda (inv) (= (invader-ship-row inv) row-index))
             (level-invaders level)))
   (if (not (null? row-invaders))
-      (let* ((collision?
+      (let* ((collision-inv
               (exists (lambda (inv) (detect-collision? inv level))
                       row-invaders))
+             (wall-collision? (if collision-inv
+                                  (wall? (detect-collision? collision-inv
+                                                            level))
+                                  #f))
              (old-dx (pos2d-x (game-object-speed (car row-invaders))))
-             (dx (if collision? (* old-dx -1) old-dx))
-             (dy (if collision? (- invader-spacing) 0)))
+             (dx (if wall-collision? (* old-dx -1) old-dx))
+             (dy (if wall-collision? (- invader-spacing) 0)))
         (for-each (lambda (inv) (move-object! inv dx dy))
                   row-invaders))))
 
@@ -269,11 +273,11 @@
     (lambda ()
       (move-ship-row! level row-index)
       ;; the sleep delay is a function such that when the level is full of
-      ;; invaders (55 invaders) then the delay is 0.3 and when there is
+      ;; invaders (55 invaders) then the delay is 0.1 and when there is
       ;; no invader left, it is 0.01. Thus the equation system:
-      ;; 55x + xy = 3/10 and 0x + xy = 1/100 was solved.
+      ;; 55x + xy = 1/10 and 0x + xy = 1/100 was solved.
       (let* ((invader-nb (length (level-invaders current-level)))
-             (next-event-delay (+ (* 29/5500 invader-nb) 1/100)))
+             (next-event-delay (+ (* 9/5500 invader-nb) 1/100)))
         (in next-event-delay
             (next-event (modulo (+ row-index 1) invader-row-number))))))
     (next-event 0))
@@ -378,6 +382,7 @@
 (define (create-laser-event laser-obj level dy)
   (define player-laser-update-interval 0.005)
   (define invader-laser-update-interval 0.01)
+  (define next-invader-laser-interval 0.5)
   (define (laser-event)
     (move-object! laser-obj 0 dy)
     (let ((collision-obj (detect-collision? laser-obj level)))
@@ -391,7 +396,7 @@
                   ((and (laser-obj? collision-obj)
                         (not (eq? collision-obj (level-player-laser level))))
                    (level-remove-object! level collision-obj)
-                   (in invader-laser-update-interval
+                   (in next-invader-laser-interval
                        (create-invader-laser-event level)))
              
                   ((player-ship? collision-obj)
@@ -401,7 +406,7 @@
                    (pp 'damage-shield)))
             
             (if (not (eq? laser-obj (level-player-laser level)))
-                (in invader-laser-update-interval
+                (in next-invader-laser-interval
                     (create-invader-laser-event level)))
             (level-remove-object! level laser-obj))
           

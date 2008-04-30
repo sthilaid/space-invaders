@@ -69,6 +69,7 @@ end
 (include-ppm-pixel-sprite "sprites/medium1.ppm")
 (include-ppm-pixel-sprite "sprites/hard0.ppm")
 (include-ppm-pixel-sprite "sprites/hard1.ppm")
+(include-ppm-pixel-sprite "sprites/mothership0.ppm")
 (include-ppm-pixel-sprite "sprites/player0.ppm")
 (include-ppm-pixel-sprite "sprites/player1.ppm")
 (include-ppm-pixel-sprite "sprites/explodeI0.ppm")
@@ -102,6 +103,14 @@ end
                    (cast-pointer GLvoid* GLubyte*
                                  (get-pixelmap-param ,id pointer)))))
 
+(define-macro (create-single-state-renderer obj-type)
+  `(lambda (x y state)
+     (glRasterPos2i x y)
+     (case state
+       ((0) (render-pixel-sprite ,obj-type 0))
+       (else
+        (error "cannot draw sprite: invalid state.")))))
+
 (define-macro (create-ship-renderer ship-type)
   `(lambda (x y state)
      (glRasterPos2i x y)
@@ -131,29 +140,29 @@ end
        (else
         (error "cannot draw sprite: invalid state.")))))
 
-(define (create-laserP-renderer)
-  (lambda (x y state)
-    (glRasterPos2i x y)
-     (case state
-       ((0) (render-pixel-sprite laserP 0))
-       (else
-        (error "cannot draw sprite: invalid state.")))))
+;; (define (create-laserP-renderer)
+;;   (lambda (x y state)
+;;     (glRasterPos2i x y)
+;;      (case state
+;;        ((0) (render-pixel-sprite laserP 0))
+;;        (else
+;;         (error "cannot draw sprite: invalid state.")))))
 
-(define (create-explodeI-renderer)
-  (lambda (x y state)
-    (glRasterPos2i x y)
-     (case state
-       ((0) (render-pixel-sprite explodeI 0))
-       (else
-        (error "cannot draw sprite: invalid state.")))))
+;; (define (create-explodeI-renderer)
+;;   (lambda (x y state)
+;;     (glRasterPos2i x y)
+;;      (case state
+;;        ((0) (render-pixel-sprite explodeI 0))
+;;        (else
+;;         (error "cannot draw sprite: invalid state.")))))
 
-(define (create-shield-renderer)
-  (lambda (x y state)
-    (glRasterPos2i x y)
-     (case state
-       ((0) (render-pixel-sprite shield 0))
-       (else
-        (error "cannot draw sprite: invalid state.")))))
+;; (define (create-shield-renderer)
+;;   (lambda (x y state)
+;;     (glRasterPos2i x y)
+;;      (case state
+;;        ((0) (render-pixel-sprite shield 0))
+;;        (else
+;;         (error "cannot draw sprite: invalid state.")))))
 
 
 (define render-object
@@ -163,9 +172,10 @@ end
         (player-renderer (create-ship-renderer player))
         (laserA-renderer  (create-laserA-renderer))
         (laserB-renderer  (create-laserB-renderer))
-        (laserP-renderer  (create-laserP-renderer))
-        (explodeI-renderer (create-explodeI-renderer))
-        (shield-renderer (create-shield-renderer)))
+        (laserP-renderer  (create-single-state-renderer laserP))
+        (explodeI-renderer (create-single-state-renderer explodeI))
+        (shield-renderer (create-single-state-renderer shield))
+        (mothership-renderer (create-single-state-renderer mothership)))
         
     (lambda (obj)
       (define x (pos2d-x (game-object-pos obj)))
@@ -182,6 +192,7 @@ end
         ((laserP) (laserP-renderer x y state))
         ((explodeI) (explodeI-renderer x y state))
         ((shield) (shield-renderer x y state))
+        ((mothership) (mothership-renderer x y state))
         (else (error (string-append "Cannot render unknown object type:"
                                     (symbol->string type))))))))
 

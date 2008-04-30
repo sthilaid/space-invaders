@@ -5,8 +5,12 @@
 ;; Global constants
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define max-x 228)
-(define max-y 265)
+(define screen-max-x 228)
+(define screen-max-y 265)
+(define wall-offset 14)
+(define gamefield-max-x (- screen-max-x wall-offset))
+(define gamefield-max-y (- screen-max-y wall-offset))
+
 
 (define invader-row-number 5)
 (define invader-col-number 11)
@@ -50,6 +54,7 @@
 ;;;; Specific game object descriptions ;;;;
 (define-type-of-game-object invader-ship row col)
 (define-type-of-game-object player-ship)
+(define-type-of-game-object mothership)
 (define-type-of-game-object laser-obj)
 (define-type-of-game-object shield-obj)
 
@@ -95,14 +100,14 @@
 (define-type wall-struct rect)
 (define (new-wall x y width height)
   (make-wall-struct (make-rect x y width height)))
+(define wall? wall-struct?)
 (define wall-rect wall-struct-rect)
 
 (define (generate-walls)
-  (define wall-offset 14)
   (list (new-wall wall-offset 0 +inf.0 -inf.0)
         (new-wall wall-offset 0 -inf.0 +inf.0)
-        (new-wall (- max-x wall-offset) max-y -inf.0 +inf.0)
-        (new-wall (- max-x wall-offset) max-y +inf.0 -inf.0)))
+        (new-wall gamefield-max-x screen-max-y -inf.0 +inf.0)
+        (new-wall gamefield-max-x screen-max-y +inf.0 -inf.0)))
 
 
 ;;;; Recursive mutex implementation ;;;;
@@ -143,7 +148,7 @@
 
 ;;;; Game level description ;;;;
 (define-type level height width object-table walls mutex)
-(define (level-add-object lvl obj)
+(define (level-add-object! lvl obj)
 ;;   (level-critical-section
 ;;    lvl
    (table-set! (level-object-table lvl) (game-object-id obj) obj))
@@ -173,6 +178,10 @@
 ;;    lvl
    (table-ref (level-object-table lvl) 'player-laser #f))
 
+(define (level-mothership lvl)
+;;   (level-critical-section
+;;    lvl
+   (table-ref (level-object-table lvl) 'mothership #f))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -183,9 +192,9 @@
   (define invaders '())
   (define x-offset 30)
   (define y-offset (- 265 152))
-  (define (determine-type-id max-y)
-    (cond ((< max-y 2) 'easy)
-          ((< max-y 4) 'medium)
+  (define (determine-type-id y)
+    (cond ((< y 2) 'easy)
+          ((< y 4) 'medium)
           (else 'hard)))
 
   (for h 0 (< h invader-row-number)
@@ -205,16 +214,16 @@
 
   (let* ((walls (generate-walls))
          (player-type (get-type 'player))
-         (pos (make-pos2d 22 (- max-y 240)))
+         (pos (make-pos2d 22 (- screen-max-y 240)))
          (state 1)
          (speed (make-pos2d 0 0))
          (player-ship (make-player-ship 'player
                                         player-type pos state speed))
-         (lvl (make-level max-y max-x (make-table)
+         (lvl (make-level screen-max-y screen-max-x (make-table)
                           walls (make-recursive-mutex))))
-    (for-each (lambda (x) (level-add-object lvl x)) invaders)
-    (for-each (lambda (x) (level-add-object lvl x)) (generate-shields))
-    (level-add-object lvl player-ship)
+    (for-each (lambda (x) (level-add-object! lvl x)) invaders)
+    (for-each (lambda (x) (level-add-object! lvl x)) (generate-shields))
+    (level-add-object! lvl player-ship)
     lvl))
 
 
@@ -239,8 +248,9 @@
     (filter (lambda (inv) (= (invader-ship-row inv) row-index))
             (level-invaders level)))
   (if (not (null? row-invaders))
-      (let* ((collision? (exists (lambda (inv) (detect-collision? inv level))
-                                 row-invaders))
+      (let* ((collision?
+              (exists (lambda (inv) (detect-collision? inv level))
+                      row-invaders))
              (old-dx (pos2d-x (game-object-speed (car row-invaders))))
              (dx (if collision? (* old-dx -1) old-dx))
              (dy (if collision? (- invader-spacing) 0)))
@@ -253,6 +263,7 @@
 ;; Simulation Events and Game Logic
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; Event that will move a single row of invaders
 (define (create-invader-event level)
   (define (next-event row-index)
     (lambda ()
@@ -266,6 +277,37 @@
         (in next-event-delay
             (next-event (modulo (+ row-index 1) invader-row-number))))))
     (next-event 0))
+
+;; Creates a new mothership and schedules its first move event.
+(define (create-new-mothership-event level)
+  (lambda ()
+    (let ((mothership
+           (make-mothership 'mothership (get-type 'mothership)
+                            (make-pos2d wall-offset 201) 0 (make-pos2d 1 0))))
+    (level-add-object! level mothership)
+    (in 0 (create-mothership-event level mothership)))))
+    
+;; Event that moves a mothership and handles its collisions.
+(define (create-mothership-event level mothership)
+  (define mothership-update-interval 0.02)
+  (define (mothership-event)
+    (let* ((speed (game-object-speed mothership))
+           (dx (pos2d-x speed))
+           (dy (pos2d-y speed)))
+      (move-object! mothership dx dy)
+      (let ((collision-obj (detect-collision? mothership level)))
+        (if collision-obj
+            (begin (cond ((wall? collision-obj)
+                          (level-remove-object! level mothership))
+                         ((laser-obj? collision-obj)
+                          (pp 'todo-get-lots-of-points)
+                          (explode-invader! level mothership)))
+                   ;; Schedule next mothership
+                   (let ((delta-t (+ (random-integer 3) 1)))
+                     (in delta-t (create-new-mothership-event level))))
+            (in mothership-update-interval mothership-event)))))
+  mothership-event)
+    
 
 ;; An invader laser event wraps up a shoot-laser! such that it will
 ;; create a new laser that will come from a candidate invader (one
@@ -295,7 +337,7 @@
     (let* ((candidates (get-candidates))
            (canditate-nb (length candidates))
            (shooting-invader
-            (if (< canditate-nb 0)
+            (if (> canditate-nb 0)
                 (list-ref candidates (random-integer (length candidates)))
                 #f)))
       (if shooting-invader
@@ -328,7 +370,7 @@
                          0
                          (make-pos2d 0 dy))))
         (in 0 (create-laser-event laser-obj level dy))
-        (level-add-object level laser-obj))))
+        (level-add-object! level laser-obj))))
 
 ;; Will generate the events associated with a laser object such that
 ;; it will be moved regularly dy pixels on the y axis. The game logic
@@ -425,6 +467,8 @@
     (schedule-event! sim 0 (create-manager-event level))
     (schedule-event! sim 1 (create-invader-laser-event level))
     (schedule-event! sim 0 (create-redraw-event ui-thread level))
+    (schedule-event! sim (+ (random-integer 3) 1)
+                     (create-new-mothership-event level))
     (start-simulation! sim +inf.0)))
 
 

@@ -111,7 +111,7 @@ end
        (else
         (error "cannot draw sprite: invalid state.")))))
 
-(define-macro (create-ship-renderer ship-type)
+(define-macro (create-2-state-renderer ship-type)
   `(lambda (x y state)
      (glRasterPos2i x y)
      (case state
@@ -120,58 +120,24 @@ end
        (else
         (error "cannot draw sprite: invalid state.")))))
 
-(define (create-laserA-renderer)
-  (lambda (x y state)
-    (glRasterPos2i x y)
+(define-macro (create-4-state-renderer obj-type)
+  `(lambda (x y state)
+     (glRasterPos2i x y)
      (case state
-       ((0) (render-pixel-sprite laserA 0))
-       ((1) (render-pixel-sprite laserA 1))
+       ((0) (render-pixel-sprite ,obj-type 0))
+       ((1) (render-pixel-sprite ,obj-type 1))
+       ((2) (render-pixel-sprite ,obj-type 2))
+       ((3) (render-pixel-sprite ,obj-type 3))
        (else
         (error "cannot draw sprite: invalid state.")))))
-
-(define (create-laserB-renderer)
-  (lambda (x y state)
-    (glRasterPos2i x y)
-     (case state
-       ((0) (render-pixel-sprite laserB 0))
-       ((1) (render-pixel-sprite laserB 1))
-       ((2) (render-pixel-sprite laserB 2))
-       ((3) (render-pixel-sprite laserB 3))
-       (else
-        (error "cannot draw sprite: invalid state.")))))
-
-;; (define (create-laserP-renderer)
-;;   (lambda (x y state)
-;;     (glRasterPos2i x y)
-;;      (case state
-;;        ((0) (render-pixel-sprite laserP 0))
-;;        (else
-;;         (error "cannot draw sprite: invalid state.")))))
-
-;; (define (create-explodeI-renderer)
-;;   (lambda (x y state)
-;;     (glRasterPos2i x y)
-;;      (case state
-;;        ((0) (render-pixel-sprite explodeI 0))
-;;        (else
-;;         (error "cannot draw sprite: invalid state.")))))
-
-;; (define (create-shield-renderer)
-;;   (lambda (x y state)
-;;     (glRasterPos2i x y)
-;;      (case state
-;;        ((0) (render-pixel-sprite shield 0))
-;;        (else
-;;         (error "cannot draw sprite: invalid state.")))))
-
 
 (define render-object
-  (let ((easy-renderer   (create-ship-renderer easy))
-        (medium-renderer (create-ship-renderer medium))
-        (hard-renderer   (create-ship-renderer hard))
-        (player-renderer (create-ship-renderer player))
-        (laserA-renderer  (create-laserA-renderer))
-        (laserB-renderer  (create-laserB-renderer))
+  (let ((easy-renderer   (create-2-state-renderer easy))
+        (medium-renderer (create-2-state-renderer medium))
+        (hard-renderer   (create-2-state-renderer hard))
+        (player-renderer (create-2-state-renderer player))
+        (laserA-renderer  (create-2-state-renderer laserA))
+        (laserB-renderer  (create-4-state-renderer laserB))
         (laserP-renderer  (create-single-state-renderer laserP))
         (explodeI-renderer (create-single-state-renderer explodeI))
         (shield-renderer (create-single-state-renderer shield))

@@ -293,10 +293,16 @@
 
   (lambda ()
     (let* ((candidates (get-candidates))
-           (shooting-invader (list-ref candidates
-                                       (random-integer (length candidates)))))
-      (shoot-laser! level (list-ref (list 'laserA 'laserB) (random-integer 2))
-                    shooting-invader (- invader-laser-speed)))))
+           (canditate-nb (length candidates))
+           (shooting-invader
+            (if (< canditate-nb 0)
+                (list-ref candidates (random-integer (length candidates)))
+                #f)))
+      (if shooting-invader
+          (shoot-laser! level
+                        (list-ref (list 'laserA 'laserB) (random-integer 2))
+                        shooting-invader
+                        (- invader-laser-speed))))))
 
 ;; Wrapper function over create-laser-event which will create a new
 ;; laser object instance of specifiex type and place it correctly next
@@ -328,7 +334,8 @@
 ;; it will be moved regularly dy pixels on the y axis. The game logic
 ;; of a laser is thus defined by the returned event.
 (define (create-laser-event laser-obj level dy)
-  (define laser-update-interval 0.01)
+  (define player-laser-update-interval 0.005)
+  (define invader-laser-update-interval 0.01)
   (define (laser-event)
     (move-object! laser-obj 0 dy)
     (let ((collision-obj (detect-collision? laser-obj level)))
@@ -342,7 +349,7 @@
                   ((and (laser-obj? collision-obj)
                         (not (eq? collision-obj (level-player-laser level))))
                    (level-remove-object! level collision-obj)
-                   (in laser-update-interval
+                   (in invader-laser-update-interval
                        (create-invader-laser-event level)))
              
                   ((player-ship? collision-obj)
@@ -352,11 +359,15 @@
                    (pp 'damage-shield)))
             
             (if (not (eq? laser-obj (level-player-laser level)))
-                (in laser-update-interval (create-invader-laser-event level)))
+                (in invader-laser-update-interval
+                    (create-invader-laser-event level)))
             (level-remove-object! level laser-obj))
           
           ;; if no collisions, continue on with the laser motion
-          (in laser-update-interval laser-event))))
+          (let ((delta-t (if (eq? (level-player-laser level) laser-obj)
+                             player-laser-update-interval
+                             invader-laser-update-interval)))
+            (in delta-t laser-event)))))
 
   laser-event)
 
@@ -379,7 +390,7 @@
 ;; discrete event simulation is perfomed in it's own thread and that
 ;; user input is passed to the simulation via this mechanism.
 (define (create-manager-event current-level)
-  (define manager-time-interfal 0.01)
+  (define manager-time-interfal 0.005)
   (define player (level-player current-level))
 
   (define (manager-event)

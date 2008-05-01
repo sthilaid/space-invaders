@@ -120,6 +120,18 @@
 
 (define (level-invaders lvl)
    (filter invader-ship? (level-all-objects lvl)))
+
+;; Returns (not efficiently) the list of all invaders located on the
+;; specified row index or '() if none exists.
+(define (get-invaders-from-row level row-index)
+  (filter (lambda (inv) (= (invader-ship-row inv) row-index))
+            (level-invaders level)))
+
+(define (get-all-invader-rows level)
+  (let loop ((i 0) (acc '()))
+    (if (< i invader-row-number)
+        (loop (+ i 1) (cons (get-invaders-from-row level i) acc))
+        (reverse (cleanse acc)))))
           
 (define (level-player lvl)
    (table-ref (level-object-table lvl) 'player))
@@ -178,34 +190,20 @@
 ;; Gameplay procedures
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define (move-object! obj delta-x delta-y)
+(define (move-object! obj)
   (let* ((pos (game-object-pos obj) )
          (x (pos2d-x pos))
          (y (pos2d-y pos))
-         (speed (game-object-speed obj)))
+         (speed (game-object-speed obj))
+         (dx (pos2d-x speed))
+         (dy (pos2d-y speed)))
     (cycle-state! obj)
-    (pos2d-x-set! speed delta-x)
-    (pos2d-y-set! speed delta-y)
-    (pos2d-x-set! pos (+ x delta-x))
-    (pos2d-y-set! pos (+ y delta-y))))
+    (pos2d-x-set! pos (+ x dx))
+    (pos2d-y-set! pos (+ y dy))))
 
 (define (move-ship-row! level row-index)
-  (define row-invaders
-    (filter (lambda (inv) (= (invader-ship-row inv) row-index))
-            (level-invaders level)))
-  (if (not (null? row-invaders))
-      (let* ((collision-inv
-              (exists (lambda (inv) (detect-collision? inv level))
-                      row-invaders))
-             (wall-collision? (if collision-inv
-                                  (wall? (detect-collision? collision-inv
-                                                            level))
-                                  #f))
-             (old-dx (pos2d-x (game-object-speed (car row-invaders))))
-             (dx (if wall-collision? (* old-dx -1) old-dx))
-             (dy (if wall-collision? (- invader-spacing) 0)))
-        (for-each (lambda (inv) (move-object! inv dx dy))
-                  row-invaders))))
+  (for-each (lambda (inv) (move-object! inv))
+            (get-invaders-from-row level row-index)))
 
 
 
@@ -213,20 +211,48 @@
 ;; Simulation Events and Game Logic
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(define get-invader-move-refresh-rate
+  ;; the sleep delay is a function such that when the level is full of
+  ;; invaders (55 invaders) then the delay is 0.1 and when there is
+  ;; no invader left, it is 0.01. Thus the equation system:
+  ;; 55x + xy = 1/10 and 0x + xy = 1/100 was solved.
+  (let* ((min-delta 1/100)
+         (max-delta 1/10)
+         (max-inv-nb 55)
+         (slope (/ (- max-delta min-delta) max-inv-nb)))
+    (lambda (level)
+      (let ((x (length (level-invaders level))))
+        (+  (* slope x) min-delta)))))
+
 ;; Event that will move a single row of invaders
-(define (create-invader-event level)
-  (define (next-event row-index)
-    (lambda ()
-      (move-ship-row! level row-index)
-      ;; the sleep delay is a function such that when the level is full of
-      ;; invaders (55 invaders) then the delay is 0.1 and when there is
-      ;; no invader left, it is 0.01. Thus the equation system:
-      ;; 55x + xy = 1/10 and 0x + xy = 1/100 was solved.
-      (let* ((invader-nb (length (level-invaders current-level)))
-             (next-event-delay (+ (* 9/5500 invader-nb) 1/100)))
-        (in next-event-delay
-            (next-event (modulo (+ row-index 1) invader-row-number))))))
-  (next-event 0))
+(define (create-init-invader-move-event level)
+  (lambda ()
+    (let* ((rows (get-all-invader-rows level))
+           (walls (level-walls level))
+           (wall-collision?
+            (exists
+             (lambda (row)
+               (exists (lambda (inv) (obj-wall-collision? inv walls)) row))
+             rows)))
+      (let ((old-dx (pos2d-x (game-object-speed (caar rows))))
+            (delta-t (* (length rows)
+                        (get-invader-move-refresh-rate level))))
+        (if wall-collision?
+            (begin
+              (schedule-invader-move! 0 0 (- invader-spacing) level)
+              (schedule-invader-move! delta-t (- old-dx) 0 level)
+              (in (* 2 delta-t) (create-init-invader-move-event level)))
+            (begin
+              (schedule-invader-move! 0 old-dx 0 level)
+              (in delta-t (create-init-invader-move-event level))))))))
+
+(define (schedule-invader-move! init-dt dx dy level)
+  (define dt (get-invader-move-refresh-rate level))
+  (for-each (lambda (inv) (let ((speed (make-pos2d dx dy)))
+                            (game-object-speed-set! inv speed)))
+            (level-invaders level))
+  (for i 0 (< i invader-row-number)
+     (in (+ init-dt (* i dt)) (lambda () (move-ship-row! level i)))))
 
 ;; Creates a new mothership and schedules its first move event.
 (define (create-new-mothership-event level)
@@ -241,25 +267,22 @@
 (define (create-mothership-event level mothership)
   (define mothership-update-interval 0.02)
   (define (mothership-event)
-    (let* ((speed (game-object-speed mothership))
-           (dx (pos2d-x speed))
-           (dy (pos2d-y speed)))
-      (move-object! mothership dx dy)
-      (let ((collision-obj (detect-collision? mothership level)))
-        (if collision-obj
-            (begin (cond ((wall? collision-obj)
-                          (level-remove-object! level mothership))
-                         ((laser-obj? collision-obj)
-                          (level-score-set!
-                           level
-                           (+ (level-score level)
-                              (object-type-value
-                               (game-object-type mothership))))
-                          (explode-invader! level mothership)))
-                   ;; Schedule next mothership
-                   (let ((delta-t (+ (random-integer 3) 1)))
-                     (in delta-t (create-new-mothership-event level))))
-            (in mothership-update-interval mothership-event)))))
+    (move-object! mothership)
+    (let ((collision-obj (detect-collision? mothership level)))
+      (if collision-obj
+          (begin (cond ((wall? collision-obj)
+                        (level-remove-object! level mothership))
+                       ((laser-obj? collision-obj)
+                        (level-score-set!
+                         level
+                         (+ (level-score level)
+                            (object-type-value
+                             (game-object-type mothership))))
+                        (explode-invader! level mothership)))
+                 ;; Schedule next mothership
+                 (let ((delta-t (+ (random-integer 3) 1)))
+                   (in delta-t (create-new-mothership-event level))))
+          (in mothership-update-interval mothership-event))))
   mothership-event)
     
 
@@ -323,18 +346,18 @@
                          (make-pos2d x y)
                          0
                          (make-pos2d 0 dy))))
-        (in 0 (create-laser-event laser-obj level dy))
+        (in 0 (create-laser-event laser-obj level))
         (level-add-object! level laser-obj))))
 
 ;; Will generate the events associated with a laser object such that
 ;; it will be moved regularly dy pixels on the y axis. The game logic
 ;; of a laser is thus defined by the returned event.
-(define (create-laser-event laser-obj level dy)
+(define (create-laser-event laser-obj level)
   (define player-laser-update-interval 0.005)
   (define invader-laser-update-interval 0.01)
   (define next-invader-laser-interval 0.5)
   (define (laser-event)
-    (move-object! laser-obj 0 dy)
+    (move-object! laser-obj)
     (let ((collision-obj (detect-collision? laser-obj level)))
       (if collision-obj
           (begin
@@ -409,8 +432,16 @@
           ((shoot-laser) (shoot-laser! current-level 'laserP
                                        (level-player current-level)
                                        player-laser-speed))
-          ((move-right)  (move-object! player player-movement-speed 0))
-          ((move-left)   (move-object! player (- player-movement-speed) 0))
+          ((move-right)
+           (let ((new-speed (make-pos2d player-movement-speed 0)))
+             (game-object-speed-set! player new-speed))
+           (move-object! player))
+          
+          ((move-left)
+           (let ((new-speed (make-pos2d (- player-movement-speed) 0)))
+             (game-object-speed-set! player new-speed))
+           (move-object! player))
+          
           ((show-score) (pp `(score is ,(level-score current-level))))
           (else (error "Unknown message received in manager event."))))
     (in manager-time-interfal manager-event))
@@ -431,7 +462,7 @@
   (define sim (create-simulation))
 
   (lambda ()
-    (schedule-event! sim 0 (create-invader-event level))
+    (schedule-event! sim 0 (create-init-invader-move-event level))
     (schedule-event! sim 0 (create-manager-event level))
     (schedule-event! sim 1 (create-invader-laser-event level))
     (schedule-event! sim 0 (create-redraw-event ui-thread level))
@@ -450,19 +481,12 @@
 ;; multiple collision are occurring.
 (define (detect-collision? obj level)
   ;; exists is exptected to return the object that satisfy the condition
-  (or (exists (lambda (collision-obj) (detect-obj-col? obj collision-obj))
+  (or (exists (lambda (collision-obj) (obj-obj-collision? obj collision-obj))
               (level-all-objects level))
-      (exists (lambda (wall)
-                (rectangle-collision?
-                 (make-rect (pos2d-x (game-object-pos obj))
-                            (pos2d-y (game-object-pos obj))
-                            (type-width (game-object-type obj))
-                            (type-height (game-object-type obj)))
-                 (wall-rect wall)))
-              (level-walls level))))
+      (obj-wall-collision? obj (level-walls level))))
 
 ;; collision detection between 2 game objects
-(define (detect-obj-col? obj1 obj2)
+(define (obj-obj-collision? obj1 obj2)
   (let* ((obj1-pos (game-object-pos obj1))
          (obj2-pos (game-object-pos obj2)))
     (and (not (eq? obj1 obj2))
@@ -473,6 +497,16 @@
           (make-rect (pos2d-x obj2-pos) (pos2d-y obj2-pos)
                      (type-width (game-object-type obj2))
                      (type-height (game-object-type obj2)))))))
+
+(define (obj-wall-collision? obj walls)
+  (exists (lambda (wall)
+            (rectangle-collision?
+             (make-rect (pos2d-x (game-object-pos obj))
+                        (pos2d-y (game-object-pos obj))
+                        (type-width (game-object-type obj))
+                        (type-height (game-object-type obj)))
+             (wall-rect wall)))
+          walls))
 
 ;; Simple rectangular collision detection. Not optimized.
 (define (rectangle-collision? r1 r2)

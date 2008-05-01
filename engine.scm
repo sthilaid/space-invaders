@@ -266,28 +266,31 @@
            (make-mothership 'mothership (get-type 'mothership)
                             (make-pos2d wall-offset 201) 0 (make-pos2d 1 0))))
     (level-add-object! level mothership)
-    (in 0 (create-mothership-event level mothership)))))
+    (in 0 (create-mothership-event level)))))
     
 ;; Event that moves a mothership and handles its collisions.
-(define (create-mothership-event level mothership)
+(define (create-mothership-event level)
   (define mothership-update-interval 0.02)
   (define (mothership-event)
-    (move-object! mothership)
-    (let ((collision-obj (detect-collision? mothership level)))
-      (if collision-obj
-          (begin (cond ((wall? collision-obj)
-                        (level-remove-object! level mothership))
-                       ((laser-obj? collision-obj)
-                        (level-score-set!
-                         level
-                         (+ (level-score level)
-                            (object-type-value
-                             (game-object-type mothership))))
-                        (explode-invader! level mothership)))
-                 ;; Schedule next mothership
-                 (let ((delta-t (+ (random-integer 3) 1)))
-                   (in delta-t (create-new-mothership-event level))))
-          (in mothership-update-interval mothership-event))))
+    (define mothership (level-mothership level))
+    (if mothership
+        (begin
+          (move-object! mothership)
+          (let ((collision-obj (detect-collision? mothership level)))
+            (if collision-obj
+                (begin (cond ((wall? collision-obj)
+                              (level-remove-object! level mothership))
+                             ((laser-obj? collision-obj)
+                              (level-score-set!
+                               level
+                               (+ (level-score level)
+                                  (object-type-value
+                                   (game-object-type mothership))))
+                              (explode-invader! level mothership)))
+                       ;; Schedule next mothership
+                       (let ((delta-t (+ (random-integer 3) 1)))
+                         (in delta-t (create-new-mothership-event level))))
+                (in mothership-update-interval mothership-event))))))
   mothership-event)
     
 

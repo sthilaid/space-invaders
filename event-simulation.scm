@@ -38,8 +38,11 @@
                  (current-actions (event-heap-actions top-node))
                  (wake-time (- (time->seconds (current-time))
                                simulation-start-time)))
-;            (pp `(sleeping for ,(- current-event-time wake-time)))
-            (thread-sleep! (- current-event-time wake-time))
+            (let ((sleep-time (- current-event-time wake-time)))
+;;               (if (< sleep-time 0)
+;;                   (show "Warning: Simulation is getting late by "
+;;                         sleep-time " secs.\n"))
+              (thread-sleep! sleep-time))
 
             (parameterize ((!!-event-queue-!! sim)
                            (!!-current-time-!! current-event-time))

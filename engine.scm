@@ -234,25 +234,30 @@
              (lambda (row)
                (exists (lambda (inv) (obj-wall-collision? inv walls)) row))
              rows)))
-      (let ((old-dx (pos2d-x (game-object-speed (caar rows))))
-            (delta-t (* (length rows)
-                        (get-invader-move-refresh-rate level))))
-        (if wall-collision?
-            (begin
-              (schedule-invader-move! 0 0 (- invader-spacing) level)
-              (schedule-invader-move! delta-t (- old-dx) 0 level)
-              (in (* 2 delta-t) (create-init-invader-move-event level)))
-            (begin
-              (schedule-invader-move! 0 old-dx 0 level)
-              (in delta-t (create-init-invader-move-event level))))))))
+      (if (null? rows)
+          (show "Game over with " (level-score level) " points.\n")
+          (let ((old-dx (pos2d-x (game-object-speed (caar rows))))
+                (delta-t (* (length rows)
+                            (get-invader-move-refresh-rate level))))
+            (if wall-collision?
+                (begin
+                  (schedule-invader-move! 0 0 (- invader-spacing) level)
+                  (schedule-invader-move! delta-t (- old-dx) 0 level)
+                  (in (* 2 delta-t) (create-init-invader-move-event level)))
+                (begin
+                  (schedule-invader-move! 0 old-dx 0 level)
+                  (in delta-t (create-init-invader-move-event level)))))))))
 
 (define (schedule-invader-move! init-dt dx dy level)
   (define dt (get-invader-move-refresh-rate level))
-  (for-each (lambda (inv) (let ((speed (make-pos2d dx dy)))
-                            (game-object-speed-set! inv speed)))
-            (level-invaders level))
+
   (for i 0 (< i invader-row-number)
-     (in (+ init-dt (* i dt)) (lambda () (move-ship-row! level i)))))
+     (in (+ init-dt (* i dt))
+         (lambda ()
+           (for-each (lambda (inv) (let ((speed (make-pos2d dx dy)))
+                                     (game-object-speed-set! inv speed)))
+                     (get-invaders-from-row level i))
+           (move-ship-row! level i)))))
 
 ;; Creates a new mothership and schedules its first move event.
 (define (create-new-mothership-event level)

@@ -28,6 +28,10 @@
 ;;;; 2d position coordinate ;;;;
 (define-type pos2d x y)
 
+(define (pos2d-add p1 p2)
+  (make-pos2d (+ (pos2d-x p1) (pos2d-x p2))
+              (+ (pos2d-y p1) (pos2d-y p2))))
+
 (define (inverse-dir dir . options)
   (let ((x-fact (if (memq 'x options) -1 1))
         (y-fact (if (memq 'y options) -1 1)))
@@ -48,21 +52,95 @@
    obj (modulo (+ (game-object-state obj) 1)
                (object-type-state-num (game-object-type obj)))))
 
+(define (get-bounding-box obj)
+  (make-rect (pos2d-x (game-object-pos obj))
+             (pos2d-y (game-object-pos obj))
+             (type-width (game-object-type obj))
+             (type-height (game-object-type obj))))
+
 ;;;; Specific game object descriptions ;;;;
 (define-type-of-game-object invader-ship row col)
 (define-type-of-game-object player-ship)
 (define-type-of-game-object mothership)
 (define-type-of-game-object laser-obj)
-(define-type-of-game-object shield-obj)
+(define-type-of-game-object shield particles)
 
 (define (generate-shields)
   (define shield-type (get-type 'shield))
   (define speed (make-pos2d 0 0))
-  (list (make-shield-obj 'shield1 shield-type (make-pos2d  36 40) 0 speed)
-        (make-shield-obj 'shield2 shield-type (make-pos2d  81 40) 0 speed)
-        (make-shield-obj 'shield3 shield-type (make-pos2d 126 40) 0 speed)
-        (make-shield-obj 'shield4 shield-type (make-pos2d 171 40) 0 speed)))
-        
+  (define (generate-particles)
+    (define p make-pos2d)
+    (list (p 0 0) (p 1 0) (p 2 0) (p 3 0) (p 4 0)
+          (p 16 0) (p 17 0) (p 18 0) (p 19 0) (p 20 0) (p 21 0)
+          
+          (p 0 1) (p 1 1) (p 2 1) (p 3 1) (p 4 1)
+          (p 16 1) (p 17 1) (p 18 1) (p 19 1) (p 20 1) (p 21 1)
+          
+          (p 0 2) (p 1 2) (p 2 2) (p 3 2) (p 4 2) (p 5 2) (p 15 2)
+          (p 16 2) (p 17 2) (p 18 2) (p 19 2) (p 20 2) (p 21 2)
+
+          (p 0 3) (p 1 3) (p 2 3) (p 3 3) (p 4 3) (p 5 3) (p 6 3) (p 14 3)
+          (p 15 3)(p 16 3) (p 17 3) (p 18 3) (p 19 3) (p 20 3) (p 21 3)
+
+          (p 0 4) (p 1 4) (p 2 4) (p 3 4) (p 4 4) (p 5 4) (p 6 4) (p 7 4)
+          (p 8 4) (p 9 4) (p 10 4) (p 11 4) (p 12 4) (p 13 4) (p 14 4)
+          (p 15 4)(p 16 4) (p 17 4) (p 18 4) (p 19 4) (p 20 4) (p 21 4)
+
+          (p 0 5) (p 1 5) (p 2 5) (p 3 5) (p 4 5) (p 5 5) (p 6 5) (p 7 5)
+          (p 8 5) (p 9 5) (p 10 5) (p 11 5) (p 12 5) (p 13 5) (p 14 5)
+          (p 15 5)(p 16 5) (p 17 5) (p 18 5) (p 19 5) (p 20 5) (p 21 5)
+
+          (p 0 6) (p 1 6) (p 2 6) (p 3 6) (p 4 6) (p 5 6) (p 6 6) (p 7 6)
+          (p 8 6) (p 9 6) (p 10 6) (p 11 6) (p 12 6) (p 13 6) (p 14 6)
+          (p 15 6)(p 16 6) (p 17 6) (p 18 6) (p 19 6) (p 20 6) (p 21 6)
+
+          (p 0 7) (p 1 7) (p 2 7) (p 3 7) (p 4 7) (p 5 7) (p 6 7) (p 7 7)
+          (p 8 7) (p 9 7) (p 10 7) (p 11 7) (p 12 7) (p 13 7) (p 14 7)
+          (p 15 7)(p 16 7) (p 17 7) (p 18 7) (p 19 7) (p 20 7) (p 21 7)
+
+          (p 0 8) (p 1 8) (p 2 8) (p 3 8) (p 4 8) (p 5 8) (p 6 8) (p 7 8)
+          (p 8 8) (p 9 8) (p 10 8) (p 11 8) (p 12 8) (p 13 8) (p 14 8)
+          (p 15 8)(p 16 8) (p 17 8) (p 18 8) (p 19 8) (p 20 8) (p 21 8)
+
+          (p 0 9) (p 1 9) (p 2 9) (p 3 9) (p 4 9) (p 5 9) (p 6 9) (p 7 9)
+          (p 8 9) (p 9 9) (p 10 9) (p 11 9) (p 12 9) (p 13 9) (p 14 9)
+          (p 15 9)(p 16 9) (p 17 9) (p 18 9) (p 19 9) (p 20 9) (p 21 9)
+
+          (p 0 10) (p 1 10) (p 2 10) (p 3 10) (p 4 10) (p 5 10) (p 6 10)
+          (p 7 10) (p 8 10) (p 9 10) (p 10 10) (p 11 10) (p 12 10) (p 13 10)
+          (p 14 10)(p 15 10)(p 16 10) (p 17 10) (p 18 10) (p 19 10) (p 20 10)
+          (p 21 10)
+
+          (p 0 11) (p 1 11) (p 2 11) (p 3 11) (p 4 11) (p 5 11) (p 6 11)
+          (p 7 11) (p 8 11) (p 9 11) (p 10 11) (p 11 11) (p 12 11) (p 13 11)
+          (p 14 11)(p 15 11)(p 16 11) (p 17 11) (p 18 11) (p 19 11) (p 20 11)
+          (p 21 11)
+
+          (p 1 12) (p 2 12) (p 3 12) (p 4 12) (p 5 12) (p 6 12)
+          (p 7 12) (p 8 12) (p 9 12) (p 10 12) (p 11 12) (p 12 12) (p 13 12)
+          (p 14 12)(p 15 12)(p 16 12) (p 17 12) (p 18 12) (p 19 12) (p 20 12)
+
+          (p 2 13) (p 3 13) (p 4 13) (p 5 13) (p 6 13)
+          (p 7 13) (p 8 13) (p 9 13) (p 10 13) (p 11 13) (p 12 13) (p 13 13)
+          (p 14 13)(p 15 13)(p 16 13) (p 17 13) (p 18 13) (p 19 13)
+          
+          (p 3 14) (p 4 14) (p 5 14) (p 6 14) (p 7 14) (p 8 14) (p 9 14)
+          (p 10 14) (p 11 14) (p 12 14) (p 13 14) (p 14 14)(p 15 14)
+          (p 16 14) (p 17 14) (p 18 14)
+
+          (p 4 15) (p 5 15) (p 6 15) (p 7 15) (p 8 15) (p 9 15)
+          (p 10 15) (p 11 15) (p 12 15) (p 13 15) (p 14 15)(p 15 15)
+          (p 16 15) (p 17 15)))
+  
+  (list (make-shield 'shield1 shield-type (make-pos2d  36 40) 0
+                     speed (generate-particles))
+        (make-shield 'shield2 shield-type (make-pos2d  81 40) 0
+                     speed (generate-particles))
+        (make-shield 'shield3 shield-type (make-pos2d 126 40) 0
+                     speed (generate-particles))
+        (make-shield 'shield4 shield-type (make-pos2d 171 40) 0
+                     speed (generate-particles))))
+
 
 ;;;; Game object type definition ;;;;
 (define-type object-type id width height state-num value)
@@ -108,7 +186,7 @@
 
 
 ;;;; Game level description ;;;;
-(define-type level height width object-table walls score)
+(define-type level height width object-table walls shields score)
 (define (level-add-object! lvl obj)
    (table-set! (level-object-table lvl) (game-object-id obj) obj))
 
@@ -172,15 +250,16 @@
                       invaders))))))
 
   (let* ((walls (generate-walls))
+         (shields (generate-shields))
          (player-type (get-type 'player))
          (pos (make-pos2d 22 (- screen-max-y 240)))
          (state 1)
          (speed (make-pos2d 0 0))
          (player-ship (make-player-ship 'player
                                         player-type pos state speed))
-         (lvl (make-level screen-max-y screen-max-x (make-table) walls 0)))
+         (lvl (make-level screen-max-y screen-max-x (make-table)
+                          walls shields 0)))
     (for-each (lambda (x) (level-add-object! lvl x)) invaders)
-    (for-each (lambda (x) (level-add-object! lvl x)) (generate-shields))
     (level-add-object! lvl player-ship)
     lvl))
 
@@ -386,7 +465,7 @@
                   ((player-ship? collision-obj)
                    (pp 'todo-lose-one-life-and-restart))
 
-                  ((shield-obj? collision-obj)
+                  ((shield? collision-obj)
                    (pp 'damage-shield))
 
                   ((mothership? collision-obj)
@@ -458,7 +537,7 @@
 
 ;; Event that will send a message to the ui asking for a redraw.
 (define (create-redraw-event ui-thread level)
-  (define refresh-rate 0.01)
+  (define refresh-rate 0.05)
   (define (duplicate obj) obj) ;;TODO: Dummy duplication!!
   (define (redraw-event)
     (thread-send ui-thread (duplicate level))
@@ -491,6 +570,7 @@
   ;; exists is exptected to return the object that satisfy the condition
   (or (exists (lambda (collision-obj) (obj-obj-collision? obj collision-obj))
               (level-all-objects level))
+      (obj-shield-collision? obj (level-shields level))
       (obj-wall-collision? obj (level-walls level))))
 
 ;; collision detection between 2 game objects
@@ -499,22 +579,26 @@
          (obj2-pos (game-object-pos obj2)))
     (and (not (eq? obj1 obj2))
          (rectangle-collision?
-          (make-rect (pos2d-x obj1-pos) (pos2d-y obj1-pos)
-                     (type-width (game-object-type obj1))
-                     (type-height (game-object-type obj1)))
-          (make-rect (pos2d-x obj2-pos) (pos2d-y obj2-pos)
-                     (type-width (game-object-type obj2))
-                     (type-height (game-object-type obj2)))))))
+          (get-bounding-box obj1)
+          (get-bounding-box obj2)))))
 
 (define (obj-wall-collision? obj walls)
   (exists (lambda (wall)
             (rectangle-collision?
-             (make-rect (pos2d-x (game-object-pos obj))
-                        (pos2d-y (game-object-pos obj))
-                        (type-width (game-object-type obj))
-                        (type-height (game-object-type obj)))
+             (get-bounding-box obj)
              (wall-rect wall)))
           walls))
+
+(define (obj-shield-collision? obj shields)
+  (exists (lambda (shield)
+            (if (obj-obj-collision? obj shield)
+                (let* ((pos (game-object-pos shield)))
+                  (exists (lambda (particle)
+                            (point-rect-collision? (pos2d-add pos particle)
+                                                   (get-bounding-box obj)))
+                          (shield-particles shield)))
+                #f))
+          shields))
 
 ;; Simple rectangular collision detection. Not optimized.
 (define (rectangle-collision? r1 r2)
@@ -539,3 +623,19 @@
              (> r1-x-min r2-x-max)
              (< r1-y-max r2-y-min)
              (> r1-y-min r2-y-max)))))
+
+(define (point-rect-collision? point rect)
+  (let* ((rect-x1 (rect-x rect))
+         (rect-x2 (+ rect-x1 (rect-width rect)))
+         (rect-x-min (min rect-x1 rect-x2))
+         (rect-x-max (max rect-x1 rect-x2))
+         (rect-y1 (rect-y rect))
+         (rect-y2 (+ rect-y1 (rect-height rect)))
+         (rect-y-min (min rect-y1 rect-y2))
+         (rect-y-max (max rect-y1 rect-y2))
+         (point-x (pos2d-x point))
+         (point-y (pos2d-y point)))
+    (and (>= point-x rect-x-min)
+         (<= point-x rect-x-max)
+         (>= point-y rect-y-min)
+         (<= point-y rect-y-max))))

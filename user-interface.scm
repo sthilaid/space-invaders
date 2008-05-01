@@ -161,6 +161,18 @@ end
         ((mothership) (mothership-renderer x y state))
         (else (error (string-append "Cannot render unknown object type:"
                                     (symbol->string type))))))))
+(define (render-shield shield)
+  ;; equivalent to rgb color: 1ffe1f
+  (glColor3f .12156862745098039 .996078431372549 .12156862745098039)
+  (for-each (lambda (particle)
+              (let* ((shield-x (pos2d-x (game-object-pos shield)))
+                     (shield-y (pos2d-y (game-object-pos shield)))
+                     (x (+ shield-x (pos2d-x particle)))
+                     (y (+ shield-y (pos2d-y particle))))
+                (glBegin GL_POINTS)
+                (glVertex2i x y)
+                (glEnd)))
+            (shield-particles shield)))
 
 (define (display-message x y msg)
   (let ((chars (map char->integer (string->list msg)))
@@ -176,6 +188,7 @@ end
 
   ;; Draw all objects
   (for-each render-object (level-all-objects level))
+  (for-each render-shield (level-shields level))
 
 ;;   (if status-message
 ;;       (display-message 0 0 status-message))

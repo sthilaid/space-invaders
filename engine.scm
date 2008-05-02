@@ -32,6 +32,14 @@
   (make-pos2d (+ (pos2d-x p1) (pos2d-x p2))
               (+ (pos2d-y p1) (pos2d-y p2))))
 
+(define (pos2d-sub p1 p2)
+  (make-pos2d (- (pos2d-x p1) (pos2d-x p2))
+              (- (pos2d-y p1) (pos2d-y p2))))
+
+(define (pos2d= p1 p2)
+  (and (= (pos2d-x p1) (pos2d-x p2))
+       (= (pos2d-y p1) (pos2d-y p2))))
+
 (define (inverse-dir dir . options)
   (let ((x-fact (if (memq 'x options) -1 1))
         (y-fact (if (memq 'y options) -1 1)))
@@ -64,6 +72,16 @@
 (define-type-of-game-object mothership)
 (define-type-of-game-object laser-obj)
 (define-type-of-game-object shield particles)
+
+(define invader-explosion-particles
+  (let ((p make-pos2d))
+    (list (p 1 0) (p 3 0) (p 5 0)
+          (p 0 1) (p 2 1) (p 3 1) (p 4 1)
+          (p 1 2) (p 2 2) (p 3 2) (p 4 2) (p 5 2)
+          (p 0 3) (p 2 3) (p 3 3) (p 4 3)
+          (p 1 4) (p 2 4) (p 3 4) (p 4 4)
+          (p 2 5) (p 3 5) (p 5 5)
+          (p 0 6) (p 4 6) (p 2 7))))
 
 (define (generate-shields)
   (define shield-type (get-type 'shield))
@@ -131,7 +149,7 @@
           (p 4 15) (p 5 15) (p 6 15) (p 7 15) (p 8 15) (p 9 15)
           (p 10 15) (p 11 15) (p 12 15) (p 13 15) (p 14 15)(p 15 15)
           (p 16 15) (p 17 15)))
-  
+
   (list (make-shield 'shield1 shield-type (make-pos2d  36 40) 0
                      speed (generate-particles))
         (make-shield 'shield2 shield-type (make-pos2d  81 40) 0
@@ -140,6 +158,42 @@
                      speed (generate-particles))
         (make-shield 'shield4 shield-type (make-pos2d 171 40) 0
                      speed (generate-particles))))
+
+(define (shield-explosion! shield explosion-pos explosion-particles)
+  (define pos (game-object-pos shield))
+  (define particles (shield-particles shield))
+  (define relative-expl-particles
+    (let ((relative-expl-pos (pos2d-sub (pos2d-sub explosion-pos
+                                                   (make-pos2d 0 6))
+                                        pos)))
+      (map (lambda (ex-part) (pos2d-add ex-part relative-expl-pos))
+         explosion-particles)))
+  
+  (define (particle-member p p-list)
+    (if (not (pair? p-list))
+        #f
+        (if (pos2d= p (car p-list))
+            p-list
+            (particle-member p (cdr p-list)))))
+  
+  (define new-particles
+    (filter (lambda (p)
+              (if (not (particle-member p relative-expl-particles))
+                  #t
+                  (begin (pp `(removing ,p)) #f)))
+            particles))
+;;   (pp `(relative-pos ,(pos2d-sub (pos2d-sub explosion-pos
+;;                                                    (make-pos2d 0 4))
+;;                                         pos)))
+;;   (pp 'particles:)
+;;   (pp particles)
+;;   (pp 'relative-expl-part:)
+;;   (pp relative-expl-particles)
+;;   (pp 'new-particles:)
+;;   (pp new-particles)
+;;   (newline)
+  (pp `(,(length particles) => ,(length new-particles)))
+  (shield-particles-set! shield new-particles))
 
 
 ;;;; Game object type definition ;;;;
@@ -443,6 +497,8 @@
   (define player-laser-update-interval 0.005)
   (define invader-laser-update-interval 0.01)
   (define next-invader-laser-interval 0.5)
+  (define pos (game-object-pos laser-obj))
+  (define type (game-object-type laser-obj))
   (define (laser-event)
     (move-object! laser-obj)
     (let ((collision-obj (detect-collision? laser-obj level)))
@@ -466,7 +522,13 @@
                    (pp 'todo-lose-one-life-and-restart))
 
                   ((shield? collision-obj)
-                   (pp 'damage-shield))
+                   (if (not (eq? (type-id type) 'laserP))
+                       (begin
+                         'show-explostion-sprite
+                         (shield-explosion! collision-obj
+                                            pos
+                                            invader-explosion-particles))
+                       (pp 'damage-shield)))
 
                   ((mothership? collision-obj)
                    (level-score-set!

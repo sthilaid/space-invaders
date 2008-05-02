@@ -140,7 +140,7 @@ end
         (laserB-renderer  (create-4-state-renderer laserB))
         (laserP-renderer  (create-single-state-renderer laserP))
         (explodeI-renderer (create-single-state-renderer explodeI))
-        (shield-renderer (create-single-state-renderer shield))
+;;        (shield-renderer (create-single-state-renderer shield))
         (mothership-renderer (create-single-state-renderer mothership)))
         
     (lambda (obj)
@@ -157,22 +157,29 @@ end
         ((laserB) (laserB-renderer x y state))
         ((laserP) (laserP-renderer x y state))
         ((explodeI) (explodeI-renderer x y state))
-        ((shield) (shield-renderer x y state))
+;;        ((shield) (shield-renderer x y state))
         ((mothership) (mothership-renderer x y state))
         (else (error (string-append "Cannot render unknown object type:"
                                     (symbol->string type))))))))
 (define (render-shield shield)
+  (define counter 0)
+  (pp (length (shield-particles shield)))
   ;; equivalent to rgb color: 1ffe1f
   (glColor3f .12156862745098039 .996078431372549 .12156862745098039)
+;;  (glColor3f (random-real)(random-real)(random-real))
   (for-each (lambda (particle)
               (let* ((shield-x (pos2d-x (game-object-pos shield)))
                      (shield-y (pos2d-y (game-object-pos shield)))
                      (x (+ shield-x (pos2d-x particle)))
                      (y (+ shield-y (pos2d-y particle))))
+                (set! counter (+ counter 1))
                 (glBegin GL_POINTS)
                 (glVertex2i x y)
                 (glEnd)))
-            (shield-particles shield)))
+            (shield-particles shield))
+  (pp `(counter = ,counter)))
+
+
 
 (define (display-message x y msg)
   (let ((chars (map char->integer (string->list msg)))
@@ -183,6 +190,7 @@ end
               chars)))
 
 (define (render-scene level)
+  (pp 'RENDER-SCENE)
   (glClearColor 0. 0. 0. 0.)
   (glClear GL_COLOR_BUFFER_BIT)
 
@@ -195,17 +203,7 @@ end
 
   (glutSwapBuffers))
 
-;; (c-define (render-scene) () void "render_scene" ""
-;;   (glClearColor 0. 0. 0. 0.)
-;;   (glClear GL_COLOR_BUFFER_BIT)
 
-;;   ;; Draw all objects
-;;   (for-each render-object (level-all-objects current-level))
-
-;; ;;   (if status-message
-;; ;;       (display-message 0 0 status-message))
-
-;;   (glutSwapBuffers))
 
 ;;;;;;;;;;;;;;;;;;;;;;; Viewport and projection ;;;;;;;;;;;;;;;;;;;;;;;
 

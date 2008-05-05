@@ -264,7 +264,7 @@
 (define-macro (vector3d-set! vector i j k val)
   `(vector-set! (vector2d-ref ,vector ,i ,j) ,k ,val))
 
-; Randomize current mrg's seed
+;; Randomize current mrg's seed
 (random-source-randomize! default-random-source)
 ;;;;;;;;;;;;;;;;;;;;;;;; Data Structures ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

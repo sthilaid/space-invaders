@@ -74,14 +74,15 @@
 (define-type-of-game-object shield particles)
 
 (define invader-explosion-particles
+  ;; centered explosion particle positions
   (let ((p make-pos2d))
-    (list (p 1 0) (p 3 0) (p 5 0)
-          (p 0 1) (p 2 1) (p 3 1) (p 4 1)
-          (p 1 2) (p 2 2) (p 3 2) (p 4 2) (p 5 2)
-          (p 0 3) (p 2 3) (p 3 3) (p 4 3)
-          (p 1 4) (p 2 4) (p 3 4) (p 4 4)
-          (p 2 5) (p 3 5) (p 5 5)
-          (p 0 6) (p 4 6) (p 2 7))))
+    (list (p -2 0) (p 0 0) (p 2 0)
+          (p -3 1) (p -1 1) (p 0 1) (p 1 1)
+          (p -2 2) (p -1 2) (p 0 2) (p 1 2) (p 2 2)
+          (p -3 3) (p -1 3) (p 0 3) (p 1 3)
+          (p -2 4) (p -1 4) (p 0 4) (p 1 4)
+          (p -1 5) (p 0 5) (p 2 5)
+          (p -3 6) (p 1 6) (p -1 7))))
 
 (define (generate-shields)
   (define shield-type (get-type 'shield))
@@ -159,12 +160,21 @@
         (make-shield 'shield4 shield-type (make-pos2d 171 40) 0
                      speed (generate-particles))))
 
-(define (shield-explosion! shield explosion-pos explosion-particles)
+
+(define (shield-explosion! shield explosion-pos explosion-speed
+                           explosion-particles)
   (define pos (game-object-pos shield))
   (define particles (shield-particles shield))
+  (define interpenetration-vect
+    (let ((delta 4)
+          (dy (pos2d-y explosion-speed)))
+      (cond ((< dy 0) (make-pos2d 0 (- delta)))
+            ((> dy 0) (make-pos2d 0 delta))
+            (else (make-pos2d 0 0)))))
+  
   (define relative-expl-particles
-    (let ((relative-expl-pos (pos2d-sub (pos2d-sub explosion-pos
-                                                   (make-pos2d 0 4))
+    (let ((relative-expl-pos (pos2d-sub (pos2d-add explosion-pos
+                                                   interpenetration-vect)
                                         pos)))
       (map (lambda (ex-part) (pos2d-add ex-part relative-expl-pos))
          explosion-particles)))
@@ -483,9 +493,12 @@
   (define player-laser-update-interval 0.005)
   (define invader-laser-update-interval 0.01)
   (define next-invader-laser-interval 0.5)
-  (define pos (game-object-pos laser-obj))
   (define type (game-object-type laser-obj))
   (define (laser-event)
+    (define pos (let ((pos (game-object-pos laser-obj)))
+                  (pos2d-add pos
+                             (make-pos2d (floor (/ (type-width type) 2)) 0))))
+    
     (move-object! laser-obj)
     (let ((collision-obj (detect-collision? laser-obj level)))
       (if collision-obj
@@ -508,13 +521,11 @@
                    (pp 'todo-lose-one-life-and-restart))
 
                   ((shield? collision-obj)
-                   (if (not (eq? (type-id type) 'laserP))
-                       (begin
-                         'show-explostion-sprite
-                         (shield-explosion! collision-obj
-                                            pos
-                                            invader-explosion-particles))
-                       (pp 'damage-shield)))
+                   (pp 'show-explostion-sprite)
+                   (shield-explosion! collision-obj
+                                      pos
+                                      (game-object-speed laser-obj)
+                                      invader-explosion-particles))
 
                   ((mothership? collision-obj)
                    (level-score-set!

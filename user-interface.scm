@@ -1,5 +1,6 @@
-
 (include "scm-lib.scm")
+(include "sprite.scm")
+
 
 ;;;;;;;;;;;;;;;;;;;;;;; Global state variables  ;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -164,7 +165,7 @@ end
 (define (render-shield shield)
   ;; equivalent to rgb color: 1ffe1f
   (glColor3f .12156862745098039 .996078431372549 .12156862745098039)
-;;  (glColor3f (random-real)(random-real)(random-real))
+
   (for-each (lambda (particle)
               (let* ((shield-x (pos2d-x (game-object-pos shield)))
                      (shield-y (pos2d-y (game-object-pos shield)))
@@ -209,9 +210,11 @@ end
 ;;    (glOrtho 0. (exact->inexact w) 0. (exact->inexact h) -1.0 1.0)
 ;;    (glMatrixMode GL_MODELVIEW))
 
-  (let ((zoom-x (/ w image-width))
-        (zoom-y (/ h image-height)))
-    (glPointSize (exact->inexact (ceiling (max zoom-x zoom-y))))
+  (let* ((zoom-x (/ w image-width))
+         (zoom-y (/ h image-height))
+         (factor (exact->inexact (ceiling (max zoom-x zoom-y)))))
+    (glPointSize factor)
+    (glPixelZoom factor factor)
     (glViewport 0 0 w h)
     (glMatrixMode GL_PROJECTION)
     (glLoadIdentity)

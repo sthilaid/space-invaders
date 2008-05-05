@@ -162,8 +162,6 @@ end
         (else (error (string-append "Cannot render unknown object type:"
                                     (symbol->string type))))))))
 (define (render-shield shield)
-  (define counter 0)
-  (pp (length (shield-particles shield)))
   ;; equivalent to rgb color: 1ffe1f
   (glColor3f .12156862745098039 .996078431372549 .12156862745098039)
 ;;  (glColor3f (random-real)(random-real)(random-real))
@@ -172,12 +170,10 @@ end
                      (shield-y (pos2d-y (game-object-pos shield)))
                      (x (+ shield-x (pos2d-x particle)))
                      (y (+ shield-y (pos2d-y particle))))
-                (set! counter (+ counter 1))
                 (glBegin GL_POINTS)
                 (glVertex2i x y)
                 (glEnd)))
-            (shield-particles shield))
-  (pp `(counter = ,counter)))
+            (shield-particles shield)))
 
 
 
@@ -190,7 +186,6 @@ end
               chars)))
 
 (define (render-scene level)
-  (pp 'RENDER-SCENE)
   (glClearColor 0. 0. 0. 0.)
   (glClear GL_COLOR_BUFFER_BIT)
 
@@ -216,7 +211,7 @@ end
 
   (let ((zoom-x (/ w image-width))
         (zoom-y (/ h image-height)))
-    (glPointSize (exact->inexact (+ (max zoom-x zoom-y) 1)))
+    (glPointSize (exact->inexact (ceiling (max zoom-x zoom-y))))
     (glViewport 0 0 w h)
     (glMatrixMode GL_PROJECTION)
     (glLoadIdentity)

@@ -164,7 +164,7 @@
   (define particles (shield-particles shield))
   (define relative-expl-particles
     (let ((relative-expl-pos (pos2d-sub (pos2d-sub explosion-pos
-                                                   (make-pos2d 0 6))
+                                                   (make-pos2d 0 4))
                                         pos)))
       (map (lambda (ex-part) (pos2d-add ex-part relative-expl-pos))
          explosion-particles)))
@@ -177,22 +177,8 @@
             (particle-member p (cdr p-list)))))
   
   (define new-particles
-    (filter (lambda (p)
-              (if (not (particle-member p relative-expl-particles))
-                  #t
-                  (begin (pp `(removing ,p)) #f)))
+    (filter (lambda (p) (not (particle-member p relative-expl-particles)))
             particles))
-;;   (pp `(relative-pos ,(pos2d-sub (pos2d-sub explosion-pos
-;;                                                    (make-pos2d 0 4))
-;;                                         pos)))
-;;   (pp 'particles:)
-;;   (pp particles)
-;;   (pp 'relative-expl-part:)
-;;   (pp relative-expl-particles)
-;;   (pp 'new-particles:)
-;;   (pp new-particles)
-;;   (newline)
-  (pp `(,(length particles) => ,(length new-particles)))
   (shield-particles-set! shield new-particles))
 
 

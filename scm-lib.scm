@@ -1,8 +1,5 @@
-;;               Scheme library used for Assignement #1
-;;                      for the course comp-521
-;;
-;;                        by David St-Hilaire
-;;                            winter 2008
+;;                       General Scheme library 
+;;                         by David St-Hilaire
 ;;
 ;;
 ;; This library source file contains various well known and less well
@@ -210,6 +207,32 @@
   (make-rectangular (real-part z) (- (imag-part z))))
 
 (define pi (* 2 (asin 1)))
+
+;;;;;;;;;;;;;;;;;;;;;; 2d-position vectors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;(define-type pos2d x y)
+(define make-pos2d cons)
+(define (pos2d? x) (and (pair? x) (number? (car x)) (number? (cdr x))))
+(define pos2d-x car)
+(define pos2d-y cdr)
+(define pos2d-x-set! set-car!)
+(define pos2d-y-set! set-cdr!)
+(define (pos2d-add p1 p2) (make-pos2d (+ (pos2d-x p1) (pos2d-x p2))
+                                      (+ (pos2d-y p1) (pos2d-y p2))))
+(define (pos2d-sub p1 p2) (make-pos2d (- (pos2d-x p1) (pos2d-x p2))
+                                      (- (pos2d-y p1) (pos2d-y p2))))
+(define (pos2d-scalar-prod p1 p2)
+  (+ (* (pos2d-x p1) (pos2d-x p2)) (* (pos2d-y p1) (pos2d-y p2))))
+(define (pos2d-cartesian-distance p1 p2)
+  (sqrt (+ (expt (- (pos2d-x p1) (pos2d-x p2)) 2)
+           (expt (- (pos2d-y p1) (pos2d-y p2)) 2))))
+
+(define (pos2d-complexify p) (make-rectangular (pos2d-x p) (pos2d-y p)))
+
+(define (pos2d= p1 p2)
+  (and (= (pos2d-x p1) (pos2d-x p2))
+       (= (pos2d-y p1) (pos2d-y p2))))
+
 
 
 ;;;;;;;;;;;;;;;;;;;;;; Boolean operation ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

@@ -28,7 +28,7 @@ space-invaders_.c: $(GLUT_FILES:.scm=.c) $(SPACE_INVADERS_FILES:.scm=.c)
 user-interface.c: user-interface.scm $(GRAPHICS_FILES) ppm-reader.scm scm-lib.scm sprite.scm
 	$(GSC) -c user-interface.scm
 
-engine.c: engine.scm scm-lib.scm event-simulation.scm
+engine.c: engine.scm scm-lib.scm event-simulation.scm ppm-reader.scm
 	$(GSC) -c engine.scm
 
 .scm.c: 

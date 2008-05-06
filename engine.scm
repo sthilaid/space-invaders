@@ -1,4 +1,5 @@
 (include "scm-lib.scm")
+(include "ppm-reader.scm")
 (include "event-simulation.scm")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -17,7 +18,7 @@
 (define invader-spacing 16)
 
 (define ship-movement-speed 1)
-(define player-movement-speed 5)
+(define player-movement-speed 1)
 (define player-laser-speed 1)
 (define invader-laser-speed 1)
 
@@ -25,21 +26,7 @@
 ;; Data Structures definitions and operations
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;;;; 2d position coordinate ;;;;
-(define-type pos2d x y)
-
-(define (pos2d-add p1 p2)
-  (make-pos2d (+ (pos2d-x p1) (pos2d-x p2))
-              (+ (pos2d-y p1) (pos2d-y p2))))
-
-(define (pos2d-sub p1 p2)
-  (make-pos2d (- (pos2d-x p1) (pos2d-x p2))
-              (- (pos2d-y p1) (pos2d-y p2))))
-
-(define (pos2d= p1 p2)
-  (and (= (pos2d-x p1) (pos2d-x p2))
-       (= (pos2d-y p1) (pos2d-y p2))))
-
+;;;; 2d position coordinate additionnal operations ;;;;
 (define (inverse-dir dir . options)
   (let ((x-fact (if (memq 'x options) -1 1))
         (y-fact (if (memq 'y options) -1 1)))
@@ -73,83 +60,23 @@
 (define-type-of-game-object laser-obj)
 (define-type-of-game-object shield particles)
 
-(define invader-explosion-particles
-  ;; centered explosion particle positions
-  (let ((p make-pos2d))
-    (list (p -2 0) (p 0 0) (p 2 0)
-          (p -3 1) (p -1 1) (p 0 1) (p 1 1)
-          (p -2 2) (p -1 2) (p 0 2) (p 1 2) (p 2 2)
-          (p -3 3) (p -1 3) (p 0 3) (p 1 3)
-          (p -2 4) (p -1 4) (p 0 4) (p 1 4)
-          (p -1 5) (p 0 5) (p 2 5)
-          (p -3 6) (p 1 6) (p -1 7))))
+;;;; centered explosion particle positions ;;;;
+(define invader-laser-explosion-particles
+  (rgb-pixels-to-boolean-point-list
+   (parse-ppm-image-file "sprites/explodeInvL0.ppm") 'center))
 
+(define player-laser-explosion-particles
+  (rgb-pixels-to-boolean-point-list
+   (parse-ppm-image-file "sprites/explodeL0.ppm") 'center))
+
+
+;;;; Shields ;;;;
 (define (generate-shields)
   (define shield-type (get-type 'shield))
   (define speed (make-pos2d 0 0))
   (define (generate-particles)
-    (define p make-pos2d)
-    (list (p 0 0) (p 1 0) (p 2 0) (p 3 0) (p 4 0)
-          (p 16 0) (p 17 0) (p 18 0) (p 19 0) (p 20 0) (p 21 0)
-          
-          (p 0 1) (p 1 1) (p 2 1) (p 3 1) (p 4 1)
-          (p 16 1) (p 17 1) (p 18 1) (p 19 1) (p 20 1) (p 21 1)
-          
-          (p 0 2) (p 1 2) (p 2 2) (p 3 2) (p 4 2) (p 5 2) (p 15 2)
-          (p 16 2) (p 17 2) (p 18 2) (p 19 2) (p 20 2) (p 21 2)
-
-          (p 0 3) (p 1 3) (p 2 3) (p 3 3) (p 4 3) (p 5 3) (p 6 3) (p 14 3)
-          (p 15 3)(p 16 3) (p 17 3) (p 18 3) (p 19 3) (p 20 3) (p 21 3)
-
-          (p 0 4) (p 1 4) (p 2 4) (p 3 4) (p 4 4) (p 5 4) (p 6 4) (p 7 4)
-          (p 8 4) (p 9 4) (p 10 4) (p 11 4) (p 12 4) (p 13 4) (p 14 4)
-          (p 15 4)(p 16 4) (p 17 4) (p 18 4) (p 19 4) (p 20 4) (p 21 4)
-
-          (p 0 5) (p 1 5) (p 2 5) (p 3 5) (p 4 5) (p 5 5) (p 6 5) (p 7 5)
-          (p 8 5) (p 9 5) (p 10 5) (p 11 5) (p 12 5) (p 13 5) (p 14 5)
-          (p 15 5)(p 16 5) (p 17 5) (p 18 5) (p 19 5) (p 20 5) (p 21 5)
-
-          (p 0 6) (p 1 6) (p 2 6) (p 3 6) (p 4 6) (p 5 6) (p 6 6) (p 7 6)
-          (p 8 6) (p 9 6) (p 10 6) (p 11 6) (p 12 6) (p 13 6) (p 14 6)
-          (p 15 6)(p 16 6) (p 17 6) (p 18 6) (p 19 6) (p 20 6) (p 21 6)
-
-          (p 0 7) (p 1 7) (p 2 7) (p 3 7) (p 4 7) (p 5 7) (p 6 7) (p 7 7)
-          (p 8 7) (p 9 7) (p 10 7) (p 11 7) (p 12 7) (p 13 7) (p 14 7)
-          (p 15 7)(p 16 7) (p 17 7) (p 18 7) (p 19 7) (p 20 7) (p 21 7)
-
-          (p 0 8) (p 1 8) (p 2 8) (p 3 8) (p 4 8) (p 5 8) (p 6 8) (p 7 8)
-          (p 8 8) (p 9 8) (p 10 8) (p 11 8) (p 12 8) (p 13 8) (p 14 8)
-          (p 15 8)(p 16 8) (p 17 8) (p 18 8) (p 19 8) (p 20 8) (p 21 8)
-
-          (p 0 9) (p 1 9) (p 2 9) (p 3 9) (p 4 9) (p 5 9) (p 6 9) (p 7 9)
-          (p 8 9) (p 9 9) (p 10 9) (p 11 9) (p 12 9) (p 13 9) (p 14 9)
-          (p 15 9)(p 16 9) (p 17 9) (p 18 9) (p 19 9) (p 20 9) (p 21 9)
-
-          (p 0 10) (p 1 10) (p 2 10) (p 3 10) (p 4 10) (p 5 10) (p 6 10)
-          (p 7 10) (p 8 10) (p 9 10) (p 10 10) (p 11 10) (p 12 10) (p 13 10)
-          (p 14 10)(p 15 10)(p 16 10) (p 17 10) (p 18 10) (p 19 10) (p 20 10)
-          (p 21 10)
-
-          (p 0 11) (p 1 11) (p 2 11) (p 3 11) (p 4 11) (p 5 11) (p 6 11)
-          (p 7 11) (p 8 11) (p 9 11) (p 10 11) (p 11 11) (p 12 11) (p 13 11)
-          (p 14 11)(p 15 11)(p 16 11) (p 17 11) (p 18 11) (p 19 11) (p 20 11)
-          (p 21 11)
-
-          (p 1 12) (p 2 12) (p 3 12) (p 4 12) (p 5 12) (p 6 12)
-          (p 7 12) (p 8 12) (p 9 12) (p 10 12) (p 11 12) (p 12 12) (p 13 12)
-          (p 14 12)(p 15 12)(p 16 12) (p 17 12) (p 18 12) (p 19 12) (p 20 12)
-
-          (p 2 13) (p 3 13) (p 4 13) (p 5 13) (p 6 13)
-          (p 7 13) (p 8 13) (p 9 13) (p 10 13) (p 11 13) (p 12 13) (p 13 13)
-          (p 14 13)(p 15 13)(p 16 13) (p 17 13) (p 18 13) (p 19 13)
-          
-          (p 3 14) (p 4 14) (p 5 14) (p 6 14) (p 7 14) (p 8 14) (p 9 14)
-          (p 10 14) (p 11 14) (p 12 14) (p 13 14) (p 14 14)(p 15 14)
-          (p 16 14) (p 17 14) (p 18 14)
-
-          (p 4 15) (p 5 15) (p 6 15) (p 7 15) (p 8 15) (p 9 15)
-          (p 10 15) (p 11 15) (p 12 15) (p 13 15) (p 14 15)(p 15 15)
-          (p 16 15) (p 17 15)))
+      (rgb-pixels-to-boolean-point-list
+       (parse-ppm-image-file "sprites/shield0.ppm")))
 
   (list (make-shield 'shield1 shield-type (make-pos2d  36 40) 0
                      speed (generate-particles))
@@ -339,7 +266,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Simulation Events and Game Logic
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
+ 
 (define get-invader-move-refresh-rate
   ;; the sleep delay is a function such that when the level is full of
   ;; invaders (55 invaders) then the delay is 0.1 and when there is
@@ -365,28 +292,38 @@
              rows)))
       (if (null? rows)
           (show "Game over with " (level-score level) " points.\n")
-          (let ((old-dx (pos2d-x (game-object-speed (caar rows))))
-                (delta-t (* (length rows)
-                            (get-invader-move-refresh-rate level))))
+          (let* ((old-dx (pos2d-x (game-object-speed (caar rows))))
+                 (dt (get-invader-move-refresh-rate level))
+                 (duration (* (length rows) dt)))
+                             
             (if wall-collision?
                 (begin
-                  (schedule-invader-move! 0 0 (- invader-spacing) level)
-                  (schedule-invader-move! delta-t (- old-dx) 0 level)
-                  (in (* 2 delta-t) (create-init-invader-move-event level)))
+                  (pp 'wall-collision-detected!)
+                  (in 0 (create-invader-row-move-event!
+                         dt 0 (- invader-spacing) level))
+                  (in duration
+                      (create-invader-row-move-event! dt (- old-dx) 0 level))
+                  (in (* 2 duration) (create-init-invader-move-event level)))
                 (begin
-                  (schedule-invader-move! 0 old-dx 0 level)
-                  (in delta-t (create-init-invader-move-event level)))))))))
+                  (in 0 (create-invader-row-move-event! dt old-dx 0 level))
+                  (in duration (create-init-invader-move-event level)))))))))
 
-(define (schedule-invader-move! init-dt dx dy level)
-  (define dt (get-invader-move-refresh-rate level))
-
-  (for i 0 (< i invader-row-number)
-     (in (+ init-dt (* i dt))
-         (lambda ()
-           (for-each (lambda (inv) (let ((speed (make-pos2d dx dy)))
-                                     (game-object-speed-set! inv speed)))
-                     (get-invaders-from-row level i))
-           (move-ship-row! level i)))))
+(define (create-invader-row-move-event! dt dx dy level)
+  (define rows (get-all-invader-rows level))
+  (define (inv-row-move-event row-index)
+    (lambda ()
+      (if (< row-index invader-row-number)
+          (let ((current-row (get-invaders-from-row level row-index)))
+            (if (not (null? current-row))
+                (begin 
+                  (for-each
+                   (lambda (inv) (let ((speed (make-pos2d dx dy)))
+                                   (game-object-speed-set! inv speed)))
+                   current-row)
+                  (move-ship-row! level row-index)
+                  (in dt (inv-row-move-event (+ row-index 1))))
+                ((inv-row-move-event (+ row-index 1))))))))
+  (inv-row-move-event 0))
 
 ;; Creates a new mothership and schedules its first move event.
 (define (create-new-mothership-event level)
@@ -525,7 +462,9 @@
                    (shield-explosion! collision-obj
                                       pos
                                       (game-object-speed laser-obj)
-                                      invader-explosion-particles))
+                                      (if (eq? (type-id type) 'laserP)
+                                          player-laser-explosion-particles
+                                          invader-laser-explosion-particles)))
 
                   ((mothership? collision-obj)
                    (level-score-set!

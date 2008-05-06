@@ -74,6 +74,8 @@ end
 (include-ppm-pixel-sprite "sprites/player0.ppm")
 (include-ppm-pixel-sprite "sprites/player1.ppm")
 (include-ppm-pixel-sprite "sprites/explodeI0.ppm")
+(include-ppm-pixel-sprite "sprites/explodeS0.ppm")
+(include-ppm-pixel-sprite "sprites/explodeInvL0.ppm")
 
 (define-macro (cast-pointer new-type old-type val)
   `((c-lambda (,old-type) ,new-type
@@ -141,6 +143,8 @@ end
         (laserB-renderer  (create-4-state-renderer laserB))
         (laserP-renderer  (create-single-state-renderer laserP))
         (explodeI-renderer (create-single-state-renderer explodeI))
+        (explodeInvL-renderer (create-single-state-renderer explodeInvL))
+        (explodeS-renderer (create-single-state-renderer explodeS))
 ;;        (shield-renderer (create-single-state-renderer shield))
         (mothership-renderer (create-single-state-renderer mothership)))
         
@@ -158,6 +162,8 @@ end
         ((laserB) (laserB-renderer x y state))
         ((laserP) (laserP-renderer x y state))
         ((explodeI) (explodeI-renderer x y state))
+        ((explodeInvL) (explodeInvL-renderer x y state))
+        ((explodeS) (explodeS-renderer x y state))
 ;;        ((shield) (shield-renderer x y state))
         ((mothership) (mothership-renderer x y state))
         (else (error (string-append "Cannot render unknown object type:"

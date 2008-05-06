@@ -86,6 +86,8 @@
      (laserP ,(make-object-type 'laserP (make-rect 0 0 1 5) 1 0))
      (shield ,(make-object-type 'shield (make-rect 0 0 22 16) 1 0))
      (explodeI ,(make-object-type 'explodeI (make-rect 0 0 13 8) 1 0))
+     (explodeInvL ,(make-object-type 'explodeInvL (make-rect 0 0 6 8) 1 0))
+     (explodeS ,(make-object-type 'explodeS (make-rect 0 0 8 8) 1 0))
    ))
 
 (define (get-type type-name)
@@ -121,21 +123,24 @@
         (make-shield 'shield4 shield-type (make-pos2d 171 40) 0
                      speed (generate-particles))))
 
+(define (get-laser-penetration-pos laser-obj)
+  (let* ((delta 3)
+         (pos (game-object-pos laser-obj))
+         (dy (pos2d-y (game-object-speed laser-obj)))
+         (delta-vect 
+          (cond ((< dy 0) (make-pos2d 0 (- delta)))
+                ((> dy 0) (make-pos2d 0 delta))
+                (else (make-pos2d 0 0)))))
+    (pos2d-add pos delta-vect)))
+
 
 (define (shield-explosion! shield explosion-pos explosion-speed
                            explosion-particles)
   (define pos (game-object-pos shield))
   (define particles (shield-particles shield))
-  (define interpenetration-vect
-    (let ((delta 4)
-          (dy (pos2d-y explosion-speed)))
-      (cond ((< dy 0) (make-pos2d 0 (- delta)))
-            ((> dy 0) (make-pos2d 0 delta))
-            (else (make-pos2d 0 0)))))
   
   (define relative-expl-particles
-    (let ((relative-expl-pos (pos2d-sub (pos2d-add explosion-pos
-                                                   interpenetration-vect)
+    (let ((relative-expl-pos (pos2d-sub explosion-pos
                                         pos)))
       (map (lambda (ex-part) (pos2d-add ex-part relative-expl-pos))
          explosion-particles)))
@@ -465,13 +470,15 @@
                    (pp 'todo-lose-one-life-and-restart))
 
                   ((shield? collision-obj)
-                   (pp 'show-explostion-sprite)
+                   (let ((penetrated-pos
+                          (get-laser-penetration-pos laser-obj)))
+                   (explode-laser! level laser-obj)
                    (shield-explosion! collision-obj
-                                      pos
+                                      penetrated-pos
                                       (game-object-speed laser-obj)
                                       (if (eq? (type-id type) 'laserP)
                                           player-laser-explosion-particles
-                                          invader-laser-explosion-particles)))
+                                          invader-laser-explosion-particles))))
 
                   ((mothership? collision-obj)
                    (level-score-set!
@@ -503,10 +510,33 @@
   (define animation-duration 0.3)
   (game-object-type-set! inv (get-type 'explodeI))
   (game-object-state-set! inv 0)
-  (in animation-duration (create-explode-invader-end-event! level inv)))
+  (in animation-duration (create-explosion-end-event! level inv)))
+
+(define (explode-laser! level laser-obj)
+  (define animation-duration 0.3)
+  (define (laser-type-id) (object-type-id (game-object-type laser-obj)))
+  (define expl-type (if (eq? (laser-type-id) 'laserP)
+                        (get-type 'explodeS)
+                        (get-type 'explodeInvL)))
+  (define (center-pos pos)
+    ;; FIXME: ugly hack where only player laser's explotion are
+    ;; centered in x. I'm unsure why other lasers don't require this
+    ;; shift so far...
+    (if (eq? (laser-type-id) 'laserP)
+        (pos2d-sub pos (make-pos2d (floor (/ (type-width expl-type) 2))
+                                   0))
+        pos))
+  (define obj
+    (make-game-object (gensym 'explosion)
+                      expl-type
+                      (center-pos (get-laser-penetration-pos laser-obj))
+                      0 (make-pos2d 0 0)))
+  (level-add-object! level obj)
+  (in animation-duration (create-explosion-end-event! level obj)))
+
 
 ;; Event that will stop an invader explosion animation
-(define (create-explode-invader-end-event! level inv)
+(define (create-explosion-end-event! level inv)
   (lambda ()
     (level-remove-object! level inv)))
 

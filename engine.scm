@@ -309,7 +309,6 @@
                              
             (if wall-collision?
                 (begin
-                  (pp 'wall-collision-detected!)
                   (in 0 (create-invader-row-move-event!
                          dt 0 (- invader-y-movement-speed) level))
                   (in duration

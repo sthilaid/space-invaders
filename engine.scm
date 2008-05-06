@@ -52,8 +52,10 @@
                (object-type-state-num (game-object-type obj)))))
 
 (define (get-bounding-box obj)
-  (make-rect (pos2d-x (game-object-pos obj))
-             (pos2d-y (game-object-pos obj))
+  (make-rect (+ (pos2d-x (game-object-pos obj))
+                (rect-x (object-type-bbox (game-object-type obj))))
+             (+ (pos2d-y (game-object-pos obj))
+                (rect-y (object-type-bbox (game-object-type obj))))
              (type-width (game-object-type obj))
              (type-height (game-object-type obj))))
 
@@ -64,10 +66,38 @@
 (define-type-of-game-object laser-obj)
 (define-type-of-game-object shield particles)
 
+;;;; Game object type definition ;;;;
+(define-type object-type id bbox state-num score-value)
+(define type-id object-type-id)
+(define (type-height t) (rect-height (object-type-bbox t)))
+(define (type-width t) (rect-width (object-type-bbox t)))
+
+;; Global associative list of all object types
+(define types
+  ;; Bounding boxes for all ship types must be equal such that they
+  ;; behave the same way in the level.
+  `( (easy ,(make-object-type 'easy (make-rect 0 0 12 8) 2 10))
+     (medium ,(make-object-type 'medium (make-rect 0 0 12 8) 2 20))
+     (hard ,(make-object-type 'hard (make-rect 0 0 12 8) 2 30))
+     (mothership ,(make-object-type 'mothership (make-rect 0 0 16 7) 1 100))
+     (player ,(make-object-type 'player (make-rect 0 0 13 8) 1 0))
+     (laserA ,(make-object-type 'laserA (make-rect 1 0 1 6) 2 0))
+     (laserB ,(make-object-type 'laserB (make-rect 1 0 1 6) 3 0))
+     (laserP ,(make-object-type 'laserP (make-rect 0 0 1 5) 1 0))
+     (shield ,(make-object-type 'shield (make-rect 0 0 22 16) 1 0))
+     (explodeI ,(make-object-type 'explodeI (make-rect 0 0 13 8) 1 0))
+   ))
+
+(define (get-type type-name)
+  (let ((type (assq type-name types)))
+  (if type
+      (cadr type)
+      (error (string-append "no such type: " type-name)))))
+
 ;;;; centered explosion particle positions ;;;;
 (define invader-laser-explosion-particles
   (rgb-pixels-to-boolean-point-list
-   (parse-ppm-image-file "sprites/explodeInvL0.ppm") 'center))
+   (parse-ppm-image-file "sprites/explodeInvL0.ppm") 'dont-center))
 
 (define player-laser-explosion-particles
   (rgb-pixels-to-boolean-point-list
@@ -122,34 +152,6 @@
             particles))
   (shield-particles-set! shield new-particles))
 
-
-;;;; Game object type definition ;;;;
-(define-type object-type id width height state-num value)
-(define type-id object-type-id)
-(define type-height object-type-height)
-(define type-width object-type-width)
-
-;; Global associative list of all object types
-(define types
-  ;; Bounding boxes for all ship types must be equal such that they
-  ;; behave the same way in the level.
-  `( (easy ,(make-object-type 'easy 12 8 2 10))
-     (medium ,(make-object-type 'medium 12 8 2 20))
-     (hard ,(make-object-type 'hard 12 8 2 30))
-     (mothership ,(make-object-type 'mothership 16 7 1 100))
-     (player ,(make-object-type 'player 13 8 1 0))
-     (laserA ,(make-object-type 'laserA 3 6 2 0))
-     (laserB ,(make-object-type 'laserB 3 6 3 0))
-     (laserP ,(make-object-type 'laserP 1 5 1 0))
-     (shield ,(make-object-type 'shield 22 16 1 0))
-     (explodeI ,(make-object-type 'explodeI 13 8 1 0))
-   ))
-
-(define (get-type type-name)
-  (let ((type (assq type-name types)))
-  (if type
-      (cadr type)
-      (error (string-append "no such type: " type-name)))))
 
 
 ;;;; Wall or game boundary structure ;;;;
@@ -354,7 +356,7 @@
                               (level-score-set!
                                level
                                (+ (level-score level)
-                                  (object-type-value
+                                  (object-type-score-value
                                    (game-object-type mothership))))
                               (explode-invader! level mothership)))
                        ;; Schedule next mothership
@@ -449,7 +451,7 @@
             (cond ((invader-ship? collision-obj) 
                    (level-score-set!
                     level (+ (level-score level)
-                             (object-type-value
+                             (object-type-score-value
                               (game-object-type collision-obj))))
                    (explode-invader! level collision-obj))
               
@@ -474,7 +476,7 @@
                   ((mothership? collision-obj)
                    (level-score-set!
                     level (+ (level-score level)
-                             (object-type-value
+                             (object-type-score-value
                               (game-object-type collision-obj))))
                    (explode-invader! level collision-obj)
                    (let ((delta-t (+ (random-integer 3) 1)))

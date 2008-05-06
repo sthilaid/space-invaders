@@ -15,9 +15,13 @@
 
 (define invader-row-number 5)
 (define invader-col-number 11)
+;; (define invader-row-number 2)
+;; (define invader-col-number 5)
+
 (define invader-spacing 16)
 
-(define ship-movement-speed 1)
+(define invader-x-movement-speed 1)
+(define invader-y-movement-speed 8)
 (define player-movement-speed 1)
 (define player-laser-speed 1)
 (define invader-laser-speed 1)
@@ -218,7 +222,7 @@
                (y (+ y-offset (* h invader-spacing)))
                (pos (make-pos2d x y))
                (state 1)
-               (speed (make-pos2d ship-movement-speed 0))
+               (speed (make-pos2d invader-x-movement-speed 0))
                (row h)
                (col w))
           (set! invaders
@@ -300,7 +304,7 @@
                 (begin
                   (pp 'wall-collision-detected!)
                   (in 0 (create-invader-row-move-event!
-                         dt 0 (- invader-spacing) level))
+                         dt 0 (- invader-y-movement-speed) level))
                   (in duration
                       (create-invader-row-move-event! dt (- old-dx) 0 level))
                   (in (* 2 duration) (create-init-invader-move-event level)))
@@ -429,9 +433,10 @@
 (define (create-laser-event laser-obj level)
   (define player-laser-update-interval 0.005)
   (define invader-laser-update-interval 0.01)
-  (define next-invader-laser-interval 0.5)
+  (define next-invader-laser-interval 0.2)
   (define type (game-object-type laser-obj))
   (define (laser-event)
+    ;; centered laser position (depending on the laser type...
     (define pos (let ((pos (game-object-pos laser-obj)))
                   (pos2d-add pos
                              (make-pos2d (floor (/ (type-width type) 2)) 0))))
@@ -474,11 +479,12 @@
                    (explode-invader! level collision-obj)
                    (let ((delta-t (+ (random-integer 3) 1)))
                      (in delta-t (create-new-mothership-event level)))))
-            
-            (if (not (eq? laser-obj (level-player-laser level)))
+
+            (level-remove-object! level laser-obj)
+            (if (not (eq? (type-id type) 'laserP))
                 (in next-invader-laser-interval
-                    (create-invader-laser-event level)))
-            (level-remove-object! level laser-obj))
+                    (create-invader-laser-event level))))
+            
           
           ;; if no collisions, continue on with the laser motion
           (let ((delta-t (if (eq? (level-player-laser level) laser-obj)

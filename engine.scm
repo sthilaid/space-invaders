@@ -27,6 +27,10 @@
 (define player-laser-speed 1)
 (define invader-laser-speed 1)
 
+(define global-sim-mutex (new-mutex))
+
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Data Structures definitions and operations
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -353,7 +357,9 @@
                             (make-pos2d wall-offset 201) 0 (make-pos2d 1 0))))
     (level-add-object! level mothership)
     (in 0 (create-mothership-event level)))))
-    
+
+(define (mothership-random-delay)
+  (+ (random-integer 10) 5))
 ;; Event that moves a mothership and handles its collisions.
 (define (create-mothership-event level)
   (define mothership-update-interval 0.02)
@@ -374,7 +380,7 @@
                                    (game-object-type mothership))))
                               (explode-invader! level mothership)))
                        ;; Schedule next mothership
-                       (let ((delta-t (+ (random-integer 3) 1)))
+                       (let ((delta-t (mothership-random-delay)))
                          (in delta-t (create-new-mothership-event level))))
                 (in mothership-update-interval mothership-event))))))
   mothership-event)
@@ -497,7 +503,7 @@
                              (object-type-score-value
                               (game-object-type collision-obj))))
                    (explode-invader! level collision-obj)
-                   (let ((delta-t (+ (random-integer 3) 1)))
+                   (let ((delta-t (mothership-random-delay)))
                      (in delta-t (create-new-mothership-event level))))
 
                   ((wall? collision-obj)
@@ -622,6 +628,7 @@
     (in refresh-rate redraw-event))
   redraw-event)
 
+
 ;; Setup of initial game events and start the simulation.
 (define (game-loop ui-thread level)
   (define sim (create-simulation))
@@ -631,7 +638,7 @@
     (schedule-event! sim 0 (create-manager-event level))
     (schedule-event! sim 1 (create-invader-laser-event level))
     (schedule-event! sim 0 (create-redraw-event ui-thread level))
-    (schedule-event! sim (+ (random-integer 3) 1)
+    (schedule-event! sim (mothership-random-delay)
                      (create-new-mothership-event level))
     (start-simulation! sim +inf.0)))
 

@@ -9,6 +9,7 @@
 (define screen-max-x 228)
 (define screen-max-y 265)
 (define wall-offset 14)
+(define screen-bottom-y-offset 9)
 (define gamefield-max-x (- screen-max-x wall-offset))
 (define gamefield-max-y (- screen-max-y wall-offset))
 
@@ -20,9 +21,9 @@
 
 (define invader-spacing 16)
 
-(define invader-x-movement-speed 1)
+(define invader-x-movement-speed 2)
 (define invader-y-movement-speed 8)
-(define player-movement-speed 1)
+(define player-movement-speed 2)
 (define player-laser-speed 1)
 (define invader-laser-speed 1)
 
@@ -88,6 +89,7 @@
      (explodeI ,(make-object-type 'explodeI (make-rect 0 0 13 8) 1 0))
      (explodeInvL ,(make-object-type 'explodeInvL (make-rect 0 0 6 8) 1 0))
      (explodeS ,(make-object-type 'explodeS (make-rect 0 0 8 8) 1 0))
+     (explodeP ,(make-object-type 'explodeP (make-rect 0 0 16 8) 2 0))
    ))
 
 (define (get-type type-name)
@@ -167,14 +169,14 @@
 (define wall-rect wall-struct-rect)
 
 (define (generate-walls)
-  (list (new-wall wall-offset 0 +inf.0 -inf.0)
-        (new-wall wall-offset 0 -inf.0 +inf.0)
+  (list (new-wall wall-offset screen-bottom-y-offset +inf.0 -inf.0) ;;
+        (new-wall wall-offset screen-bottom-y-offset -inf.0 +inf.0)
         (new-wall gamefield-max-x screen-max-y -inf.0 +inf.0)
         (new-wall gamefield-max-x screen-max-y +inf.0 -inf.0)))
 
 
 ;;;; Game level description ;;;;
-(define-type level height width object-table walls shields score)
+(define-type level height width object-table walls shields score lives)
 (define (level-add-object! lvl obj)
    (table-set! (level-object-table lvl) (game-object-id obj) obj))
 
@@ -186,6 +188,10 @@
 
 (define (level-invaders lvl)
    (filter invader-ship? (level-all-objects lvl)))
+
+(define (level-loose-1-life! lvl)
+  (level-lives-set! lvl (- (level-lives lvl) 1))
+  (if (<= (level-lives lvl) 0) (pp 'todo-game-over?)))
 
 ;; Returns (not efficiently) the list of all invaders located on the
 ;; specified row index or '() if none exists.
@@ -200,7 +206,7 @@
         (reverse (cleanse acc)))))
           
 (define (level-player lvl)
-   (table-ref (level-object-table lvl) 'player))
+   (table-ref (level-object-table lvl) 'player #f))
 
 (define (level-player-laser lvl)
    (table-ref (level-object-table lvl) 'player-laser #f))
@@ -208,6 +214,16 @@
 (define (level-mothership lvl)
    (table-ref (level-object-table lvl) 'mothership #f))
 
+(define (new-player! level)
+  (let* ((player-type (get-type 'player))
+         (pos (make-pos2d 22 (- screen-max-y 240)))
+         (state 0)
+         (speed (make-pos2d 0 0))
+         (player-ship (make-player-ship 'player
+                                        player-type pos state speed)))
+    (level-add-object! level player-ship)))
+
+  
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Game Level Creation
@@ -239,16 +255,10 @@
 
   (let* ((walls (generate-walls))
          (shields (generate-shields))
-         (player-type (get-type 'player))
-         (pos (make-pos2d 22 (- screen-max-y 240)))
-         (state 1)
-         (speed (make-pos2d 0 0))
-         (player-ship (make-player-ship 'player
-                                        player-type pos state speed))
          (lvl (make-level screen-max-y screen-max-x (make-table)
-                          walls shields 0)))
+                          walls shields 0 3)))
     (for-each (lambda (x) (level-add-object! lvl x)) invaders)
-    (level-add-object! lvl player-ship)
+    (new-player! lvl)
     lvl))
 
 
@@ -466,18 +476,20 @@
                        (create-invader-laser-event level)))
              
                   ((player-ship? collision-obj)
-                   (pp 'todo-lose-one-life-and-restart))
+                   (level-loose-1-life! level)
+                   (explode-player! level collision-obj))
 
                   ((shield? collision-obj)
                    (let ((penetrated-pos
                           (get-laser-penetration-pos laser-obj)))
-                   (explode-laser! level laser-obj)
-                   (shield-explosion! collision-obj
-                                      penetrated-pos
-                                      (game-object-speed laser-obj)
-                                      (if (eq? (type-id type) 'laserP)
-                                          player-laser-explosion-particles
-                                          invader-laser-explosion-particles))))
+                     (explode-laser! level laser-obj)
+                     (shield-explosion!
+                      collision-obj
+                      penetrated-pos
+                      (game-object-speed laser-obj)
+                      (if (eq? (type-id type) 'laserP)
+                          player-laser-explosion-particles
+                          invader-laser-explosion-particles))))
 
                   ((mothership? collision-obj)
                    (level-score-set!
@@ -486,7 +498,10 @@
                               (game-object-type collision-obj))))
                    (explode-invader! level collision-obj)
                    (let ((delta-t (+ (random-integer 3) 1)))
-                     (in delta-t (create-new-mothership-event level)))))
+                     (in delta-t (create-new-mothership-event level))))
+
+                  ((wall? collision-obj)
+                   (explode-laser! level laser-obj)))
 
             (level-remove-object! level laser-obj)
             (if (not (eq? (type-id type) 'laserP))
@@ -510,6 +525,30 @@
   (game-object-type-set! inv (get-type 'explodeI))
   (game-object-state-set! inv 0)
   (in animation-duration (create-explosion-end-event! level inv)))
+
+(define (explode-player! level player)
+  (define animation-duration 1.5)
+  (define expl-obj
+    (make-game-object (gensym 'explosion)
+                      (get-type 'explodeP)
+                      (game-object-pos player)
+                      0 (make-pos2d 0 0)))
+  (level-add-object! level expl-obj)
+  (level-remove-object! level player)
+  (in 0
+      (player-explosion-animation-event level expl-obj animation-duration))
+  (in (+ animation-duration 0.000001) (lambda () (new-player! level))))
+
+(define (player-explosion-animation-event level expl-obj duration)
+  (define frame-rate 0.3)
+  (define init-time (time->seconds (current-time)))
+  (define (animation-ev dt)
+    (lambda ()
+      (cycle-state! expl-obj)
+      (if (< dt duration)
+          (in frame-rate (animation-ev (+ dt frame-rate)))
+          (level-remove-object! level expl-obj))))
+  (animation-ev 0))
 
 (define (explode-laser! level laser-obj)
   (define animation-duration 0.3)
@@ -545,24 +584,28 @@
 ;; user input is passed to the simulation via this mechanism.
 (define (create-manager-event current-level)
   (define manager-time-interfal 0.005)
-  (define player (level-player current-level))
-
+  
   (define (manager-event)
+    (define player (level-player current-level))
     (define msg (thread-receive 0 #f))
     (if msg
         (case msg
-          ((shoot-laser) (shoot-laser! current-level 'laserP
-                                       (level-player current-level)
-                                       player-laser-speed))
+          ((shoot-laser)
+           (if player
+               (shoot-laser! current-level 'laserP
+                             (level-player current-level)
+                             player-laser-speed)))
           ((move-right)
-           (let ((new-speed (make-pos2d player-movement-speed 0)))
-             (game-object-speed-set! player new-speed))
-           (move-object! player))
+           (if player
+               (let ((new-speed (make-pos2d player-movement-speed 0)))
+                 (game-object-speed-set! player new-speed)
+                 (move-object! player))))
           
           ((move-left)
-           (let ((new-speed (make-pos2d (- player-movement-speed) 0)))
-             (game-object-speed-set! player new-speed))
-           (move-object! player))
+           (if player
+               (let ((new-speed (make-pos2d (- player-movement-speed) 0)))
+                 (game-object-speed-set! player new-speed)
+                 (move-object! player))))
           
           ((show-score) (pp `(score is ,(level-score current-level))))
           (else (error "Unknown message received in manager event."))))

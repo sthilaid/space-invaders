@@ -74,6 +74,9 @@
 ;;                     (+ (!!-current-time-!!) ,delta)
 ;;                     (lambda () ,arg1 ,@args)))
 
+(define NOW! -10)
+(define RIGHT-NOW! -100)
+
 (define-macro (in delta thunk)
   `(schedule-event! (!!-event-queue-!!)
                     (+ (!!-current-time-!!) ,delta)

@@ -75,6 +75,8 @@ end
 (include-ppm-pixel-sprite "sprites/player1.ppm")
 (include-ppm-pixel-sprite "sprites/explodeI0.ppm")
 (include-ppm-pixel-sprite "sprites/explodeS0.ppm")
+(include-ppm-pixel-sprite "sprites/explodeP0.ppm")
+(include-ppm-pixel-sprite "sprites/explodeP1.ppm")
 (include-ppm-pixel-sprite "sprites/explodeInvL0.ppm")
 
 (define-macro (cast-pointer new-type old-type val)
@@ -138,13 +140,14 @@ end
   (let ((easy-renderer   (create-2-state-renderer easy))
         (medium-renderer (create-2-state-renderer medium))
         (hard-renderer   (create-2-state-renderer hard))
-        (player-renderer (create-2-state-renderer player))
+        (player-renderer (create-single-state-renderer player))
         (laserA-renderer  (create-2-state-renderer laserA))
         (laserB-renderer  (create-4-state-renderer laserB))
         (laserP-renderer  (create-single-state-renderer laserP))
         (explodeI-renderer (create-single-state-renderer explodeI))
         (explodeInvL-renderer (create-single-state-renderer explodeInvL))
         (explodeS-renderer (create-single-state-renderer explodeS))
+        (explodeP-renderer (create-2-state-renderer explodeP))
 ;;        (shield-renderer (create-single-state-renderer shield))
         (mothership-renderer (create-single-state-renderer mothership)))
         
@@ -164,6 +167,7 @@ end
         ((explodeI) (explodeI-renderer x y state))
         ((explodeInvL) (explodeInvL-renderer x y state))
         ((explodeS) (explodeS-renderer x y state))
+        ((explodeP) (explodeP-renderer x y state))
 ;;        ((shield) (shield-renderer x y state))
         ((mothership) (mothership-renderer x y state))
         (else (error (string-append "Cannot render unknown object type:"
@@ -182,6 +186,15 @@ end
                 (glEnd)))
             (shield-particles shield)))
 
+(define (render-level level)
+  (define score (level-score level))
+  (define player-lives (level-lives level))
+
+  (glBegin GL_LINES)
+  (glVertex2i 0 9)
+  (glVertex2i screen-max-x 9)
+  (glEnd))
+
 
 
 (define (display-message x y msg)
@@ -196,6 +209,9 @@ end
   (glClearColor 0. 0. 0. 0.)
   (glClear GL_COLOR_BUFFER_BIT)
 
+  ;; Draw background stuff
+  (render-level level)
+  
   ;; Draw all objects
   (for-each render-object (level-all-objects level))
   (for-each render-shield (level-shields level))

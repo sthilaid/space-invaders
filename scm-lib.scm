@@ -115,7 +115,7 @@
         lag)))
 
 (define (drop-right lst n)
-  (let recur ((lag lst) (lead (drop lst n)))
+  (let recur ((lag lst) (lead (drop-right lst n)))
     (if (pair? lead)
         (cons (car lag) (recur (cdr lag) (cdr lead)))
         '())))

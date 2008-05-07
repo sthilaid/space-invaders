@@ -13,6 +13,8 @@
 
 (define !!-event-queue-!! (make-parameter #f))
 (define !!-current-time-!! (make-parameter #f))
+(define !!-simulation-start-time-!! (make-parameter #f))
+(define !!-event-continuation-!! (make-parameter #f))
 
 ;; Here the event ev, is a thunk to be executed when the simulation is
 ;; performed.
@@ -44,15 +46,123 @@
 ;;                         sleep-time " secs.\n"))
               (thread-sleep! sleep-time))
 
-            (parameterize ((!!-event-queue-!! sim)
-                           (!!-current-time-!! current-event-time))
-              (current-actions))
+            (call/cc
+             (lambda (k)
+               (parameterize ((!!-event-queue-!! sim)
+                              (!!-simulation-start-time-!!
+                               simulation-start-time)
+                              (!!-current-time-!! current-event-time)
+                              (!!-event-continuation-!! k))
+              (current-actions))))
             (iterate)))))
 
   (call/cc (lambda (k)
              (set! stop-simulation
                    (lambda (msg) (pp msg) (k #t)))
              (run-simulation))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Utilitaries
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(define NOW! -10)
+(define RIGHT-NOW! -100)
+
+(define-macro (in delta thunk)
+  ;; or (+ !!-current-time-!! ,delta). Not sure if its better to not
+  ;; be accurate in times (as with using !!-current-time-!! or be
+  ;; slower by rechecking the current-time and be more accurate...
+  `(schedule-event! (!!-event-queue-!!)
+                    (+ (- (time->seconds (current-time))
+                          (!!-simulation-start-time-!!))
+                       ,delta)
+                    ,thunk))
+
+
+;;;; Semaphores and critical sections ;;;;
+
+(define-type sem value wait-queue)
+(define (new-semaphore init-value) (make-sem init-value '()))
+(define (new-mutex) (new-semaphore 1))
+
+(define (sem-locked? sem) (< (sem-value sem) 0))
+(define (sem-increase! sem) (sem-value-set! sem (+ (sem-value sem) 1)))
+(define (sem-decrease! sem) (sem-value-set! sem (- (sem-value sem) 1)))
+
+;;*VERY* innefficient queue implementation...
+(define (sem-enqueue-k! sem k)
+  (sem-wait-queue-set! sem (cons k (sem-wait-queue sem))))
+(define (sem-dequeue-k! sem)
+  (let ((k (car (take-right (sem-wait-queue sem) 1))))
+    (sem-wait-queue-set! sem (drop-right (sem-wait-queue sem) 1))
+    k))
+
+(define (sem-lock! sem)
+  (call/cc (lambda (k)
+             (sem-decrease! sem)
+             (if (< (sem-value sem) 0)
+                 (begin
+                   (sem-enqueue-k! sem k)
+                   ((!!-event-continuation-!!) 'dummy))))))
+
+(define (sem-unlock! sem)
+  (sem-increase! sem)
+  (if (< (sem-value sem) 1)
+      (let ((k (sem-dequeue-k! sem)))
+        (in 0 (lambda () (k 'dummy))))))
+
+(define-macro (critical-section! sem action . actions)
+  `(begin
+     (sem-lock! ,sem)
+     ,action
+     ,@actions
+     (sem-unlock! ,sem)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Test
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(define (event-sim-test)
+  (define sim (create-simulation))
+  (define (make-test-actions i)
+    (lambda ()
+      (pp `(,i : now it is ,(!!-current-time-!!)))
+      (if (< i 10)
+          (in 4 (make-test-actions (+ i 1))))))
+
+  ;; Cannot do (in 12.54321 (make-test-actions 0)) because the current
+  ;; flow of control is not yet in the simulation.
+  (schedule-event! sim 12.5421 (make-test-actions 0))
+  (start-simulation! sim 50))
+
+(define (event-sim-synchro-test)
+  (define sim (create-simulation))
+  (define sem (new-semaphore 0))
+  
+  (define (consumerA)
+    (sem-lock! sem)
+    (pp '(consumerA took 1 ressource))
+    (in 0 consumerA))
+
+  (define (consumerB)
+    (sem-lock! sem)
+    (pp '(consumerB took 1 ressource))
+    (in 0 consumerB))
+
+  (define (producer)
+    (sem-unlock! sem)
+    (pp `(produced 1 ressource))
+    (in 0.5 producer))
+
+  (schedule-event! sim 0 consumerA)
+  (schedule-event! sim 0 consumerB)
+  (schedule-event! sim 0 producer)
+  (start-simulation! sim 5.6))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; On stand-by stuff
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
 ;; Simulation performed in single stepping, no simulation end event is
@@ -73,26 +183,6 @@
 ;;   `(schedule-event! (!!-event-queue-!!)
 ;;                     (+ (!!-current-time-!!) ,delta)
 ;;                     (lambda () ,arg1 ,@args)))
-
-(define NOW! -10)
-(define RIGHT-NOW! -100)
-
-(define-macro (in delta thunk)
-  `(schedule-event! (!!-event-queue-!!)
-                    (+ (!!-current-time-!!) ,delta)
-                    ,thunk))
-
-(define (event-sim-test)
-  (define sim (create-simulation))
-  (define (make-test-actions i)
-    (lambda ()
-      (pp `(,i : now it is ,(!!-current-time-!!)))
-      (if (< i 10)
-          (in 4 (make-test-actions (+ i 1))))))
-
-  ;(in 12.54321 (make-test-actions 0))
-  (schedule-event! sim 12.5421 (make-test-actions 0))
-  (start-simulation! sim 50))
 
 
 ;; (define (event-sim-step-test)

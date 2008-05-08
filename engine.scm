@@ -26,6 +26,7 @@
 (define player-movement-speed 2)
 (define player-laser-speed 2)
 (define invader-laser-speed 1)
+(define mothership-movement-speed (make-pos2d 1 0))
 
 (define global-sim-mutex (new-mutex))
 
@@ -305,22 +306,120 @@
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Gameplay procedures
+;; Collision resolution
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define (move-object! obj)
-  (let* ((pos (game-object-pos obj) )
-         (x (pos2d-x pos))
-         (y (pos2d-y pos))
-         (speed (game-object-speed obj))
-         (dx (pos2d-x speed))
-         (dy (pos2d-y speed)))
-    (cycle-state! obj)
-    (pos2d-x-set! pos (+ x dx))
-    (pos2d-y-set! pos (+ y dy))))
+(define (resolve-collision! level obj collision-obj)
+  (cond
+   ((player-ship? obj) (resolve-player-collision! level obj collision-obj))
+   ((laser-obj? obj) (resolve-laser-collision! level obj collision-obj))
+   ((invader-ship? obj) (resolve-invader-collision! level obj collision-obj))
+   ((mothership? obj) (resolve-mothership-collision! level obj collision-obj))
+   (else
+    (error "cannot resolve object collision."))))
 
+(define (resolve-laser-collision! level laser-obj collision-obj)
+  (define type-id (object-type-id (game-object-type laser-obj)))
+  ;;(show "collision occured with " collision-obj "\n")
+  (cond ((invader-ship? collision-obj) 
+         (level-score-set!
+          level (+ (level-score level)
+                   (object-type-score-value
+                    (game-object-type collision-obj))))
+         (explode-invader! level collision-obj))
+        
+        ((and (laser-obj? collision-obj)
+              (not (eq? collision-obj (level-player-laser level))))
+         (level-remove-object! level collision-obj)
+         (in next-invader-laser-interval
+             (create-invader-laser-event level)))
+        
+        ((player-ship? collision-obj)
+         (level-loose-1-life! level)
+         (explode-player! level collision-obj))
+
+        ((shield? collision-obj)
+         (let ((penetrated-pos
+                (get-laser-penetration-pos laser-obj)))
+           (explode-laser! level laser-obj)
+           (shield-explosion!
+            collision-obj
+            penetrated-pos
+            (game-object-speed laser-obj)
+            (if (eq? type-id 'laserP)
+                player-laser-explosion-particles
+                invader-laser-explosion-particles))))
+
+        ((mothership? collision-obj)
+         (level-score-set!
+          level (+ (level-score level)
+                   (object-type-score-value
+                    (game-object-type collision-obj))))
+         (explode-invader! level collision-obj)
+         (let ((delta-t (mothership-random-delay)))
+           (in delta-t (create-new-mothership-event level))))
+
+        ((wall? collision-obj)
+         (explode-laser! level laser-obj)))
+
+  (level-remove-object! level laser-obj)
+  (if (not (eq? type-id 'laserP))
+      (in next-invader-laser-interval
+          (create-invader-laser-event level))))
+
+(define (resolve-invader-collision! level invader collision-obj)
+  (pp 'todo-resolve-invader-collision))
+
+(define (resolve-player-collision! level player collision-obj)
+  (pp 'todo-resolve-player-collision!))
+
+(define (resolve-mothership-collision! level mothership collision-obj)
+  (cond ((wall? collision-obj)
+         (level-remove-object! level mothership))
+        ((laser-obj? collision-obj)
+         (level-score-set!
+          level
+          (+ (level-score level)
+             (object-type-score-value
+              (game-object-type mothership))))
+         (explode-invader! level mothership)))
+  ;; Schedule next mothership
+  (let ((delta-t (mothership-random-delay)))
+    (in delta-t (create-new-mothership-event level))))
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Movement procedures
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Returns #t if a collision occured (and was resolved) during the
+;; movement.
+(define (move-object! level obj)
+  (define (move-object-raw! obj)
+    (let* ((pos (game-object-pos obj) )
+           (x (pos2d-x pos))
+           (y (pos2d-y pos))
+           (speed (game-object-speed obj))
+           (dx (pos2d-x speed))
+           (dy (pos2d-y speed)))
+      (cycle-state! obj)
+      (pos2d-x-set! pos (+ x dx))
+      (pos2d-y-set! pos (+ y dy))))
+
+  ;; 1st move the object, then detect/respond to a collision if
+  ;; required.
+  (move-object-raw! obj)
+  (let ((collision-obj (detect-collision? obj level)))
+    (if collision-obj
+        (begin
+          (resolve-collision! level obj collision-obj)
+          #t)
+        #f)))
+  
+;; Moves the entire ship row of specified index
 (define (move-ship-row! level row-index)
-  (for-each (lambda (inv) (move-object! inv))
+  (for-each (lambda (inv) (move-object! level inv))
             (get-invaders-from-row level row-index)))
 
 
@@ -344,7 +443,6 @@
           (let* ((old-dx (pos2d-x (game-object-speed (caar rows))))
                  (dt (get-invader-move-refresh-rate level))
                  (duration (* (length rows) dt)))
-                             
             (if wall-collision?
                 (begin
                   (in 0 (create-invader-row-move-event!
@@ -377,8 +475,11 @@
 (define (create-new-mothership-event level)
   (lambda ()
     (let ((mothership
-           (make-mothership 'mothership (get-type 'mothership)
-                            (make-pos2d wall-offset 201) 0 (make-pos2d 1 0))))
+           (make-mothership 'mothership
+                            (get-type 'mothership)
+                            (make-pos2d wall-offset 201)
+                            0
+                            mothership-movement-speed)))
     (level-add-object! level mothership)
     (in 0 (create-mothership-event level)))))
 
@@ -387,23 +488,9 @@
   (define (mothership-event)
     (define mothership (level-mothership level))
     (if mothership
-        (begin
-          (move-object! mothership)
-          (let ((collision-obj (detect-collision? mothership level)))
-            (if collision-obj
-                (begin (cond ((wall? collision-obj)
-                              (level-remove-object! level mothership))
-                             ((laser-obj? collision-obj)
-                              (level-score-set!
-                               level
-                               (+ (level-score level)
-                                  (object-type-score-value
-                                   (game-object-type mothership))))
-                              (explode-invader! level mothership)))
-                       ;; Schedule next mothership
-                       (let ((delta-t (mothership-random-delay)))
-                         (in delta-t (create-new-mothership-event level))))
-                (in mothership-update-interval mothership-event))))))
+        (let ((collision-occured? (move-object! level mothership)))
+          (if (not collision-occured?)
+              (in mothership-update-interval mothership-event)))))
   mothership-event)
     
 
@@ -481,58 +568,8 @@
                   (pos2d-add pos
                              (make-pos2d (floor (/ (type-width type) 2)) 0))))
     
-    (move-object! laser-obj)
-    (let ((collision-obj (detect-collision? laser-obj level)))
-      (if collision-obj
-          (begin
-            ;;(show "collision occured with " collision-obj "\n")
-            (cond ((invader-ship? collision-obj) 
-                   (level-score-set!
-                    level (+ (level-score level)
-                             (object-type-score-value
-                              (game-object-type collision-obj))))
-                   (explode-invader! level collision-obj))
-              
-                  ((and (laser-obj? collision-obj)
-                        (not (eq? collision-obj (level-player-laser level))))
-                   (level-remove-object! level collision-obj)
-                   (in next-invader-laser-interval
-                       (create-invader-laser-event level)))
-             
-                  ((player-ship? collision-obj)
-                   (level-loose-1-life! level)
-                   (explode-player! level collision-obj))
-
-                  ((shield? collision-obj)
-                   (let ((penetrated-pos
-                          (get-laser-penetration-pos laser-obj)))
-                     (explode-laser! level laser-obj)
-                     (shield-explosion!
-                      collision-obj
-                      penetrated-pos
-                      (game-object-speed laser-obj)
-                      (if (eq? (type-id type) 'laserP)
-                          player-laser-explosion-particles
-                          invader-laser-explosion-particles))))
-
-                  ((mothership? collision-obj)
-                   (level-score-set!
-                    level (+ (level-score level)
-                             (object-type-score-value
-                              (game-object-type collision-obj))))
-                   (explode-invader! level collision-obj)
-                   (let ((delta-t (mothership-random-delay)))
-                     (in delta-t (create-new-mothership-event level))))
-
-                  ((wall? collision-obj)
-                   (explode-laser! level laser-obj)))
-
-            (level-remove-object! level laser-obj)
-            (if (not (eq? (type-id type) 'laserP))
-                (in next-invader-laser-interval
-                    (create-invader-laser-event level))))
-            
-          
+    (let ((collision-occured? (move-object! level laser-obj)))
+      (if (not collision-occured?)
           ;; if no collisions, continue on with the laser motion
           (let ((delta-t (if (eq? (level-player-laser level) laser-obj)
                              player-laser-update-interval
@@ -606,30 +643,30 @@
 ;; input by looking into the thread's mailbox. It is assumed that the
 ;; discrete event simulation is perfomed in it's own thread and that
 ;; user input is passed to the simulation via this mechanism.
-(define (create-manager-event current-level)
+(define (create-manager-event level)
   (define (manager-event)
-    (define player (level-player current-level))
+    (define player (level-player level))
     (define msg (thread-receive 0 #f))
     (if msg
         (case msg
           ((shoot-laser)
            (if player
-               (shoot-laser! current-level 'laserP
-                             (level-player current-level)
+               (shoot-laser! level 'laserP
+                             (level-player level)
                              player-laser-speed)))
           ((move-right)
            (if player
                (let ((new-speed (make-pos2d player-movement-speed 0)))
                  (game-object-speed-set! player new-speed)
-                 (move-object! player))))
+                 (move-object! level player))))
           
           ((move-left)
            (if player
                (let ((new-speed (make-pos2d (- player-movement-speed) 0)))
                  (game-object-speed-set! player new-speed)
-                 (move-object! player))))
+                 (move-object! level player))))
           
-          ((show-score) (pp `(score is ,(level-score current-level))))
+          ((show-score) (pp `(score is ,(level-score level))))
           (else (error "Unknown message received in manager event."))))
     (in manager-time-interfal manager-event))
 

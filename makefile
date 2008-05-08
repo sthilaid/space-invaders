@@ -7,7 +7,7 @@ SPACE_INVADERS_FILES = engine.scm user-interface.scm ppm-reader.scm event-simula
 PATH_TO_GAMBIT=/opt/gambit-c/current
 GAMBIT_LIB=$(PATH_TO_GAMBIT)/lib
 GAMBIT_INCLUDE=$(PATH_TO_GAMBIT)/include
-GSC=gsc -:=$(PATH_TO_GAMBIT)
+GSC=gsc -:=$(PATH_TO_GAMBIT) -debug
 CC=gcc 
 INCLUDE_OPTIONS=-I$(GAMBIT_INCLUDE)
 LD_OPTIONS =-lglut -lgambc -lutil -L$(GAMBIT_LIB)

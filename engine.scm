@@ -24,10 +24,34 @@
 (define invader-x-movement-speed 2)
 (define invader-y-movement-speed 8)
 (define player-movement-speed 2)
-(define player-laser-speed 1)
+(define player-laser-speed 2)
 (define invader-laser-speed 1)
 
 (define global-sim-mutex (new-mutex))
+
+;; Simulation delays
+(define mothership-update-interval 0.02)
+(define player-laser-update-interval 0.000015)
+(define invader-laser-update-interval 0.005)
+(define next-invader-laser-interval 0.2)
+(define manager-time-interfal 0.005)
+(define redraw-interval 0.05)
+
+(define (mothership-random-delay)
+  (+ (random-integer 10) 5))
+
+(define get-invader-move-refresh-rate
+  ;; the sleep delay is a function such that when the level is full of
+  ;; invaders (55 invaders) then the delay is 0.1 and when there is
+  ;; no invader left, it is 0.01. Thus the equation system:
+  ;; 55x + xy = 1/10 and 0x + xy = 1/100 was solved.
+  (let* ((min-delta 1/100)
+         (max-delta 1/10)
+         (max-inv-nb 55)
+         (slope (/ (- max-delta min-delta) max-inv-nb)))
+    (lambda (level)
+      (let ((x (length (level-invaders level))))
+        (+  (* slope x) min-delta)))))
 
 
 
@@ -106,6 +130,19 @@
 (define invader-laser-explosion-particles
   (rgb-pixels-to-boolean-point-list
    (parse-ppm-image-file "sprites/explodeInvL0.ppm") 'dont-center))
+
+(define (invader-ship-particles inv)
+  (define height (type-height (game-object-type inv)))
+  (define width (type-width (game-object-type inv)))
+  (let loop-y ((y 0) (acc '()))
+    (if (< y height)
+        (loop-y (+ y 1)
+                (append (let loop-x ((x 0) (acc '()))
+                          (if (< x width)
+                              (loop-x (+ x 1) (cons (make-pos2d x y) acc))
+                              acc))
+                        acc))
+        acc)))
 
 (define player-laser-explosion-particles
   (rgb-pixels-to-boolean-point-list
@@ -292,19 +329,6 @@
 ;; Simulation Events and Game Logic
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
  
-(define get-invader-move-refresh-rate
-  ;; the sleep delay is a function such that when the level is full of
-  ;; invaders (55 invaders) then the delay is 0.1 and when there is
-  ;; no invader left, it is 0.01. Thus the equation system:
-  ;; 55x + xy = 1/10 and 0x + xy = 1/100 was solved.
-  (let* ((min-delta 1/100)
-         (max-delta 1/10)
-         (max-inv-nb 55)
-         (slope (/ (- max-delta min-delta) max-inv-nb)))
-    (lambda (level)
-      (let ((x (length (level-invaders level))))
-        (+  (* slope x) min-delta)))))
-
 ;; Event that will move a single row of invaders
 (define (create-init-invader-move-event level)
   (lambda ()
@@ -358,11 +382,8 @@
     (level-add-object! level mothership)
     (in 0 (create-mothership-event level)))))
 
-(define (mothership-random-delay)
-  (+ (random-integer 10) 5))
 ;; Event that moves a mothership and handles its collisions.
-(define (create-mothership-event level)
-  (define mothership-update-interval 0.02)
+ (define (create-mothership-event level)
   (define (mothership-event)
     (define mothership (level-mothership level))
     (if mothership
@@ -453,9 +474,6 @@
 ;; it will be moved regularly dy pixels on the y axis. The game logic
 ;; of a laser is thus defined by the returned event.
 (define (create-laser-event laser-obj level)
-  (define player-laser-update-interval 0.005)
-  (define invader-laser-update-interval 0.01)
-  (define next-invader-laser-interval 0.2)
   (define type (game-object-type laser-obj))
   (define (laser-event)
     ;; centered laser position (depending on the laser type...
@@ -589,8 +607,6 @@
 ;; discrete event simulation is perfomed in it's own thread and that
 ;; user input is passed to the simulation via this mechanism.
 (define (create-manager-event current-level)
-  (define manager-time-interfal 0.005)
-  
   (define (manager-event)
     (define player (level-player current-level))
     (define msg (thread-receive 0 #f))
@@ -621,11 +637,10 @@
 
 ;; Event that will send a message to the ui asking for a redraw.
 (define (create-redraw-event ui-thread level)
-  (define refresh-rate 0.05)
   (define (duplicate obj) obj) ;;TODO: Dummy duplication!!
   (define (redraw-event)
     (thread-send ui-thread (duplicate level))
-    (in refresh-rate redraw-event))
+    (in redraw-interval redraw-event))
   redraw-event)
 
 

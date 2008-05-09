@@ -148,7 +148,6 @@ end
         (explodeInvL-renderer (create-single-state-renderer explodeInvL))
         (explodeS-renderer (create-single-state-renderer explodeS))
         (explodeP-renderer (create-2-state-renderer explodeP))
-;;        (shield-renderer (create-single-state-renderer shield))
         (mothership-renderer (create-single-state-renderer mothership)))
         
     (lambda (obj)
@@ -168,7 +167,6 @@ end
         ((explodeInvL) (explodeInvL-renderer x y state))
         ((explodeS) (explodeS-renderer x y state))
         ((explodeP) (explodeP-renderer x y state))
-;;        ((shield) (shield-renderer x y state))
         ((mothership) (mothership-renderer x y state))
         (else (error (string-append "Cannot render unknown object type:"
                                     (symbol->string type))))))))
@@ -186,16 +184,23 @@ end
                 (glEnd)))
             (shield-particles shield)))
 
-(define (render-level level)
-  (define score (level-score level))
-  (define player-lives (level-lives level))
+(define FPS (create-simple-moving-avg))
 
-  (glBegin GL_LINES)
-  (glVertex2i 0 9)
-  (glVertex2i screen-max-x 9)
-  (glEnd))
+(define render-level
+  (let ((last-render-time 0))
+    (lambda (level)
+      (define score (level-score level))
+      (define player-lives (level-lives level))
 
+      (glBegin GL_LINES)
+      (glVertex2i 0 9)
+      (glVertex2i screen-max-x 9)
+      (glEnd)
 
+      (let ((now (time->seconds (current-time))))
+        (if (not (= last-render-time 0))
+            (FPS (/ 1 (- now last-render-time))))
+        (set! last-render-time now)))))
 
 (define (display-message x y msg)
   (let ((chars (map char->integer (string->list msg)))
@@ -255,6 +260,7 @@ end
 (c-define (keyboard key x y) (unsigned-char int int) void "keyboard" ""
  (case key
    ((#\s #\S) (register-user-action 'show-score))
+   ((#\f #\F) (show "average FPS = " (FPS) "\n"))
    ((#\space) (register-user-action 'shoot-laser))
    ;; On Escape, Ctl-q, Ctl-c, Ctl-w, q -> terminate the program
    ((#\x1b #\x11 #\x03 #\x17 #\q) (quit))

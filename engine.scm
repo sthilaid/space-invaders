@@ -25,18 +25,18 @@
 (define invader-y-movement-speed 8)
 (define player-movement-speed 2)
 (define player-laser-speed 2)
-(define invader-laser-speed 1)
+(define invader-laser-speed 2)
 (define mothership-movement-speed (make-pos2d 1 0))
 
 (define global-sim-mutex (new-mutex))
 
 ;; Simulation delays
 (define mothership-update-interval 0.02)
-(define player-laser-update-interval 0.000015)
-(define invader-laser-update-interval 0.005)
+(define player-laser-update-interval 0.001)
+(define invader-laser-update-interval 0.02)
 (define next-invader-laser-interval 0.2)
-(define manager-time-interfal 0.005)
-(define redraw-interval 0.05)
+(define manager-time-interfal 0.001)
+(define redraw-interval 0.0001)
 
 (define (mothership-random-delay)
   (+ (random-integer 10) 5))
@@ -47,7 +47,7 @@
   ;; no invader left, it is 0.01. Thus the equation system:
   ;; 55x + xy = 1/10 and 0x + xy = 1/100 was solved.
   (let* ((min-delta 1/100)
-         (max-delta 1/10)
+         (max-delta 2/10)
          (max-inv-nb 55)
          (slope (/ (- max-delta min-delta) max-inv-nb)))
     (lambda (level)

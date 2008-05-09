@@ -115,7 +115,7 @@
         lag)))
 
 (define (drop-right lst n)
-  (let recur ((lag lst) (lead (drop-right lst n)))
+  (let recur ((lag lst) (lead (drop lst n)))
     (if (pair? lead)
         (cons (car lag) (recur (cdr lag) (cdr lead)))
         '())))
@@ -173,24 +173,22 @@
      N))
 
 (define (standard-deviation sample) (sqrt (variance sample)))
-(define (create-simple-moving-avg working-set-size)
-  (define working-set '())
+
+(define (create-simple-moving-avg)
+  (define n 0)
   (define SMA 0)
   (define current-mode #f)
   
   (define (gather-init-data new-val)
-    (set! working-set (cons new-val working-set))
-    (if (< (length working-set) working-set-size)
-        gather-init-data
-        (begin
-          (set! SMA (average working-set))
-          (set! current-mode sma-calculator))))
+    (set! SMA new-val)
+    (set! n 1)
+    (set! current-mode sma-calculator))
   
   (define (sma-calculator new-val)
-    (set! SMA (+ SMA
-                 (- (/ (car (take-right working-set 1)) working-set-size))
-                 (/ new-val working-set-size)))
-    (set! working-set (cons new-val (drop-right working-set 1)))
+    (let ((new-n (+ n 1)))
+      (set! SMA (+ (* SMA (/ n new-n))
+                   (* new-val (/ 1 new-n))))
+      (set! n new-n))
     SMA)
   
   (define (dispatcher . arg)

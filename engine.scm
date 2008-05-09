@@ -33,6 +33,8 @@
 (define mothership-movement-speed (make-pos2d 1 0))
 
 (define global-sim-mutex (new-mutex))
+(define player-laser-last-destruction-time 0)
+
 
 ;; Simulation delays
 (define mothership-update-interval 0.02)
@@ -41,6 +43,8 @@
 (define next-invader-laser-interval 0.2)
 (define manager-time-interfal 0.001)
 (define redraw-interval 0.0001)
+
+(define player-laser-refresh-constraint 0.6)
 
 (define (mothership-random-delay)
   (+ (random-integer 10) 5))
@@ -230,6 +234,9 @@
 (define (level-remove-object! lvl obj)
    (table-set! (level-object-table lvl) (game-object-id obj)))
 
+(define (level-exists lvl obj-id)
+  (table-ref (level-object-table lvl) obj-id #f))
+
 (define (level-all-objects lvl)
    (map cdr (table->list (level-object-table lvl))))
 
@@ -366,20 +373,33 @@
    (else
     (error "cannot resolve object collision."))))
 
+
+(define (destroy-laser! level laser-obj)
+  (level-remove-object! level laser-obj)
+  (if (not (eq? (object-type-id (game-object-type laser-obj)) 'laserP))
+      (in next-invader-laser-interval (create-invader-laser-event level))
+      (set! player-laser-last-destruction-time
+            (time->seconds (current-time)))))
+
 (define (resolve-laser-collision! level laser-obj collision-obj)
   (define type-id (object-type-id (game-object-type laser-obj)))
+  
   ;;(show "collision occured with " collision-obj "\n")
   (cond ((invader-ship? collision-obj) 
          (level-increase-score! level collision-obj)
-         (explode-invader! level collision-obj))
+         (explode-invader! level collision-obj)
+         (destroy-laser! level laser-obj))
         
-        ((and (laser-obj? collision-obj)
-              (not (eq? collision-obj (level-player-laser level))))
-         (level-remove-object! level collision-obj))
+        ((laser-obj? collision-obj)
+         (let ((inv-laser
+                (if (not (eq? type-id 'laserP)) laser-obj collision-obj)))
+           (explode-laser! level inv-laser)
+           (destroy-laser! level inv-laser)))
         
         ((player-ship? collision-obj)
          (level-loose-1-life! level)
-         (explode-player! level collision-obj))
+         (explode-player! level collision-obj)
+         (destroy-laser! level laser-obj))
 
         ((shield? collision-obj)
          (let ((penetrated-pos (get-laser-penetration-pos laser-obj)))
@@ -389,16 +409,18 @@
                               (game-object-speed laser-obj)
                               (if (eq? type-id 'laserP)
                                   player-laser-explosion-particles
-                                  invader-laser-explosion-particles))))
+                                  invader-laser-explosion-particles)))
+         (destroy-laser! level laser-obj))
 
         ((mothership? collision-obj)
-         (resolve-mothership-collision! level collision-obj laser-obj))
+         (resolve-mothership-collision! level collision-obj laser-obj)
+         (destroy-laser! level laser-obj))
 
-        ((wall? collision-obj) (explode-laser! level laser-obj)))
+        ((wall? collision-obj)
+         (explode-laser! level laser-obj)
+         (destroy-laser! level laser-obj))))
 
-  (level-remove-object! level laser-obj)
-  (if (not (eq? type-id 'laserP))
-      (in next-invader-laser-interval (create-invader-laser-event level))))
+  
 
 (define (resolve-invader-collision! level invader collision-obj)
   (cond ((laser-obj? collision-obj)
@@ -558,8 +580,15 @@
 ;; laser object instance of specifiex type and place it correctly next
 ;; to the shooting object.
 (define (shoot-laser! level laser-type shooter-obj dy)
+  ;; if the shot laser is a player laser, there must not be another
+  ;; player laser in the game or the player-laser-refresh-constraint
+  ;; must be elabsed before shooting a new one.
   (if (not (and (eq? laser-type 'laserP)
-                (level-player-laser level)))
+                (or (level-player-laser level)
+                    (< (- (time->seconds (current-time))
+                          player-laser-last-destruction-time)
+                       player-laser-refresh-constraint))))
+                    
       (let* ((shooter-x (pos2d-x (game-object-pos shooter-obj)))
              (shooter-y (pos2d-y (game-object-pos shooter-obj)))
              (x (+ shooter-x
@@ -595,7 +624,8 @@
                              (make-pos2d (floor (/ (type-width type) 2)) 0))))
     
     (let ((collision-occured? (move-object! level laser-obj)))
-      (if (not collision-occured?)
+      (if (or (not collision-occured?)
+              (level-exists level (game-object-id laser-obj)))
           ;; if no collisions, continue on with the laser motion
           (let ((delta-t (if (eq? (level-player-laser level) laser-obj)
                              player-laser-update-interval

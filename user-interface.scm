@@ -136,44 +136,53 @@ end
        (else
         (error "cannot draw sprite: invalid state.")))))
 
-(define render-object
-  (let ((easy-renderer   (create-2-state-renderer easy))
-        (medium-renderer (create-2-state-renderer medium))
-        (hard-renderer   (create-2-state-renderer hard))
-        (player-renderer (create-single-state-renderer player))
-        (laserA-renderer  (create-2-state-renderer laserA))
-        (laserB-renderer  (create-4-state-renderer laserB))
-        (laserP-renderer  (create-single-state-renderer laserP))
-        (explodeI-renderer (create-single-state-renderer explodeI))
-        (explodeInvL-renderer (create-single-state-renderer explodeInvL))
-        (explodeS-renderer (create-single-state-renderer explodeS))
-        (explodeP-renderer (create-2-state-renderer explodeP))
-        (mothership-renderer (create-single-state-renderer mothership)))
-        
-    (lambda (obj)
-      (define x (pos2d-x (game-object-pos obj)))
-      (define y (pos2d-y (game-object-pos obj)))
-      (define type (type-id (game-object-type obj)))
-      (define state (game-object-state obj))
-      (case type
-        ((easy)   (easy-renderer x y state))
-        ((medium) (medium-renderer x y state))
-        ((hard)   (hard-renderer x y state))
-        ((player) (player-renderer x y state))
-        ((laserA) (laserA-renderer x y state))
-        ((laserB) (laserB-renderer x y state))
-        ((laserP) (laserP-renderer x y state))
-        ((explodeI) (explodeI-renderer x y state))
-        ((explodeInvL) (explodeInvL-renderer x y state))
-        ((explodeS) (explodeS-renderer x y state))
-        ((explodeP) (explodeP-renderer x y state))
-        ((mothership) (mothership-renderer x y state))
-        (else (error (string-append "Cannot render unknown object type:"
-                                    (symbol->string type))))))))
-(define (render-shield shield)
-  ;; equivalent to rgb color: 1ffe1f
-  (glColor3f .12156862745098039 .996078431372549 .12156862745098039)
+(define easy-renderer   (create-2-state-renderer easy))
+(define medium-renderer (create-2-state-renderer medium))
+(define hard-renderer   (create-2-state-renderer hard))
+(define player-renderer (create-single-state-renderer player))
+(define laserA-renderer  (create-2-state-renderer laserA))
+(define laserB-renderer  (create-4-state-renderer laserB))
+(define laserP-renderer  (create-single-state-renderer laserP))
+(define explodeI-renderer (create-single-state-renderer explodeI))
+(define explodeInvL-renderer (create-single-state-renderer explodeInvL))
+(define explodeS-renderer (create-single-state-renderer explodeS))
+(define explodeP-renderer (create-2-state-renderer explodeP))
+(define mothership-renderer (create-single-state-renderer mothership))
 
+(define (render-object obj)
+  (define x (pos2d-x (game-object-pos obj)))
+  (define y (pos2d-y (game-object-pos obj)))
+  (define type (type-id (game-object-type obj)))
+  (define state (game-object-state obj))
+  (case type
+    ((easy)   (easy-renderer x y state))
+    ((medium) (medium-renderer x y state))
+    ((hard)   (hard-renderer x y state))
+    ((player) (player-renderer x y state))
+    ((laserA) (laserA-renderer x y state))
+    ((laserB) (laserB-renderer x y state))
+    ((laserP) (laserP-renderer x y state))
+    ((explodeI) (explodeI-renderer x y state))
+    ((explodeInvL) (explodeInvL-renderer x y state))
+    ((explodeS) (explodeS-renderer x y state))
+    ((explodeP) (explodeP-renderer x y state))
+    ((mothership) (mothership-renderer x y state))
+    (else (error (string-append "Cannot render unknown object type:"
+                                (symbol->string type))))))
+
+(define (set-openGL-color color)
+  (case color
+    ;; equivalent to rgb color: 1ffe1f
+    ((green)
+     (glColor3f .12156862745098039 .996078431372549 .12156862745098039))
+    ((white)
+     (glColor3f 1. 1. 1.))
+    ((black)
+     (glColor3f 0. 0. 0.))
+    (else (error "unknown color"))))
+
+(define (render-shield shield)
+  (set-openGL-color 'green)
   (for-each (lambda (particle)
               (let* ((shield-x (pos2d-x (game-object-pos shield)))
                      (shield-y (pos2d-y (game-object-pos shield)))
@@ -184,47 +193,68 @@ end
                 (glEnd)))
             (shield-particles shield)))
 
-(define FPS (create-simple-moving-avg))
+(define (render-level level)
+  (define y 254)
+  (define (get-score-string score)
+    (cond ((= score 0) "0000")
+          ((< score 10) (string-append "000" (number->string score)))
+          ((< score 100) (string-append "00" (number->string score)))
+          ((< score 1000) (string-append "0" (number->string score)))
+          (else (number->string score))))
+  
+  (display-message 13 y "SCORE<1>")
+  (display-message 85 y "HI-SCORE")
+  (display-message 157 y "SCORE<2>")
+  (display-message 30 (- y 17) (get-score-string (level-score level)))
+  
 
-(define render-level
-  (let ((last-render-time 0))
-    (lambda (level)
-      (define score (level-score level))
-      (define player-lives (level-lives level))
+  (set-openGL-color 'green)
+  (glBegin GL_LINES)
+  (glVertex2i 0 9)
+  (glVertex2i screen-max-x 9)
+  (glEnd)
 
-      (glBegin GL_LINES)
-      (glVertex2i 0 9)
-      (glVertex2i screen-max-x 9)
-      (glEnd)
-
-      (let ((now (time->seconds (current-time))))
-        (if (not (= last-render-time 0))
-            (FPS (/ 1 (- now last-render-time))))
-        (set! last-render-time now)))))
+  (let ((nb-lives (level-lives level)))
+    (display-message 13 0 (number->string nb-lives))
+    (for i 0 (< i (- nb-lives 1))
+         (player-renderer (+ 30 (* i 15)) 0 0))))
 
 (define (display-message x y msg)
   (let ((chars (map char->integer (string->list msg)))
         (font GLUT_BITMAP_HELVETICA_12))
-    (glColor3f 1. 1. 1.)
+    (set-openGL-color 'white)
     (glRasterPos2i x y)
     (for-each (lambda (char) (glutBitmapCharacter font char))
               chars)))
 
-(define (render-scene level)
-  (glClearColor 0. 0. 0. 0.)
-  (glClear GL_COLOR_BUFFER_BIT)
+(define FPS (create-simple-moving-avg))
 
-  ;; Draw background stuff
-  (render-level level)
-  
-  ;; Draw all objects
-  (for-each render-object (level-all-objects level))
-  (for-each render-shield (level-shields level))
+(define render-scene
+  (let ((last-render-time 0))
+    (lambda (level)
 
-;;   (if status-message
-;;       (display-message 0 0 status-message))
+      (glClearColor 0. 0. 0. 0.)
+      (glClear GL_COLOR_BUFFER_BIT)
 
-  (glutSwapBuffers))
+      ;; Draw background stuff
+      (render-level level)
+      
+      ;; Draw all objects
+      (for-each render-object (level-all-objects level))
+      (for-each render-shield (level-shields level))
+
+      (let ((now (time->seconds (current-time))))
+        (if (not (= last-render-time 0))
+            (FPS (/ 1 (- now last-render-time))))
+        (set! last-render-time now))
+
+      ;;draw frame-rate just over the green line
+      (display-message
+       0 11 
+       (with-output-to-string "" (lambda () (show "FPS: " (FPS)))))
+
+      (glutSwapBuffers))))
+      
 
 
 
@@ -299,7 +329,7 @@ end
     
     (glutInit argc '())
     (glutInitDisplayMode (bitwise-ior GLUT_DOUBLE GLUT_RGB))
-    (glutInitWindowSize image-width image-height)
+    (glutInitWindowSize screen-max-x screen-max-y)
     (glutCreateWindow "Space Invaders")
     
     (glPointSize 1.)

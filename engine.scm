@@ -8,10 +8,14 @@
 
 (define screen-max-x 228)
 (define screen-max-y 265)
-(define wall-offset 14)
-(define screen-bottom-y-offset 9)
-(define gamefield-max-x (- screen-max-x wall-offset))
-(define gamefield-max-y (- screen-max-y wall-offset))
+(define wall-x-offset 14)
+(define screen-bottom-offset 9)
+(define screen-top-offset 51)
+
+(define gamefield-min-x wall-x-offset)
+(define gamefield-min-y screen-bottom-offset)
+(define gamefield-max-x (- screen-max-x wall-x-offset))
+(define gamefield-max-y (- screen-max-y screen-top-offset))
 
 
 (define invader-row-number 5)
@@ -168,7 +172,7 @@
                      speed (generate-particles))))
 
 (define (get-laser-penetration-pos laser-obj)
-  (let* ((delta 3)
+  (let* ((delta 2)
          (pos (game-object-pos laser-obj))
          (dy (pos2d-y (game-object-speed laser-obj)))
          (delta-vect 
@@ -212,10 +216,10 @@
 (define wall-id wall-struct-id)
 
 (define (generate-walls)
-  (list (new-wall wall-offset screen-bottom-y-offset +inf.0 -inf.0 'bottom)
-        (new-wall wall-offset screen-bottom-y-offset -inf.0 +inf.0 'left)
-        (new-wall gamefield-max-x screen-max-y -inf.0 +inf.0 'top)
-        (new-wall gamefield-max-x screen-max-y +inf.0 -inf.0 'right)))
+  (list (new-wall wall-x-offset screen-bottom-offset +inf.0 -inf.0 'bottom)
+        (new-wall wall-x-offset screen-bottom-offset -inf.0 +inf.0 'left)
+        (new-wall gamefield-max-x gamefield-max-y -inf.0 +inf.0 'top)
+        (new-wall gamefield-max-x gamefield-max-y +inf.0 -inf.0 'right)))
 
 
 ;;;; Game level description ;;;;
@@ -489,7 +493,7 @@
     (let ((mothership
            (make-mothership 'mothership
                             (get-type 'mothership)
-                            (make-pos2d wall-offset 201)
+                            (make-pos2d wall-x-offset 201)
                             0
                             mothership-movement-speed)))
     (level-add-object! level mothership)

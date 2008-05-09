@@ -206,7 +206,6 @@ end
   (display-message 85 y "HI-SCORE")
   (display-message 157 y "SCORE<2>")
   (display-message 30 (- y 17) (get-score-string (level-score level)))
-  
 
   (set-openGL-color 'green)
   (glBegin GL_LINES)

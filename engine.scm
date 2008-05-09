@@ -527,8 +527,10 @@
                                   
   (define (bottom-invader? inv)
     (let* ((pos (game-object-pos inv))
-           (rect (make-rect (pos2d-x pos) (- (pos2d-y pos) 1)
-                            invader-spacing (- (pos2d-y pos)))))
+           (rect (make-rect (pos2d-x pos)        ;; x
+                            (- (pos2d-y pos) 1)  ;; y
+                            (type-width (game-object-type inv)) ;; width
+                            (- (pos2d-y pos))))) ;; height
       (not (exists (rect-inv-collision? rect) (level-invaders level)))))
                        
   (define (get-candidates)

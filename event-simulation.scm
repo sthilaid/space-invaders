@@ -102,7 +102,6 @@
              (sem-decrease! sem)
              (if (< (sem-value sem) 0)
                  (begin
-                   (pp 'test-enqueing-event)
                    (sem-enqueue-k! sem k)
                    ((!!-event-continuation-!!) 'dummy))))))
 
@@ -110,7 +109,6 @@
   (sem-increase! sem)
   (if (< (sem-value sem) 1)
       (let ((k (sem-dequeue-k! sem)))
-        (pp 'test-releasing-queued-event)
         (in 0 (lambda () (k 'dummy))))))
 
 (define-macro (critical-section! sem action . actions)

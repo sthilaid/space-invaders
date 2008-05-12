@@ -735,30 +735,39 @@
 ;; discrete event simulation is perfomed in it's own thread and that
 ;; user input is passed to the simulation via this mechanism.
 (define (create-manager-event level)
+  (define game-paused? #f)
+  (define (player-can-move?) (and (level-player level) (not game-paused?)))
   (define manager-event
-    (synchronized-event-thunk level
+    (lambda ()
       (let ((player (level-player level))
             (msg (thread-receive 0 #f)))
         (if msg
             (case msg
               ((shoot-laser)
-               (if player
+               (if (player-can-move?)
                    (shoot-laser! level 'laserP
                                  (level-player level)
                                  player-laser-speed)))
               ((move-right)
-               (if player
+               (if (player-can-move?)
                    (let ((new-speed (make-pos2d player-movement-speed 0)))
                      (game-object-speed-set! player new-speed)
                      (move-object! level player))))
               
               ((move-left)
-               (if player
+               (if (player-can-move?)
                    (let ((new-speed (make-pos2d (- player-movement-speed) 0)))
                      (game-object-speed-set! player new-speed)
                      (move-object! level player))))
               
               ((show-score) (pp `(score is ,(level-score level))))
+              
+              ((pause)
+               (if game-paused?
+                   (sem-unlock! (level-mutex level))
+                   (sem-lock! (level-mutex level)))
+               (set! game-paused? (not game-paused?)))
+               
               (else (error "Unknown message received in manager event."))))
         (in manager-time-interfal manager-event))))
 

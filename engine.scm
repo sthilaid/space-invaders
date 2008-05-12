@@ -186,14 +186,15 @@
     (pos2d-add pos delta-vect)))
 
 
-(define (shield-explosion! shield explosion-pos explosion-speed
-                           explosion-particles)
-  (define pos (game-object-pos shield))
+(define (shield-explosion! shield colliding-obj explosion-particles)
+  (define explosion-pos (game-object-pos colliding-obj))
+  (define explosion-speed (game-object-speed colliding-obj))
+  (define shield-pos (game-object-pos shield))
   (define particles (shield-particles shield))
   
   (define relative-expl-particles
     (let ((relative-expl-pos (pos2d-sub explosion-pos
-                                        pos)))
+                                        shield-pos)))
       (map (lambda (ex-part) (pos2d-add ex-part relative-expl-pos))
          explosion-particles)))
   
@@ -403,10 +404,10 @@
 
         ((shield? collision-obj)
          (let ((penetrated-pos (get-laser-penetration-pos laser-obj)))
+           (game-object-pos-set! laser-obj penetrated-pos)
            (explode-laser! level laser-obj)
            (shield-explosion! collision-obj
-                              penetrated-pos
-                              (game-object-speed laser-obj)
+                              laser-obj
                               (if (eq? type-id 'laserP)
                                   player-laser-explosion-particles
                                   invader-laser-explosion-particles)))
@@ -427,8 +428,7 @@
          (resolve-laser-collision! level collision-obj invader))
         ((shield? collision-obj)
          (shield-explosion! collision-obj
-                            (game-object-pos invader)
-                            (game-object-speed invader)
+                            invader
                             (invader-ship-particles invader)))
         ((wall? collision-obj)
          (if (eq? (wall-id collision-obj) 'bottom)
@@ -684,7 +684,7 @@
   (define obj
     (make-game-object (gensym 'explosion)
                       expl-type
-                      (center-pos (get-laser-penetration-pos laser-obj))
+                      (center-pos (game-object-pos laser-obj))
                       0 (make-pos2d 0 0)))
   (level-add-object! level obj)
   (in animation-duration (create-explosion-end-event! level obj)))

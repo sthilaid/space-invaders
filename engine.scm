@@ -189,6 +189,18 @@
 (define (shield-explosion! shield colliding-obj explosion-particles)
   (define explosion-pos (game-object-pos colliding-obj))
   (define explosion-speed (game-object-speed colliding-obj))
+  (define explosion-particles
+    (let ((type-id (type-id (game-object-type colliding-obj))))
+      (cond ((eq? type-id 'laserP) player-laser-explosion-particles)
+            ((or (eq? type-id 'laserA)
+                 (eq? type-id 'laserB))
+             invader-laser-explosion-particles)
+            ((or (eq? type-id 'easy)
+                 (eq? type-id 'medium)
+                 (eq? type-id 'hard))
+             (invader-ship-particles colliding-obj))
+            (else (error "problem occured during shield explosion.")))))
+                 
   (define shield-pos (game-object-pos shield))
   (define particles (shield-particles shield))
   

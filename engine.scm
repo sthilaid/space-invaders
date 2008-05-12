@@ -32,7 +32,6 @@
 (define invader-laser-speed 2)
 (define mothership-movement-speed (make-pos2d 1 0))
 
-(define global-sim-mutex (new-mutex))
 (define player-laser-last-destruction-time 0)
 
 
@@ -253,7 +252,7 @@
 
 ;;;; Game level description ;;;;
 (define-type level
-  height width object-table walls wall-damage shields score lives)
+  height width object-table walls wall-damage shields mutex score lives)
 
 (define (level-add-object! lvl obj)
    (table-set! (level-object-table lvl) (game-object-id obj) obj))
@@ -350,7 +349,7 @@
          (wall-damage '())
          (shields (generate-shields))
          (lvl (make-level screen-max-y screen-max-x (make-table)
-                          walls wall-damage shields 0 3)))
+                          walls wall-damage shields (new-mutex) 0 3)))
     (for-each (lambda (x) (level-add-object! lvl x)) invaders)
     (new-player! lvl)
     lvl))
@@ -374,7 +373,7 @@
       (cycle-state! obj)
       (pos2d-x-set! pos (+ x dx))
       (pos2d-y-set! pos (+ y dy))))
-
+  
   ;; 1st move the object, then detect/respond to a collision if
   ;; required.
   (move-object-raw! obj)
@@ -491,10 +490,16 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Simulation Events and Game Logic
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
- 
+
+(define-macro (synchronized-event-thunk level action . actions)
+  `(lambda ()
+     (critical-section! (level-mutex ,level)
+        ,action
+        ,@actions)))
+
 ;; Event that will move a single row of invaders
 (define (create-init-invader-move-event level)
-  (lambda ()
+  (synchronized-event-thunk level
     (let* ((rows (get-all-invader-rows level))
            (walls (level-walls level))
            (wall-collision?
@@ -521,7 +526,7 @@
 (define (create-invader-row-move-event! dt dx dy level)
   (define rows (get-all-invader-rows level))
   (define (inv-row-move-event row-index)
-    (lambda ()
+    (synchronized-event-thunk level
       (if (< row-index invader-row-number)
           (let ((current-row (get-invaders-from-row level row-index)))
             (if (not (null? current-row))
@@ -537,7 +542,7 @@
 
 ;; Creates a new mothership and schedules its first move event.
 (define (create-new-mothership-event level)
-  (lambda ()
+  (synchronized-event-thunk level
     (let ((mothership
            (make-mothership 'mothership
                             (get-type 'mothership)
@@ -549,12 +554,13 @@
 
 ;; Event that moves a mothership and handles its collisions.
  (define (create-mothership-event level)
-  (define (mothership-event)
-    (define mothership (level-mothership level))
-    (if mothership
-        (let ((collision-occured? (move-object! level mothership)))
-          (if (not collision-occured?)
-              (in mothership-update-interval mothership-event)))))
+  (define mothership-event
+    (synchronized-event-thunk level
+      (let ((mothership (level-mothership level)))
+        (if mothership
+            (let ((collision-occured? (move-object! level mothership)))
+              (if (not collision-occured?)
+                  (in mothership-update-interval mothership-event)))))))
   mothership-event)
     
 
@@ -584,23 +590,23 @@
   (define (get-candidates)
     (filter bottom-invader? (level-invaders level)))
 
-  (lambda ()
-    (if (exists (lambda (obj)
-                  (and (laser-obj? obj)
-                       (not (object-type-id (game-object-type obj)))))
-                (level-all-objects level))
-        (error "should not have 2 invader lasers at same time"))
-    (let* ((candidates (get-candidates))
-           (canditate-nb (length candidates))
-           (shooting-invader
-            (if (> canditate-nb 0)
-                (list-ref candidates (random-integer (length candidates)))
-                #f)))
-      (if shooting-invader
-          (shoot-laser! level
-                        (list-ref (list 'laserA 'laserB) (random-integer 2))
-                        shooting-invader
-                        (- invader-laser-speed))))))
+  (synchronized-event-thunk level
+    (if (not (exists (lambda (obj)
+                       (and (laser-obj? obj)
+                            (not (eq? (object-type-id (game-object-type obj))
+                                      'laserP))))
+                     (level-all-objects level)))
+        (let* ((candidates (get-candidates))
+               (canditate-nb (length candidates))
+               (shooting-invader
+                (if (> canditate-nb 0)
+                    (list-ref candidates (random-integer (length candidates)))
+                    #f)))
+          (if shooting-invader
+              (shoot-laser! level
+                            (list-ref (list 'laserA 'laserB) (random-integer 2))
+                            shooting-invader
+                            (- invader-laser-speed)))))))
 
 ;; Wrapper function over create-laser-event which will create a new
 ;; laser object instance of specifiex type and place it correctly next
@@ -643,21 +649,20 @@
 ;; of a laser is thus defined by the returned event.
 (define (create-laser-event laser-obj level)
   (define type (game-object-type laser-obj))
-  (define (laser-event)
-    ;; centered laser position (depending on the laser type...
-    (define pos (let ((pos (game-object-pos laser-obj)))
-                  (pos2d-add pos
-                             (make-pos2d (floor (/ (type-width type) 2)) 0))))
-    
-    (let ((collision-occured? (move-object! level laser-obj)))
-      (if (or (not collision-occured?)
-              (level-exists level (game-object-id laser-obj)))
-          ;; if no collisions, continue on with the laser motion
-          (let ((delta-t (if (eq? (level-player-laser level) laser-obj)
-                             player-laser-update-interval
-                             invader-laser-update-interval)))
-            (in delta-t laser-event)))))
-
+  (define laser-event
+    (synchronized-event-thunk level
+      ;; centered laser position (depending on the laser type...
+      (let ((pos (let ((pos (game-object-pos laser-obj)))
+                   (pos2d-add pos
+                              (make-pos2d (floor (/ (type-width type) 2)) 0))))
+            (collision-occured? (move-object! level laser-obj)))
+        (if (or (not collision-occured?)
+                (level-exists level (game-object-id laser-obj)))
+            ;; if no collisions, continue on with the laser motion
+            (let ((delta-t (if (eq? (level-player-laser level) laser-obj)
+                               player-laser-update-interval
+                               invader-laser-update-interval)))
+              (in delta-t laser-event))))))
   laser-event)
 
 ;; dispalys an explosion where the invader was and removes it from the
@@ -678,20 +683,24 @@
                       0 (make-pos2d 0 0)))
   (level-add-object! level expl-obj)
   (level-remove-object! level player)
-  (in 0
-      (player-explosion-animation-event level expl-obj animation-duration))
+  (in 0 (player-explosion-animation-event level expl-obj animation-duration))
   (in (+ animation-duration 0.000001) (lambda () (new-player! level))))
 
 (define (player-explosion-animation-event level expl-obj duration)
-  (define frame-rate 0.3)
+  (define frame-rate 0.1)
   (define init-time (time->seconds (current-time)))
+  (define (animation-start-event)
+    (sem-lock! (level-mutex level))
+    (in 0 (animation-ev 0)))
   (define (animation-ev dt)
     (lambda ()
       (cycle-state! expl-obj)
       (if (< dt duration)
           (in frame-rate (animation-ev (+ dt frame-rate)))
-          (level-remove-object! level expl-obj))))
-  (animation-ev 0))
+          (begin (sem-unlock! (level-mutex level))
+                 (level-remove-object! level expl-obj)))))
+  animation-start-event)
+
 
 (define (explode-laser! level laser-obj)
   (define animation-duration 0.3)
@@ -718,7 +727,7 @@
 
 ;; Event that will stop an invader explosion animation
 (define (create-explosion-end-event! level inv)
-  (lambda ()
+  (synchronized-event-thunk level
     (level-remove-object! level inv)))
 
 ;; the manager event is a regular event that polls and handle user
@@ -726,31 +735,32 @@
 ;; discrete event simulation is perfomed in it's own thread and that
 ;; user input is passed to the simulation via this mechanism.
 (define (create-manager-event level)
-  (define (manager-event)
-    (define player (level-player level))
-    (define msg (thread-receive 0 #f))
-    (if msg
-        (case msg
-          ((shoot-laser)
-           (if player
-               (shoot-laser! level 'laserP
-                             (level-player level)
-                             player-laser-speed)))
-          ((move-right)
-           (if player
-               (let ((new-speed (make-pos2d player-movement-speed 0)))
-                 (game-object-speed-set! player new-speed)
-                 (move-object! level player))))
-          
-          ((move-left)
-           (if player
-               (let ((new-speed (make-pos2d (- player-movement-speed) 0)))
-                 (game-object-speed-set! player new-speed)
-                 (move-object! level player))))
-          
-          ((show-score) (pp `(score is ,(level-score level))))
-          (else (error "Unknown message received in manager event."))))
-    (in manager-time-interfal manager-event))
+  (define manager-event
+    (synchronized-event-thunk level
+      (let ((player (level-player level))
+            (msg (thread-receive 0 #f)))
+        (if msg
+            (case msg
+              ((shoot-laser)
+               (if player
+                   (shoot-laser! level 'laserP
+                                 (level-player level)
+                                 player-laser-speed)))
+              ((move-right)
+               (if player
+                   (let ((new-speed (make-pos2d player-movement-speed 0)))
+                     (game-object-speed-set! player new-speed)
+                     (move-object! level player))))
+              
+              ((move-left)
+               (if player
+                   (let ((new-speed (make-pos2d (- player-movement-speed) 0)))
+                     (game-object-speed-set! player new-speed)
+                     (move-object! level player))))
+              
+              ((show-score) (pp `(score is ,(level-score level))))
+              (else (error "Unknown message received in manager event."))))
+        (in manager-time-interfal manager-event))))
 
   manager-event)
 

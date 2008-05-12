@@ -190,11 +190,8 @@
           ((or (eq? type-id 'laserA)
                (eq? type-id 'laserB))
            invader-laser-explosion-particles)
-          ((or (eq? type-id 'easy)
-               (eq? type-id 'medium)
-               (eq? type-id 'hard))
-           (invader-ship-particles colliding-obj))
-          (else (error "problem occured during shield explosion.")))))
+          (else
+           (invader-ship-particles colliding-obj)))))
 
 (define (shield-explosion! shield colliding-obj)
   (define explosion-particles (get-explosion-particles colliding-obj))
@@ -283,7 +280,9 @@
   (level-wall-damage-set! level (union current-damage damage)))
 
 (define (game-over! level)
-  (pp 'todo-game-over!))
+  ;; todo
+  (show "Game over with " (level-score level) " points.\n"))
+
 
 ;; Returns (not efficiently) the list of all invaders located on the
 ;; specified row index or '() if none exists.
@@ -508,22 +507,33 @@
                (exists (lambda (inv) (obj-wall-collision? inv walls)) row))
              rows)))
       (if (null? rows)
-          (show "Game over with " (level-score level) " points.\n")
+          (game-over! level)
           (let* ((old-dx (pos2d-x (game-object-speed (caar rows))))
                  (dt (get-invader-move-refresh-rate level))
                  (duration (* (length rows) dt)))
             (if wall-collision?
                 (begin
                   (in 0 (create-invader-row-move-event!
-                         dt 0 (- invader-y-movement-speed) level))
-                  (in duration
-                      (create-invader-row-move-event! dt (- old-dx) 0 level))
-                  (in (* 2 duration) (create-init-invader-move-event level)))
+                         dt 0 (- invader-y-movement-speed) level
+                         (create-invader-wall-movement-continuation-event
+                          old-dx level))))
                 (begin
-                  (in 0 (create-invader-row-move-event! dt old-dx 0 level))
-                  (in duration (create-init-invader-move-event level)))))))))
+                  (in 0 (create-invader-row-move-event!
+                         dt old-dx 0 level
+                         (create-init-invader-move-event level))))))))))
 
-(define (create-invader-row-move-event! dt dx dy level)
+(define (create-invader-wall-movement-continuation-event old-dx level)
+  (synchronized-event-thunk level
+    (let ((rows (get-all-invader-rows level)))
+      (if (null? rows)
+          (game-over! level)
+          (let* ((dt (get-invader-move-refresh-rate level)))
+            (in 0
+                (create-invader-row-move-event!
+                 dt (- old-dx) 0 level
+                 (create-init-invader-move-event level))))))))
+
+(define (create-invader-row-move-event! dt dx dy level continuation)
   (define rows (get-all-invader-rows level))
   (define (inv-row-move-event row-index)
     (synchronized-event-thunk level
@@ -537,7 +547,8 @@
                    current-row)
                   (move-ship-row! level row-index)
                   (in dt (inv-row-move-event (+ row-index 1))))
-                ((inv-row-move-event (+ row-index 1))))))))
+                ((inv-row-move-event (+ row-index 1)))))
+          (in dt continuation))))
   (inv-row-move-event 0))
 
 ;; Creates a new mothership and schedules its first move event.

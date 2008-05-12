@@ -157,6 +157,16 @@
   (rgb-pixels-to-boolean-point-list
    (parse-ppm-image-file "sprites/explodeL0.ppm") 'center))
 
+(define (get-laser-penetration-pos laser-obj)
+  (let* ((delta 2)
+         (pos (game-object-pos laser-obj))
+         (dy (pos2d-y (game-object-speed laser-obj)))
+         (delta-vect 
+          (cond ((< dy 0) (make-pos2d 0 (- delta)))
+                ((> dy 0) (make-pos2d 0 delta))
+                (else (make-pos2d 0 0)))))
+    (pos2d-add pos delta-vect)))
+
 
 ;;;; Shields ;;;;
 (define (generate-shields)
@@ -175,32 +185,22 @@
         (make-shield 'shield4 shield-type (make-pos2d 171 40) 0
                      speed (generate-particles))))
 
-(define (get-laser-penetration-pos laser-obj)
-  (let* ((delta 2)
-         (pos (game-object-pos laser-obj))
-         (dy (pos2d-y (game-object-speed laser-obj)))
-         (delta-vect 
-          (cond ((< dy 0) (make-pos2d 0 (- delta)))
-                ((> dy 0) (make-pos2d 0 delta))
-                (else (make-pos2d 0 0)))))
-    (pos2d-add pos delta-vect)))
+(define (get-explosion-particles colliding-obj)
+  (let ((type-id (type-id (game-object-type colliding-obj))))
+    (cond ((eq? type-id 'laserP) player-laser-explosion-particles)
+          ((or (eq? type-id 'laserA)
+               (eq? type-id 'laserB))
+           invader-laser-explosion-particles)
+          ((or (eq? type-id 'easy)
+               (eq? type-id 'medium)
+               (eq? type-id 'hard))
+           (invader-ship-particles colliding-obj))
+          (else (error "problem occured during shield explosion.")))))
 
-
-(define (shield-explosion! shield colliding-obj explosion-particles)
+(define (shield-explosion! shield colliding-obj)
+  (define explosion-particles (get-explosion-particles colliding-obj))
   (define explosion-pos (game-object-pos colliding-obj))
   (define explosion-speed (game-object-speed colliding-obj))
-  (define explosion-particles
-    (let ((type-id (type-id (game-object-type colliding-obj))))
-      (cond ((eq? type-id 'laserP) player-laser-explosion-particles)
-            ((or (eq? type-id 'laserA)
-                 (eq? type-id 'laserB))
-             invader-laser-explosion-particles)
-            ((or (eq? type-id 'easy)
-                 (eq? type-id 'medium)
-                 (eq? type-id 'hard))
-             (invader-ship-particles colliding-obj))
-            (else (error "problem occured during shield explosion.")))))
-                 
   (define shield-pos (game-object-pos shield))
   (define particles (shield-particles shield))
   
@@ -224,6 +224,18 @@
 
 
 
+(define (damage-wall! level laser-obj)
+  (define explosion-particles (get-explosion-particles laser-obj))
+  (define pos (game-object-pos laser-obj))
+  (define wall-damage
+    (map 
+     (lambda (p) (pos2d-add p pos))
+     (filter
+      (lambda (p) (= (pos2d-y p) 0))
+      explosion-particles)))
+  (level-damage-wall! level wall-damage))
+
+
 ;;;; Wall or game boundary structure ;;;;
 (define-type wall-struct rect id)
 (define (new-wall x y width height id)
@@ -240,7 +252,9 @@
 
 
 ;;;; Game level description ;;;;
-(define-type level height width object-table walls shields score lives)
+(define-type level
+  height width object-table walls wall-damage shields score lives)
+
 (define (level-add-object! lvl obj)
    (table-set! (level-object-table lvl) (game-object-id obj) obj))
 
@@ -264,6 +278,10 @@
   (level-score-set! level
                     (+ (level-score level)
                        (object-type-score-value (game-object-type obj)))))
+
+(define (level-damage-wall! level damage)
+  (define current-damage (level-wall-damage level))
+  (level-wall-damage-set! level (union current-damage damage)))
 
 (define (game-over! level)
   (pp 'todo-game-over!))
@@ -329,9 +347,10 @@
                       invaders))))))
 
   (let* ((walls (generate-walls))
+         (wall-damage '())
          (shields (generate-shields))
          (lvl (make-level screen-max-y screen-max-x (make-table)
-                          walls shields 0 3)))
+                          walls wall-damage shields 0 3)))
     (for-each (lambda (x) (level-add-object! lvl x)) invaders)
     (new-player! lvl)
     lvl))
@@ -418,11 +437,7 @@
          (let ((penetrated-pos (get-laser-penetration-pos laser-obj)))
            (game-object-pos-set! laser-obj penetrated-pos)
            (explode-laser! level laser-obj)
-           (shield-explosion! collision-obj
-                              laser-obj
-                              (if (eq? type-id 'laserP)
-                                  player-laser-explosion-particles
-                                  invader-laser-explosion-particles)))
+           (shield-explosion! collision-obj laser-obj))
          (destroy-laser! level laser-obj))
 
         ((mothership? collision-obj)
@@ -430,6 +445,7 @@
          (destroy-laser! level laser-obj))
 
         ((wall? collision-obj)
+         (damage-wall! level laser-obj)
          (explode-laser! level laser-obj)
          (destroy-laser! level laser-obj))))
 
@@ -439,9 +455,7 @@
   (cond ((laser-obj? collision-obj)
          (resolve-laser-collision! level collision-obj invader))
         ((shield? collision-obj)
-         (shield-explosion! collision-obj
-                            invader
-                            (invader-ship-particles invader)))
+         (shield-explosion! collision-obj invader))
         ((wall? collision-obj)
          (if (eq? (wall-id collision-obj) 'bottom)
              (game-over! level)))))

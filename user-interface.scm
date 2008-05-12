@@ -213,6 +213,13 @@ end
   (glVertex2i screen-max-x 9)
   (glEnd)
 
+  (set-openGL-color 'black)
+  (for-each (lambda (p) (glBegin GL_POINTS)
+                    (glVertex2i (pos2d-x p) (pos2d-y p))
+                    (glEnd))
+            (level-wall-damage level))
+              
+
   (let ((nb-lives (level-lives level)))
     (display-message 13 0 (number->string nb-lives))
     (for i 0 (< i (- nb-lives 1))

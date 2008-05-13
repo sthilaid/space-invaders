@@ -4,13 +4,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;; Global state variables  ;;;;;;;;;;;;;;;;;;;;;;;
 
-(define image-height #f)
-(define image-width #f)
-
-(define status-message #f)
-
-;; Game instance
-(define current-level #f)
 (define game-loop-thunk #f)
 (define simulation-thread #f)
 
@@ -212,11 +205,12 @@ end
   (glVertex2i 0 9)
   (glVertex2i screen-max-x 9)
   (glEnd)
-
+;;  (glBlendFunc GL_ONE GL_ZERO)
   (set-openGL-color 'black)
-  (for-each (lambda (p) (glBegin GL_POINTS)
-                    (glVertex2i (pos2d-x p) (pos2d-y p))
-                    (glEnd))
+  (for-each (lambda (p)
+              (glBegin GL_POINTS)
+              (glVertex2i (pos2d-x p) (pos2d-y p))
+              (glEnd))
             (level-wall-damage level))
               
 
@@ -242,12 +236,25 @@ end
       (glClearColor 0. 0. 0. 0.)
       (glClear GL_COLOR_BUFFER_BIT)
 
+      (glBlendFunc GL_SRC_ALPHA GL_ONE)
+      (glColor4f .1215 .9960 .1215 0.05)
+      (let ((y 65))
+        (glBegin GL_QUADS)
+        (glVertex2i 0 0)
+        (glVertex2i screen-max-x 0)
+        (glVertex2i screen-max-x y)
+        (glVertex2i 0 y)
+        (glEnd))
+
+      (glBlendFunc GL_ONE GL_ZERO)
+      
       ;; Draw background stuff
       (render-level level)
       
       ;; Draw all objects
       (for-each render-object (level-all-objects level))
       (for-each render-shield (level-shields level))
+
 
       (let ((now (time->seconds (current-time))))
         (if (not (= last-render-time 0))
@@ -272,9 +279,8 @@ end
 ;;    (glLoadIdentity)
 ;;    (glOrtho 0. (exact->inexact w) 0. (exact->inexact h) -1.0 1.0)
 ;;    (glMatrixMode GL_MODELVIEW))
-
-  (let* ((zoom-x (/ w image-width))
-         (zoom-y (/ h image-height))
+  (let* ((zoom-x (/ w screen-max-x))
+         (zoom-y (/ h screen-max-y))
          (factor (exact->inexact (ceiling (max zoom-x zoom-y)))))
     (glPointSize factor)
     (glPixelZoom factor factor)
@@ -326,16 +332,12 @@ end
 (define (glut-init height width)
   (let ((argc ((c-lambda () (pointer int) "___result_voidstar = &argc;"))))
 
-    (set! current-level (new-level))
-    (set! image-height (level-height current-level))
-    (set! image-width (level-width current-level))
-
     (set! simulation-thread
-          (make-thread (game-loop (current-thread) current-level)))
+          (make-thread (game-loop (current-thread))))
     (thread-start! simulation-thread)
     
     (glutInit argc '())
-    (glutInitDisplayMode (bitwise-ior GLUT_DOUBLE GLUT_RGB))
+    (glutInitDisplayMode (bitwise-ior GLUT_DOUBLE GLUT_RGBA))
     (glutInitWindowSize screen-max-x screen-max-y)
     (glutCreateWindow "Space Invaders")
     
@@ -343,6 +345,9 @@ end
     (glDisable GL_POINT_SMOOTH)
 
     (glPixelStorei GL_UNPACK_ALIGNMENT 1)
+
+    (glEnable GL_BLEND)
+    (glBlendFunc GL_SRC_ALPHA GL_ONE)
 
     ;(create-menu)
     

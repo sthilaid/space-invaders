@@ -17,6 +17,7 @@
 (define gamefield-max-x (- screen-max-x wall-x-offset))
 (define gamefield-max-y (- screen-max-y screen-top-offset))
 
+(define user-interface-thread #f)
 
 (define invader-row-number 5)
 (define invader-col-number 11)
@@ -41,12 +42,11 @@
 (define invader-laser-update-interval 0.02)
 (define next-invader-laser-interval 0.2)
 (define manager-time-interfal 0.001)
-(define redraw-interval 0.0001)
+(define redraw-interval 0.01)
 
 (define player-laser-refresh-constraint 0.6)
 
-(define (mothership-random-delay)
-  (+ (random-integer 10) 5))
+(define (mothership-random-delay) (+ (random-integer 10) 5))
 
 (define get-invader-move-refresh-rate
   ;; the sleep delay is a function such that when the level is full of
@@ -102,6 +102,7 @@
 (define-type-of-game-object mothership)
 (define-type-of-game-object laser-obj)
 (define-type-of-game-object shield particles)
+(define-type-of-game-object message-obj text)
 
 ;;;; Game object type definition ;;;;
 (define-type object-type id bbox state-num score-value)
@@ -126,6 +127,7 @@
      (explodeInvL ,(make-object-type 'explodeInvL (make-rect 0 0 6 8) 1 0))
      (explodeS ,(make-object-type 'explodeS (make-rect 0 0 8 8) 1 0))
      (explodeP ,(make-object-type 'explodeP (make-rect 0 0 16 8) 2 0))
+     (message ,(make-object-type 'message (make-rect 0 0 0 0) 0 0))
    ))
 
 (define (get-type type-name)
@@ -249,7 +251,7 @@
 
 ;;;; Game level description ;;;;
 (define-type level
-  height width object-table walls wall-damage shields mutex score lives)
+  height width object-table walls wall-damage shields score lives sim mutex)
 
 (define (level-add-object! lvl obj)
    (table-set! (level-object-table lvl) (game-object-id obj) obj))
@@ -259,6 +261,8 @@
 
 (define (level-exists lvl obj-id)
   (table-ref (level-object-table lvl) obj-id #f))
+
+(define level-get level-exists)
 
 (define (level-all-objects lvl)
    (map cdr (table->list (level-object-table lvl))))
@@ -280,8 +284,9 @@
   (level-wall-damage-set! level (union current-damage damage)))
 
 (define (game-over! level)
-  ;; todo
-  (show "Game over with " (level-score level) " points.\n"))
+  (show "Game over with " (level-score level) " points.\n")
+  (pp 'todo-update-high-score)
+  (exit-simulation 'intro-A))
 
 
 ;; Returns (not efficiently) the list of all invaders located on the
@@ -314,7 +319,8 @@
                                         player-type pos state speed)))
     (level-add-object! level player-ship)))
 
-  
+(define (play-level level)
+  (start-simulation! (level-sim level) +inf.0))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Game Level Creation
@@ -347,11 +353,32 @@
   (let* ((walls (generate-walls))
          (wall-damage '())
          (shields (generate-shields))
+         (sim (create-simulation))
          (lvl (make-level screen-max-y screen-max-x (make-table)
-                          walls wall-damage shields (new-mutex) 0 3)))
+                          walls wall-damage shields 0 3 sim (new-mutex))))
     (for-each (lambda (x) (level-add-object! lvl x)) invaders)
     (new-player! lvl)
+    (schedule-event! sim 0 (create-init-invader-move-event lvl))
+    (schedule-event! sim 1 (create-invader-laser-event lvl))
+    (schedule-event! sim (mothership-random-delay)
+                     (create-new-mothership-event lvl))
+    (schedule-event! sim 0 (create-manager-event lvl))
+    (schedule-event! sim 0 (create-redraw-event user-interface-thread lvl))
     lvl))
+
+
+(define (new-animation-level-A)
+  (let* ((invaders '())
+         (walls '())
+         (wall-damage '())
+         (shields '())
+         (sim (create-simulation))
+         (level (make-level screen-max-y screen-max-x (make-table)
+                            walls wall-damage shields 0 3 sim (new-mutex))))
+    (schedule-event! sim 0 (create-animation-A-event level))
+    (schedule-event! sim 0 (create-manager-event level))
+    (schedule-event! sim 0 (create-redraw-event user-interface-thread level))
+    level))
 
 
 
@@ -487,7 +514,7 @@
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Simulation Events and Game Logic
+;; Gameplay related simulation events 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define-macro (synchronized-event-thunk level action . actions)
@@ -741,6 +768,95 @@
   (synchronized-event-thunk level
     (level-remove-object! level inv)))
 
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Game start animation events
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(define-macro (animate-message msg-obj msg cont)
+  (let ((animation-delay 0.1)
+        (anim-event      (gensym 'anim-event))
+        (str             (gensym 'str))
+        (current-text    (gensym 'current-text)))
+    `(letrec
+         ((,anim-event
+           (lambda (,str)
+             (lambda ()
+               (if (string=? ,str "")
+                   (in ,animation-delay ,cont)
+                   (let ((,current-text (message-obj-text ,msg-obj)))
+                     (message-obj-text-set!
+                      ,msg-obj
+                      (string-append ,current-text (substring ,str 0 1)))
+                     (in ,animation-delay
+                         (,anim-event (substring ,str 1
+                                                 (string-length ,str))))))))))
+       (,anim-event ,msg))))
+
+(define (create-animation-A-event level)
+  (define msg-type (get-type 'message))
+  (define speed (make-pos2d 0 0))
+
+  (lambda ()
+    (let* ((play (let ((pos (make-pos2d 101 (- screen-max-y 88))))
+                   (make-message-obj 'play msg-type pos 0 speed "")))
+           (space (let ((pos (make-pos2d 61 (- screen-max-y 112))))
+                    (make-message-obj 'space msg-type pos 0 speed "")))
+           (score (let ((pos (make-pos2d 37 (- screen-max-y 144))))
+                    (make-message-obj 'score msg-type pos 0 speed "")))
+           (mother (let ((pos (make-pos2d 85 (- screen-max-y 160))))
+                     (make-message-obj 'mother msg-type pos 0 speed "")))
+           (hard (let ((pos (make-pos2d 85 (- screen-max-y 176))))
+                   (make-message-obj 'hard msg-type pos 0 speed "")))
+           (medium (let ((pos (make-pos2d 85 (- screen-max-y 192))))
+                     (make-message-obj 'medium msg-type pos 0 speed "")))
+           (easy (let ((pos (make-pos2d 85 (- screen-max-y 208))))
+               (make-message-obj 'easy msg-type pos 0 speed "")))
+           (anim-messages
+            (list play space score mother hard medium easy)))
+             
+      (for-each (lambda (m) (level-add-object! level m)) anim-messages )
+      (in 0 (animate-message
+             play "PLAY"
+             (animate-message
+              space "SPACE   INVADERS"
+              (create-animate-score-adv-table-event level)))))))
+
+(define (create-animate-score-adv-table-event level)
+  (define speed (make-pos2d 0 0))
+  (define (pos x y) (make-pos2d x (- screen-max-y y)))
+  (lambda ()
+    (let ((mothership (make-mothership 'mothership (get-type 'mothership)
+                                   (pos 68 160) 0 speed))
+          (hard-ship (make-invader-ship 'hard-ship (get-type 'hard)
+                                   (pos 72 176) 0 speed 0 0))
+          (medium-ship (make-invader-ship 'medium-ship (get-type 'medium)
+                                     (pos 71 192) 0 speed 0 0))
+          (easy-ship (make-invader-ship 'easy-ship (get-type 'easy)
+                                   (pos 70 208) 0 speed 0 0))
+          (score-msg-obj (level-get level 'score)))
+      (for-each (lambda (ship) (level-add-object! level ship))
+                (list mothership hard-ship medium-ship easy-ship))
+      (message-obj-text-set! score-msg-obj "*SCORE ADVANCE TABLE*"))
+    
+    (in 0 (animate-message
+           (level-get level 'mother) "=? MYSTERY"
+           (animate-message
+            (level-get level 'hard) "=30 POINTS"
+            (animate-message
+             (level-get level 'medium) "=20 POINTS"
+             (animate-message
+              (level-get level 'easy) "=10 POINTS"
+              (lambda () (pp 'todo-end-animation)))))))))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Manager events
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
 ;; the manager event is a regular event that polls and handle user
 ;; input by looking into the thread's mailbox. It is assumed that the
 ;; discrete event simulation is perfomed in it's own thread and that
@@ -778,6 +894,9 @@
                    (sem-unlock! (level-mutex level))
                    (sem-lock! (level-mutex level)))
                (set! game-paused? (not game-paused?)))
+
+              ((reset)
+               (game-over! level))
                
               (else (error "Unknown message received in manager event."))))
         (in manager-time-interfal manager-event))))
@@ -794,17 +913,12 @@
 
 
 ;; Setup of initial game events and start the simulation.
-(define (game-loop ui-thread level)
-  (define sim (create-simulation))
-
-  (lambda ()
-    (schedule-event! sim 0 (create-init-invader-move-event level))
-    (schedule-event! sim 0 (create-manager-event level))
-    (schedule-event! sim 1 (create-invader-laser-event level))
-    (schedule-event! sim 0 (create-redraw-event ui-thread level))
-    (schedule-event! sim (mothership-random-delay)
-                     (create-new-mothership-event level))
-    (start-simulation! sim +inf.0)))
+(define (game-loop ui-thread)
+  (set! user-interface-thread ui-thread)
+    (lambda ()
+      (let inf-loop ((level (new-animation-level-A))) ;;(new-level)))
+        (case (play-level level)
+          (else (inf-loop (new-animation-level-A)))))))
 
 
 

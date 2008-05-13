@@ -160,6 +160,7 @@ end
     ((explodeS) (explodeS-renderer x y state))
     ((explodeP) (explodeP-renderer x y state))
     ((mothership) (mothership-renderer x y state))
+    ((message) (display-message x y (message-obj-text obj)))
     (else (error (string-append "Cannot render unknown object type:"
                                 (symbol->string type))))))
 
@@ -307,6 +308,7 @@ end
    ((#\space) (register-user-action 'shoot-laser))
    ;; On Escape, Ctl-q, Ctl-c, Ctl-w, q -> terminate the program
    ((#\x1b #\x11 #\x03 #\x17 #\q) (quit))
+   ((#\r #\R) (register-user-action 'reset))
    (else (show "received keyboard input: " key ". Mouse is @ ("x","y")\n"))))
 
 (c-define (special-keyboard key x y)

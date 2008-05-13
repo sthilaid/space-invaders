@@ -11,10 +11,13 @@
 ;; takes 2 arguments, occuring time value and actions thunk
 (define create-event event-heap-node-create)
 
+;; Dynamically scoped "hidden" variables used by the simulator to
+;; perform "tricks" such as pause the simulation, etc...
 (define !!-event-queue-!! (make-parameter #f))
 (define !!-current-time-!! (make-parameter #f))
 (define !!-simulation-start-time-!! (make-parameter #f))
 (define !!-event-continuation-!! (make-parameter #f))
+(define !!-exit-simulation-!! (make-parameter #f))
 
 ;; Here the event ev, is a thunk to be executed when the simulation is
 ;; performed.
@@ -52,13 +55,14 @@
                               (!!-simulation-start-time-!!
                                simulation-start-time)
                               (!!-current-time-!! current-event-time)
-                              (!!-event-continuation-!! k))
+                              (!!-event-continuation-!! k)
+                              (!!-exit-simulation-!! stop-simulation))
               (current-actions))))
             (iterate)))))
 
   (call/cc (lambda (k)
              (set! stop-simulation
-                   (lambda (msg) (pp msg) (k #t)))
+                   (lambda (msg) (k msg)))
              (run-simulation))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -66,7 +70,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define NOW! -10)
-(define RIGHT-NOW! -100)
+(define RIGHT-NOW! -inf.0)
 
 (define-macro (in delta thunk)
   ;; or (+ !!-current-time-!! ,delta). Not sure if its better to not
@@ -119,6 +123,9 @@
          (sem-unlock! ,sem)
          ,result))))
 
+;;;; Simulation abrupt stop ;;;;
+(define (exit-simulation return-val) ((!!-exit-simulation-!!) return-val))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Test
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -128,13 +135,12 @@
   (define (make-test-actions i)
     (lambda ()
       (pp `(,i : now it is ,(!!-current-time-!!)))
-      (if (< i 10)
-          (in 4 (make-test-actions (+ i 1))))))
+      (in 1 (make-test-actions (+ i 1)))))
 
   ;; Cannot do (in 12.54321 (make-test-actions 0)) because the current
   ;; flow of control is not yet in the simulation.
-  (schedule-event! sim 12.5421 (make-test-actions 0))
-  (start-simulation! sim 50))
+  (schedule-event! sim 0.75 (make-test-actions 0))
+  (display (start-simulation! sim 6)) (newline))
 
 (define (event-sim-synchro-test)
   (define sim (create-simulation))
@@ -158,7 +164,17 @@
   (schedule-event! sim 0 consumerA)
   (schedule-event! sim 0 consumerB)
   (schedule-event! sim 0 producer)
-  (start-simulation! sim 5.6))
+  (display (start-simulation! sim 5.6)) (newline))
+
+(define (event-sim-exit-test)
+  (define (infinite-loop-ev)
+    (if (> (!!-current-time-!!) 5)
+        (exit-simulation "exited simulation successfully")
+        (pp `(it is now ,(!!-current-time-!!))))
+    (in 1 infinite-loop-ev))
+  (define sim (create-simulation))
+  (schedule-event! sim 0 infinite-loop-ev)
+  (display (start-simulation! sim +inf.0)) (newline))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

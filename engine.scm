@@ -394,9 +394,10 @@
          (wall-damage '())
          (shields (generate-shields))
          (sim (create-simulation))
+         (lives 1)
          (level (make-level screen-max-y screen-max-x (make-table)
                           walls wall-damage shields 0 hi-score
-                          3 sim (new-mutex))))
+                          lives sim (new-mutex))))
     (add-global-score-messages! level)
     
     (schedule-event!
@@ -927,7 +928,7 @@
   (level-remove-object! level player)
   
   (let ((cont (if (<= (level-lives level) 0)
-                  (game-over! level)
+                  (game-over-animation-event level)
                   (lambda () (sem-unlock! (level-mutex level))
                           (new-player! level)))))
     (in 0 (lambda ()
@@ -1078,7 +1079,20 @@
              (level-get level 'medium) "=20 POINTS"
              (animate-message
               (level-get level 'easy) "=10 POINTS"
-              (lambda () (pp 'todo-end-animation)))))))))
+              (lambda () 'animation-finished))))))))
+
+(define (game-over-animation-event level)
+  (lambda ()
+    (let* ((type (get-type 'message))
+           (pos (make-pos2d 77 (- screen-max-y 60)))
+           (speed (make-pos2d 0 0))
+           (msg-obj (make-message-obj 'game-over-msg type pos 'red speed "")))
+      (level-add-object! level msg-obj)
+      (in 0 (animate-message
+             msg-obj "GAME OVER"
+             (lambda () (in 2 (lambda () (game-over! level)))))))))
+
+  
 
 
 

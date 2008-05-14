@@ -178,6 +178,8 @@ end
      (glColor3f .12156862745098039 .996078431372549 .12156862745098039))
     ((white)
      (glColor3f 1. 1. 1.))
+    ((red)
+     (glColor3f 1. 0. 0.))
     ((black)
      (glColor3f 0. 0. 0.))
     (else (error "unknown color"))))

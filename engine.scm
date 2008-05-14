@@ -2,9 +2,11 @@
 (include "ppm-reader.scm")
 (include "event-simulation.scm")
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Global constants
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;*****************************************************************************
+;;
+;;                            Global constants
+;;
+;;*****************************************************************************
 
 (define screen-max-x 228)
 (define screen-max-y 265)
@@ -63,9 +65,11 @@
 
 
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Data Structures definitions and operations
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;*****************************************************************************
+;;
+;;             Data Structures definitions and operations
+;;
+;;*****************************************************************************
 
 ;;;; 2d position coordinate additionnal operations ;;;;
 (define (inverse-dir dir . options)
@@ -78,6 +82,10 @@
 ;;;; Rectangle structure used in collision detection ;;;;
 (define-type rect x y width height)
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Main game object definition
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;; General game object description ;;;;
 (define-type game-object id type pos state speed
@@ -98,6 +106,11 @@
              (type-width (game-object-type obj))
              (type-height (game-object-type obj))))
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Other object derived types
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 ;;;; Specific game object descriptions ;;;;
 (define-type-of-game-object invader-ship row col)
 (define-type-of-game-object player-ship)
@@ -106,7 +119,12 @@
 (define-type-of-game-object shield particles)
 (define-type-of-game-object message-obj text)
 
-;;;; Game object type definition ;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Object types
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;; object type definition ;;;;
 (define-type object-type id bbox state-num score-value)
 (define type-id object-type-id)
 (define (type-height t) (rect-height (object-type-bbox t)))
@@ -137,6 +155,11 @@
   (if type
       (cadr type)
       (error (string-append "no such type: " type-name)))))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Particles objects and functions
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;; centered explosion particle positions ;;;;
 (define invader-laser-explosion-particles
@@ -223,7 +246,7 @@
   (shield-particles-set! shield new-particles))
 
 
-
+;;;; Wall ;;;;
 (define (damage-wall! level laser-obj)
   (define explosion-particles (get-explosion-particles laser-obj))
   (define pos (game-object-pos laser-obj))
@@ -235,6 +258,11 @@
       explosion-particles)))
   (level-damage-wall! level wall-damage))
 
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Wall data structure
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;; Wall or game boundary structure ;;;;
 (define-type wall-struct rect id)
@@ -250,6 +278,10 @@
         (new-wall gamefield-max-x gamefield-max-y -inf.0 +inf.0 'top)
         (new-wall gamefield-max-x gamefield-max-y +inf.0 -inf.0 'right)))
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Level related data structure and functions
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;; Game level description ;;;;
 (define-type level
@@ -288,8 +320,7 @@
 
 (define (game-over! level)
   (show "Game over with " (level-score level) " points.\n")
-  (pp 'todo-update-high-score)
-  (exit-simulation 'intro-A))
+  (exit-simulation (level-score level)))
 
 
 ;; Returns (not efficiently) the list of all invaders located on the
@@ -333,75 +364,58 @@
         (else (number->string score))))
 
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Game Level Creation
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;*****************************************************************************
+;;
+;;                           Game Level Creation
+;;
+;;*****************************************************************************
+
+(define (add-global-score-messages! level)
+  (define y 254)
+  (define type (get-type 'message))
+  (define state 'white)
+  (define speed (make-pos2d 0 0))
+  (define hi-score (level-hi-score level))
+  (for-each
+   (lambda (m) (level-add-object! level m))
+   (list
+    (make-message-obj 'top-banner type (make-pos2d 13 y) state speed
+                      "SCORE<1>  HI-SCORE  SCORE<2>")
+    (make-message-obj 'player1-score-msg type
+                      (make-pos2d 30 (- y 17)) state speed
+                      (get-score-string 0))
+    (make-message-obj 'hi-score-msg type
+                      (make-pos2d 93 (- y 17)) state speed
+                      (get-score-string hi-score))
+    (make-message-obj 'player2-score-msg type
+                      (make-pos2d 173 (- y 17)) state speed ""))))
 
 (define (new-level hi-score)
-  (define invaders '())
-  (define x-offset 30)
-  (define y-offset (- 265 152))
-  (define (determine-type-id col)
-    (cond ((< col 2) 'easy)
-          ((< col 4) 'medium)
-          (else 'hard)))
-
-;;   (for h 0 (< h invader-row-number)
-;;     (let ((current-type (get-type (determine-type-id h))))
-;;       (for w 0 (< w invader-col-number)
-;;         (let* ((x (+ x-offset (* w invader-spacing)))
-;;                (y (+ y-offset (* h invader-spacing)))
-;;                (pos (make-pos2d x y))
-;;                (state 1)
-;;                (speed (make-pos2d invader-x-movement-speed 0))
-;;                (row h)
-;;                (col w))
-;;           (set! invaders
-;;                 (cons (make-invader-ship (gensym 'inv)
-;;                                          current-type pos state speed row col)
-;;                       invaders))))))
-
   (let* ((walls (generate-walls))
          (wall-damage '())
          (shields (generate-shields))
          (sim (create-simulation))
-         (lvl (make-level screen-max-y screen-max-x (make-table)
+         (level (make-level screen-max-y screen-max-x (make-table)
                           walls wall-damage shields 0 hi-score
                           3 sim (new-mutex))))
-    (let* ((y 254)
-           (type (get-type 'message))
-           (state 'white)
-           (speed (make-pos2d 0 0)))
-      (for-each
-       (lambda (m) (level-add-object! lvl m))
-       (list
-        (make-message-obj 'top-banner type (make-pos2d 13 y) state speed
-                          "SCORE<1>  HI-SCORE  SCORE<2>")
-        (make-message-obj 'player1-score-msg type
-                          (make-pos2d 30 (- y 17)) state speed
-                          (get-score-string 0))
-        (make-message-obj 'hi-score-msg type
-                          (make-pos2d 93 (- y 17)) state speed
-                          (get-score-string hi-score))
-        (make-message-obj 'player2-score-msg type
-                          (make-pos2d 173 (- y 17)) state speed ""))))
-
+    (add-global-score-messages! level)
+    
     (schedule-event!
      sim 0
      (start-of-game-animation-event
-      lvl "PLAY  PLAYER<1>"
+      level "PLAY  PLAYER<1>"
       (generate-invaders-event
-       lvl
+       level
        (lambda ()
-         (new-player! lvl)
-         (schedule-event! sim 0 (create-init-invader-move-event lvl))
-         (schedule-event! sim 1 (create-invader-laser-event lvl))
+         (new-player! level)
+         (schedule-event! sim 0 (create-init-invader-move-event level))
+         (schedule-event! sim 1 (create-invader-laser-event level))
          (schedule-event! sim (mothership-random-delay)
-                          (create-new-mothership-event lvl))))))
+                          (create-new-mothership-event level))))))
     
-    (schedule-event! sim 0 (create-main-manager-event lvl))
-    (schedule-event! sim 0 (create-redraw-event user-interface-thread lvl))
-    lvl))
+    (schedule-event! sim 0 (create-main-manager-event level))
+    (schedule-event! sim 0 (create-redraw-event user-interface-thread level))
+    level))
 
 (define (new-animation-level-A hi-score)
   (let* ((invaders '())
@@ -412,16 +426,19 @@
          (level (make-level screen-max-y screen-max-x (make-table)
                             walls wall-damage shields 0 hi-score
                             0 sim (new-mutex))))
+    (add-global-score-messages! level)
+    
     (schedule-event! sim 0 (create-animation-A-event level))
     (schedule-event! sim 0 (create-intro-manager-event level))
     (schedule-event! sim 0 (create-redraw-event user-interface-thread level))
     level))
 
 
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Movement procedures
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;*****************************************************************************
+;;
+;;                         Movement Gameplay
+;;
+;;*****************************************************************************
 
 ;; Returns #t if a collision occured (and was resolved) during the
 ;; movement.
@@ -452,6 +469,96 @@
   (for-each (lambda (inv) (move-object! level inv))
             (get-invaders-from-row level row-index)))
 
+
+
+
+;;*****************************************************************************
+;;
+;;                         Collision Management
+;;
+;;*****************************************************************************
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Collision detection
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Returns #f is the object is not colliding, else returns an object
+;; which is in collision with obj. Only one object is return, even if
+;; multiple collision are occurring.
+(define (detect-collision? obj level)
+  ;; exists is exptected to return the object that satisfy the condition
+  (or (exists (lambda (collision-obj) (obj-obj-collision? obj collision-obj))
+              (level-all-objects level))
+      (obj-shield-collision? obj (level-shields level))
+      (obj-wall-collision? obj (level-walls level))))
+
+;; collision detection between 2 game objects
+(define (obj-obj-collision? obj1 obj2)
+  (let* ((obj1-pos (game-object-pos obj1))
+         (obj2-pos (game-object-pos obj2)))
+    (and (not (eq? obj1 obj2))
+         (rectangle-collision?
+          (get-bounding-box obj1)
+          (get-bounding-box obj2)))))
+
+(define (obj-wall-collision? obj walls)
+  (exists (lambda (wall)
+            (rectangle-collision?
+             (get-bounding-box obj)
+             (wall-rect wall)))
+          walls))
+
+(define (obj-shield-collision? obj shields)
+  (exists (lambda (shield)
+            (if (obj-obj-collision? obj shield)
+                (let* ((pos (game-object-pos shield)))
+                  (exists (lambda (particle)
+                            (point-rect-collision? (pos2d-add pos particle)
+                                                   (get-bounding-box obj)))
+                          (shield-particles shield)))
+                #f))
+          shields))
+
+;; Simple rectangular collision detection. Not optimized.
+(define (rectangle-collision? r1 r2)
+  (let* ((r1-x1 (rect-x r1))
+         (r1-x2 (+ r1-x1 (rect-width r1)))
+         (r1-x-min (min r1-x1 r1-x2))
+         (r1-x-max (max r1-x1 r1-x2))
+         (r1-y1 (rect-y r1))
+         (r1-y2 (+ r1-y1 (rect-height r1)))
+         (r1-y-min (min r1-y1 r1-y2))
+         (r1-y-max (max r1-y1 r1-y2))
+
+         (r2-x1 (rect-x r2))
+         (r2-x2 (+ r2-x1 (rect-width r2)))
+         (r2-x-min (min r2-x1 r2-x2))
+         (r2-x-max (max r2-x1 r2-x2))
+         (r2-y1 (rect-y r2))
+         (r2-y2 (+ r2-y1 (rect-height r2)))
+         (r2-y-min (min r2-y1 r2-y2))
+         (r2-y-max (max r2-y1 r2-y2)))
+    (not (or (< r1-x-max r2-x-min)
+             (> r1-x-min r2-x-max)
+             (< r1-y-max r2-y-min)
+             (> r1-y-min r2-y-max)))))
+
+(define (point-rect-collision? point rect)
+  (let* ((rect-x1 (rect-x rect))
+         (rect-x2 (+ rect-x1 (rect-width rect)))
+         (rect-x-min (min rect-x1 rect-x2))
+         (rect-x-max (max rect-x1 rect-x2))
+         (rect-y1 (rect-y rect))
+         (rect-y2 (+ rect-y1 (rect-height rect)))
+         (rect-y-min (min rect-y1 rect-y2))
+         (rect-y-max (max rect-y1 rect-y2))
+         (point-x (pos2d-x point))
+         (point-y (pos2d-y point)))
+    (and (>= point-x rect-x-min)
+         (<= point-x rect-x-max)
+         (>= point-y rect-y-min)
+         (<= point-y rect-y-max))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -580,24 +687,6 @@
              level
              (level-get level 'player1-score-msg)
              3 new-cont)))))
-    
-(define (create-text-flash-animation-event level msg-obj duration continuation)
-  (define animation-delay 0.2)
-  (define original-color (game-object-state msg-obj))
-  (define (cycle-msg-state! msg-obj)
-    (let ((current-state (game-object-state msg-obj)))
-      (game-object-state-set!
-       msg-obj
-       (if (eq? current-state 'black) original-color 'black))))
-  (define (flash-ev dt)
-    (synchronized-event-thunk level
-      (if (< dt duration)
-          (begin (cycle-msg-state! msg-obj)
-                 (in animation-delay (flash-ev (+ dt animation-delay))))
-          (begin
-            (game-object-state-set! msg-obj original-color)
-            (in 0 continuation)))))
-  (flash-ev 0))
 
 (define (generate-invaders-event level continuation)
   (define animation-delay 0.01)
@@ -887,10 +976,11 @@
 
 
 
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Game start animation events
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;*****************************************************************************
+;;
+;;                            Animation events 
+;;
+;;*****************************************************************************
 
 (define-macro (animate-message msg-obj msg cont)
   (let ((animation-delay 0.1)
@@ -911,6 +1001,25 @@
                          (,anim-event (substring ,str 1
                                                  (string-length ,str))))))))))
        (,anim-event ,msg))))
+
+    
+(define (create-text-flash-animation-event level msg-obj duration continuation)
+  (define animation-delay 0.2)
+  (define original-color (game-object-state msg-obj))
+  (define (cycle-msg-state! msg-obj)
+    (let ((current-state (game-object-state msg-obj)))
+      (game-object-state-set!
+       msg-obj
+       (if (eq? current-state 'black) original-color 'black))))
+  (define (flash-ev dt)
+    (synchronized-event-thunk level
+      (if (< dt duration)
+          (begin (cycle-msg-state! msg-obj)
+                 (in animation-delay (flash-ev (+ dt animation-delay))))
+          (begin
+            (game-object-state-set! msg-obj original-color)
+            (in 0 continuation)))))
+  (flash-ev 0))
 
 (define (create-animation-A-event level)
   (define msg-type (get-type 'message))
@@ -970,10 +1079,12 @@
               (lambda () (pp 'todo-end-animation)))))))))
 
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Manager events
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;;*****************************************************************************
+;;
+;;                              Manager events 
+;;
+;;*****************************************************************************
 
 ;; the manager event is a regular event that polls and handle user
 ;; input by looking into the thread's mailbox. It is assumed that the
@@ -1035,103 +1146,41 @@
 
 ;; Event that will send a message to the ui asking for a redraw.
 (define (create-redraw-event ui-thread level)
-  (define (duplicate obj) obj) ;;TODO: Dummy duplication!!
+  ;;TODO: Dummy duplication!!
+  (define (duplicate obj) obj) 
+  (define (update-score-msg! level)
+    (let ((msg-obj (level-get level 'player1-score-msg)))
+      (message-obj-text-set! msg-obj (get-score-string (level-score level)))))
   (define (redraw-event)
+    (update-score-msg! level)
     (thread-send ui-thread (duplicate level))
     (in redraw-interval redraw-event))
+  
   redraw-event)
 
+
+
+;;*****************************************************************************
+;;
+;;                              Game loop
+;;
+;;*****************************************************************************
 
 ;; Setup of initial game events and start the simulation.
 (define (game-loop ui-thread)
   (define hi-score 0)
   (set! user-interface-thread ui-thread)
     (lambda ()
-      (let inf-loop ((level (new-animation-level-A hi-score))) ;;(new-level)))
-        (case (play-level level)
-          ((intro-A) (inf-loop (new-animation-level-A hi-score)))
-          ((game) (inf-loop (new-level hi-score)))
-          (else (inf-loop (new-animation-level-A hi-score)))))))
+      (let inf-loop ((hi-score hi-score)
+                     (result (play-level (new-animation-level-A hi-score))))
+        (cond
+         ((and (number? result) (> result hi-score))
+          (inf-loop result
+                    (play-level (new-animation-level-A result))))
+         ((eq? result 'game)
+          (inf-loop hi-score
+                    (play-level (new-level hi-score))))
+         (else
+          (inf-loop hi-score
+                    (play-level (new-animation-level-A hi-score))))))))
 
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Collision detection
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Returns #f is the object is not colliding, else returns an object
-;; which is in collision with obj. Only one object is return, even if
-;; multiple collision are occurring.
-(define (detect-collision? obj level)
-  ;; exists is exptected to return the object that satisfy the condition
-  (or (exists (lambda (collision-obj) (obj-obj-collision? obj collision-obj))
-              (level-all-objects level))
-      (obj-shield-collision? obj (level-shields level))
-      (obj-wall-collision? obj (level-walls level))))
-
-;; collision detection between 2 game objects
-(define (obj-obj-collision? obj1 obj2)
-  (let* ((obj1-pos (game-object-pos obj1))
-         (obj2-pos (game-object-pos obj2)))
-    (and (not (eq? obj1 obj2))
-         (rectangle-collision?
-          (get-bounding-box obj1)
-          (get-bounding-box obj2)))))
-
-(define (obj-wall-collision? obj walls)
-  (exists (lambda (wall)
-            (rectangle-collision?
-             (get-bounding-box obj)
-             (wall-rect wall)))
-          walls))
-
-(define (obj-shield-collision? obj shields)
-  (exists (lambda (shield)
-            (if (obj-obj-collision? obj shield)
-                (let* ((pos (game-object-pos shield)))
-                  (exists (lambda (particle)
-                            (point-rect-collision? (pos2d-add pos particle)
-                                                   (get-bounding-box obj)))
-                          (shield-particles shield)))
-                #f))
-          shields))
-
-;; Simple rectangular collision detection. Not optimized.
-(define (rectangle-collision? r1 r2)
-  (let* ((r1-x1 (rect-x r1))
-         (r1-x2 (+ r1-x1 (rect-width r1)))
-         (r1-x-min (min r1-x1 r1-x2))
-         (r1-x-max (max r1-x1 r1-x2))
-         (r1-y1 (rect-y r1))
-         (r1-y2 (+ r1-y1 (rect-height r1)))
-         (r1-y-min (min r1-y1 r1-y2))
-         (r1-y-max (max r1-y1 r1-y2))
-
-         (r2-x1 (rect-x r2))
-         (r2-x2 (+ r2-x1 (rect-width r2)))
-         (r2-x-min (min r2-x1 r2-x2))
-         (r2-x-max (max r2-x1 r2-x2))
-         (r2-y1 (rect-y r2))
-         (r2-y2 (+ r2-y1 (rect-height r2)))
-         (r2-y-min (min r2-y1 r2-y2))
-         (r2-y-max (max r2-y1 r2-y2)))
-    (not (or (< r1-x-max r2-x-min)
-             (> r1-x-min r2-x-max)
-             (< r1-y-max r2-y-min)
-             (> r1-y-min r2-y-max)))))
-
-(define (point-rect-collision? point rect)
-  (let* ((rect-x1 (rect-x rect))
-         (rect-x2 (+ rect-x1 (rect-width rect)))
-         (rect-x-min (min rect-x1 rect-x2))
-         (rect-x-max (max rect-x1 rect-x2))
-         (rect-y1 (rect-y rect))
-         (rect-y2 (+ rect-y1 (rect-height rect)))
-         (rect-y-min (min rect-y1 rect-y2))
-         (rect-y-max (max rect-y1 rect-y2))
-         (point-x (pos2d-x point))
-         (point-y (pos2d-y point)))
-    (and (>= point-x rect-x-min)
-         (<= point-x rect-x-max)
-         (>= point-y rect-y-min)
-         (<= point-y rect-y-max))))

@@ -84,9 +84,11 @@
   extender: define-type-of-game-object)
 
 (define (cycle-state! obj)
-  (game-object-state-set!
-   obj (modulo (+ (game-object-state obj) 1)
-               (object-type-state-num (game-object-type obj)))))
+  (define current-state (game-object-state obj))
+  (if (number? current-state)
+      (game-object-state-set!
+       obj (modulo (+ current-state 1)
+                   (object-type-state-num (game-object-type obj))))))
 
 (define (get-bounding-box obj)
   (make-rect (+ (pos2d-x (game-object-pos obj))
@@ -323,6 +325,14 @@
 (define (play-level level)
   (start-simulation! (level-sim level) +inf.0))
 
+(define (get-score-string score)
+  (cond ((= score 0) "0000")
+        ((< score 10) (string-append "000" (number->string score)))
+        ((< score 100) (string-append "00" (number->string score)))
+        ((< score 1000) (string-append "0" (number->string score)))
+        (else (number->string score))))
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Game Level Creation
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -331,25 +341,25 @@
   (define invaders '())
   (define x-offset 30)
   (define y-offset (- 265 152))
-  (define (determine-type-id y)
-    (cond ((< y 2) 'easy)
-          ((< y 4) 'medium)
+  (define (determine-type-id col)
+    (cond ((< col 2) 'easy)
+          ((< col 4) 'medium)
           (else 'hard)))
 
-  (for h 0 (< h invader-row-number)
-    (let ((current-type (get-type (determine-type-id h))))
-      (for w 0 (< w invader-col-number)
-        (let* ((x (+ x-offset (* w invader-spacing)))
-               (y (+ y-offset (* h invader-spacing)))
-               (pos (make-pos2d x y))
-               (state 1)
-               (speed (make-pos2d invader-x-movement-speed 0))
-               (row h)
-               (col w))
-          (set! invaders
-                (cons (make-invader-ship (gensym 'inv)
-                                         current-type pos state speed row col)
-                      invaders))))))
+;;   (for h 0 (< h invader-row-number)
+;;     (let ((current-type (get-type (determine-type-id h))))
+;;       (for w 0 (< w invader-col-number)
+;;         (let* ((x (+ x-offset (* w invader-spacing)))
+;;                (y (+ y-offset (* h invader-spacing)))
+;;                (pos (make-pos2d x y))
+;;                (state 1)
+;;                (speed (make-pos2d invader-x-movement-speed 0))
+;;                (row h)
+;;                (col w))
+;;           (set! invaders
+;;                 (cons (make-invader-ship (gensym 'inv)
+;;                                          current-type pos state speed row col)
+;;                       invaders))))))
 
   (let* ((walls (generate-walls))
          (wall-damage '())
@@ -358,16 +368,40 @@
          (lvl (make-level screen-max-y screen-max-x (make-table)
                           walls wall-damage shields 0 hi-score
                           3 sim (new-mutex))))
-    (for-each (lambda (x) (level-add-object! lvl x)) invaders)
-    (new-player! lvl)
-    (schedule-event! sim 0 (create-init-invader-move-event lvl))
-    (schedule-event! sim 1 (create-invader-laser-event lvl))
-    (schedule-event! sim (mothership-random-delay)
-                     (create-new-mothership-event lvl))
+    (let* ((y 254)
+           (type (get-type 'message))
+           (state 'white)
+           (speed (make-pos2d 0 0)))
+      (for-each
+       (lambda (m) (level-add-object! lvl m))
+       (list
+        (make-message-obj 'top-banner type (make-pos2d 13 y) state speed
+                          "SCORE<1>  HI-SCORE  SCORE<2>")
+        (make-message-obj 'player1-score-msg type
+                          (make-pos2d 30 (- y 17)) state speed
+                          (get-score-string 0))
+        (make-message-obj 'hi-score-msg type
+                          (make-pos2d 93 (- y 17)) state speed
+                          (get-score-string hi-score))
+        (make-message-obj 'player2-score-msg type
+                          (make-pos2d 173 (- y 17)) state speed ""))))
+
+    (schedule-event!
+     sim 0
+     (start-of-game-animation-event
+      lvl "PLAY  PLAYER<1>"
+      (generate-invaders-event
+       lvl
+       (lambda ()
+         (new-player! lvl)
+         (schedule-event! sim 0 (create-init-invader-move-event lvl))
+         (schedule-event! sim 1 (create-invader-laser-event lvl))
+         (schedule-event! sim (mothership-random-delay)
+                          (create-new-mothership-event lvl))))))
+    
     (schedule-event! sim 0 (create-main-manager-event lvl))
     (schedule-event! sim 0 (create-redraw-event user-interface-thread lvl))
     lvl))
-
 
 (define (new-animation-level-A hi-score)
   (let* ((invaders '())
@@ -515,16 +549,96 @@
     (in delta-t (create-new-mothership-event level))))
 
 
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Gameplay related simulation events 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;*****************************************************************************
+;;
+;;                 Gameplay related simulation events 
+;;
+;;*****************************************************************************
 
 (define-macro (synchronized-event-thunk level action . actions)
   `(lambda ()
      (critical-section! (level-mutex ,level)
         ,action
         ,@actions)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Start of game level animations
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(define (start-of-game-animation-event level text continuation)
+  (synchronized-event-thunk level
+    (let* ((pos (make-pos2d 61 (- screen-max-y 136)))
+           (type (get-type 'message))
+           (state 'white)
+           (speed (make-pos2d 0 0))
+           (msg (make-message-obj 'start-msg type pos state speed text))
+           (new-cont
+            (lambda () (level-remove-object! level msg)
+                    (in 0 continuation))))
+      (level-add-object! level msg)
+      (in 0 (create-text-flash-animation-event
+             level
+             (level-get level 'player1-score-msg)
+             3 new-cont)))))
+    
+(define (create-text-flash-animation-event level msg-obj duration continuation)
+  (define animation-delay 0.2)
+  (define original-color (game-object-state msg-obj))
+  (define (cycle-msg-state! msg-obj)
+    (let ((current-state (game-object-state msg-obj)))
+      (game-object-state-set!
+       msg-obj
+       (if (eq? current-state 'black) original-color 'black))))
+  (define (flash-ev dt)
+    (synchronized-event-thunk level
+      (if (< dt duration)
+          (begin (cycle-msg-state! msg-obj)
+                 (in animation-delay (flash-ev (+ dt animation-delay))))
+          (begin
+            (game-object-state-set! msg-obj original-color)
+            (in 0 continuation)))))
+  (flash-ev 0))
+
+(define (generate-invaders-event level continuation)
+  (define animation-delay 0.01)
+  (define x-offset 30)
+  (define y-offset (- 265 152))
+
+  (define (determine-type-id col)
+    (cond ((< col 2) 'easy)
+          ((< col 4) 'medium)
+          (else 'hard)))
+
+  (define (generate-inv! row col)
+    (let* ((x (+ x-offset (* col invader-spacing)))
+           (y (+ y-offset (* row invader-spacing)))
+           (pos (make-pos2d x y))
+           (current-type (get-type (determine-type-id row)))
+           (state 1)
+           (speed (make-pos2d invader-x-movement-speed 0))
+           (invader
+            (make-invader-ship
+             (gensym 'inv) current-type pos state speed row col)))
+      (level-add-object! level invader)))
+                         
+  (define (generate-inv-event row col)
+    (synchronized-event-thunk level
+     (if (< row invader-row-number)
+         (if (< col invader-col-number)
+             (begin (generate-inv! row col)
+                    (in animation-delay (generate-inv-event row (+ col 1))))
+             (in 0 (generate-inv-event (+ row 1) 0)))
+         (in animation-delay continuation))))
+  (generate-inv-event 0 0))
+
+    
+  ;(define (generate-inv-row index)
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Gameplay related simulation events 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 
 ;; Event that will move a single row of invaders
 (define (create-init-invader-move-event level)
@@ -801,7 +915,7 @@
 (define (create-animation-A-event level)
   (define msg-type (get-type 'message))
   (define speed (make-pos2d 0 0))
-  (define state 1)
+  (define state 'white)
 
   (lambda ()
     (let* ((play (let ((pos (make-pos2d 101 (- screen-max-y 88))))

@@ -142,6 +142,13 @@ end
 (define explodeP-renderer (create-2-state-renderer explodeP))
 (define mothership-renderer (create-single-state-renderer mothership))
 
+(define (render-message msg-obj)
+  (let* ((pos (game-object-pos msg-obj))
+         (x (pos2d-x pos))
+         (y (pos2d-y pos))
+         (state (game-object-state msg-obj)))
+    (display-message x y (message-obj-text msg-obj) state)))
+
 (define (render-object obj)
   (define x (pos2d-x (game-object-pos obj)))
   (define y (pos2d-y (game-object-pos obj)))
@@ -160,7 +167,7 @@ end
     ((explodeS) (explodeS-renderer x y state))
     ((explodeP) (explodeP-renderer x y state))
     ((mothership) (mothership-renderer x y state))
-    ((message) (display-message x y (message-obj-text obj)))
+    ((message) (render-message obj))
     (else (error (string-append "Cannot render unknown object type:"
                                 (symbol->string type))))))
 
@@ -188,20 +195,8 @@ end
             (shield-particles shield)))
 
 (define (render-level level)
-  (define y 254)
-  (define (get-score-string score)
-    (cond ((= score 0) "0000")
-          ((< score 10) (string-append "000" (number->string score)))
-          ((< score 100) (string-append "00" (number->string score)))
-          ((< score 1000) (string-append "0" (number->string score)))
-          (else (number->string score))))
-  
-  (display-message 13 y "SCORE<1>")
-  (display-message 85 y "HI-SCORE")
-  (display-message 157 y "SCORE<2>")
-  (display-message 30 (- y 17) (get-score-string (level-score level)))
-  (display-message 93 (- y 17) (get-score-string (level-hi-score level)))
-
+  ;; Draw horizontal bottom green wall and remove damaged parts by
+  ;; redrawing over it in black.
   (set-openGL-color 'green)
   (glBegin GL_LINES)
   (glVertex2i 0 9)
@@ -217,14 +212,14 @@ end
               
 
   (let ((nb-lives (level-lives level)))
-    (display-message 13 0 (number->string nb-lives))
+    (display-message 13 0 (number->string nb-lives) 'white)
     (for i 0 (< i (- nb-lives 1))
          (player-renderer (+ 30 (* i 15)) 0 0))))
 
-(define (display-message x y msg)
+(define (display-message x y msg color)
   (let ((chars (map char->integer (string->list msg)))
         (font GLUT_BITMAP_HELVETICA_12))
-    (set-openGL-color 'white)
+    (set-openGL-color color)
     (glRasterPos2i x y)
     (for-each (lambda (char) (glutBitmapCharacter font char))
               chars)))
@@ -266,7 +261,8 @@ end
       ;;draw frame-rate just over the green line
       (display-message
        0 11 
-       (with-output-to-string "" (lambda () (show "FPS: " (FPS)))))
+       (with-output-to-string "" (lambda () (show "FPS: " (FPS))))
+       'white)
 
       (glutSwapBuffers))))
       

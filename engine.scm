@@ -362,7 +362,7 @@
     (schedule-event! sim 1 (create-invader-laser-event lvl))
     (schedule-event! sim (mothership-random-delay)
                      (create-new-mothership-event lvl))
-    (schedule-event! sim 0 (create-manager-event lvl))
+    (schedule-event! sim 0 (create-main-manager-event lvl))
     (schedule-event! sim 0 (create-redraw-event user-interface-thread lvl))
     lvl))
 
@@ -376,7 +376,7 @@
          (level (make-level screen-max-y screen-max-x (make-table)
                             walls wall-damage shields 0 3 sim (new-mutex))))
     (schedule-event! sim 0 (create-animation-A-event level))
-    (schedule-event! sim 0 (create-manager-event level))
+    (schedule-event! sim 0 (create-intro-manager-event level))
     (schedule-event! sim 0 (create-redraw-event user-interface-thread level))
     level))
 
@@ -567,14 +567,14 @@
       (if (< row-index invader-row-number)
           (let ((current-row (get-invaders-from-row level row-index)))
             (if (not (null? current-row))
-                (begin 
+                (begin
                   (for-each
                    (lambda (inv) (let ((speed (make-pos2d dx dy)))
                                    (game-object-speed-set! inv speed)))
                    current-row)
                   (move-ship-row! level row-index)
                   (in dt (inv-row-move-event (+ row-index 1))))
-                ((inv-row-move-event (+ row-index 1)))))
+                (in 0 (inv-row-move-event (+ row-index 1)))))
           (in dt continuation))))
   (inv-row-move-event 0))
 
@@ -861,7 +861,7 @@
 ;; input by looking into the thread's mailbox. It is assumed that the
 ;; discrete event simulation is perfomed in it's own thread and that
 ;; user input is passed to the simulation via this mechanism.
-(define (create-manager-event level)
+(define (create-main-manager-event level)
   (define game-paused? #f)
   (define (player-can-move?) (and (level-player level) (not game-paused?)))
   (define manager-event
@@ -895,13 +895,25 @@
                    (sem-lock! (level-mutex level)))
                (set! game-paused? (not game-paused?)))
 
-              ((reset)
-               (game-over! level))
+              ((reset) (exit-simulation 'intro-A))
                
               (else (error "Unknown message received in manager event."))))
         (in manager-time-interfal manager-event))))
 
   manager-event)
+
+(define (create-intro-manager-event level)
+  (define game-paused? #f)
+  (define manager-event
+    (lambda ()
+      (let ((msg (thread-receive 0 #f)))
+        (if msg
+            (case msg
+              ((shoot-laser) (exit-simulation 'game))
+              ((reset) (exit-simulation 'intro-A))))
+        (in manager-time-interfal manager-event))))
+  manager-event)
+
 
 ;; Event that will send a message to the ui asking for a redraw.
 (define (create-redraw-event ui-thread level)
@@ -918,6 +930,8 @@
     (lambda ()
       (let inf-loop ((level (new-animation-level-A))) ;;(new-level)))
         (case (play-level level)
+          ((intro-A) (inf-loop (new-animation-level-A)))
+          ((game) (inf-loop (new-level)))
           (else (inf-loop (new-animation-level-A)))))))
 
 

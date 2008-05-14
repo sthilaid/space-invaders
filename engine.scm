@@ -251,7 +251,8 @@
 
 ;;;; Game level description ;;;;
 (define-type level
-  height width object-table walls wall-damage shields score lives sim mutex)
+  height width object-table walls wall-damage shields
+  score hi-score lives sim mutex)
 
 (define (level-add-object! lvl obj)
    (table-set! (level-object-table lvl) (game-object-id obj) obj))
@@ -326,7 +327,7 @@
 ;; Game Level Creation
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define (new-level)
+(define (new-level hi-score)
   (define invaders '())
   (define x-offset 30)
   (define y-offset (- 265 152))
@@ -355,7 +356,8 @@
          (shields (generate-shields))
          (sim (create-simulation))
          (lvl (make-level screen-max-y screen-max-x (make-table)
-                          walls wall-damage shields 0 3 sim (new-mutex))))
+                          walls wall-damage shields 0 hi-score
+                          3 sim (new-mutex))))
     (for-each (lambda (x) (level-add-object! lvl x)) invaders)
     (new-player! lvl)
     (schedule-event! sim 0 (create-init-invader-move-event lvl))
@@ -367,14 +369,15 @@
     lvl))
 
 
-(define (new-animation-level-A)
+(define (new-animation-level-A hi-score)
   (let* ((invaders '())
          (walls '())
          (wall-damage '())
          (shields '())
          (sim (create-simulation))
          (level (make-level screen-max-y screen-max-x (make-table)
-                            walls wall-damage shields 0 3 sim (new-mutex))))
+                            walls wall-damage shields 0 hi-score
+                            0 sim (new-mutex))))
     (schedule-event! sim 0 (create-animation-A-event level))
     (schedule-event! sim 0 (create-intro-manager-event level))
     (schedule-event! sim 0 (create-redraw-event user-interface-thread level))
@@ -798,22 +801,23 @@
 (define (create-animation-A-event level)
   (define msg-type (get-type 'message))
   (define speed (make-pos2d 0 0))
+  (define state 1)
 
   (lambda ()
     (let* ((play (let ((pos (make-pos2d 101 (- screen-max-y 88))))
-                   (make-message-obj 'play msg-type pos 0 speed "")))
+                   (make-message-obj 'play msg-type pos state speed "")))
            (space (let ((pos (make-pos2d 61 (- screen-max-y 112))))
-                    (make-message-obj 'space msg-type pos 0 speed "")))
+                    (make-message-obj 'space msg-type pos state speed "")))
            (score (let ((pos (make-pos2d 37 (- screen-max-y 144))))
-                    (make-message-obj 'score msg-type pos 0 speed "")))
+                    (make-message-obj 'score msg-type pos state speed "")))
            (mother (let ((pos (make-pos2d 85 (- screen-max-y 160))))
-                     (make-message-obj 'mother msg-type pos 0 speed "")))
+                     (make-message-obj 'mother msg-type pos state speed "")))
            (hard (let ((pos (make-pos2d 85 (- screen-max-y 176))))
-                   (make-message-obj 'hard msg-type pos 0 speed "")))
+                   (make-message-obj 'hard msg-type pos state speed "")))
            (medium (let ((pos (make-pos2d 85 (- screen-max-y 192))))
-                     (make-message-obj 'medium msg-type pos 0 speed "")))
+                     (make-message-obj 'medium msg-type pos state speed "")))
            (easy (let ((pos (make-pos2d 85 (- screen-max-y 208))))
-               (make-message-obj 'easy msg-type pos 0 speed "")))
+               (make-message-obj 'easy msg-type pos state speed "")))
            (anim-messages
             (list play space score mother hard medium easy)))
              
@@ -926,13 +930,14 @@
 
 ;; Setup of initial game events and start the simulation.
 (define (game-loop ui-thread)
+  (define hi-score 0)
   (set! user-interface-thread ui-thread)
     (lambda ()
-      (let inf-loop ((level (new-animation-level-A))) ;;(new-level)))
+      (let inf-loop ((level (new-animation-level-A hi-score))) ;;(new-level)))
         (case (play-level level)
-          ((intro-A) (inf-loop (new-animation-level-A)))
-          ((game) (inf-loop (new-level)))
-          (else (inf-loop (new-animation-level-A)))))))
+          ((intro-A) (inf-loop (new-animation-level-A hi-score)))
+          ((game) (inf-loop (new-level hi-score)))
+          (else (inf-loop (new-animation-level-A hi-score)))))))
 
 
 

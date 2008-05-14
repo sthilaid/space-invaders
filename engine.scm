@@ -306,8 +306,7 @@
    (filter invader-ship? (level-all-objects lvl)))
 
 (define (level-loose-1-life! lvl)
-  (level-lives-set! lvl (- (level-lives lvl) 1))
-  (if (<= (level-lives lvl) 0) (game-over! lvl)))
+  (level-lives-set! lvl (- (level-lives lvl) 1)))
 
 (define (level-increase-score! level obj)
   (level-score-set! level
@@ -598,7 +597,6 @@
            (destroy-laser! level inv-laser)))
         
         ((player-ship? collision-obj)
-         (level-loose-1-life! level)
          (explode-player! level collision-obj)
          (destroy-laser! level laser-obj))
 
@@ -641,7 +639,6 @@
          (resolve-laser-collision! level collision-obj player))
         
         ((invader-ship? collision-obj)
-         (level-loose-1-life! level)
          (explode-player! level collision-obj)
          (explode-invader! level collision-obj))))
 
@@ -925,25 +922,30 @@
                       (get-type 'explodeP)
                       (game-object-pos player)
                       0 (make-pos2d 0 0)))
+  (level-loose-1-life! level)
   (level-add-object! level expl-obj)
   (level-remove-object! level player)
-  (in 0 (player-explosion-animation-event level expl-obj animation-duration))
-  (in (+ animation-duration 0.000001) (lambda () (new-player! level))))
+  
+  (let ((cont (if (<= (level-lives level) 0)
+                  (game-over! level)
+                  (lambda () (sem-unlock! (level-mutex level))
+                          (new-player! level)))))
+    (in 0 (lambda ()
+            (sem-lock! (level-mutex level))
+            (in 0 (player-explosion-animation-event
+                   level expl-obj animation-duration cont))))))
+        
 
-(define (player-explosion-animation-event level expl-obj duration)
+(define (player-explosion-animation-event level expl-obj duration continuation)
   (define frame-rate 0.1)
-  (define init-time (time->seconds (current-time)))
-  (define (animation-start-event)
-    (sem-lock! (level-mutex level))
-    (in 0 (animation-ev 0)))
   (define (animation-ev dt)
     (lambda ()
       (cycle-state! expl-obj)
       (if (< dt duration)
           (in frame-rate (animation-ev (+ dt frame-rate)))
-          (begin (sem-unlock! (level-mutex level))
-                 (level-remove-object! level expl-obj)))))
-  animation-start-event)
+          (begin (level-remove-object! level expl-obj)
+                 (in 0 continuation)))))
+  (animation-ev 0))
 
 
 (define (explode-laser! level laser-obj)

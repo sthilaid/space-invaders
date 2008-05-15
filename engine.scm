@@ -394,7 +394,7 @@
          (wall-damage '())
          (shields (generate-shields))
          (sim (create-simulation))
-         (lives 1)
+         (lives 3)
          (level (make-level screen-max-y screen-max-x (make-table)
                           walls wall-damage shields 0 hi-score
                           lives sim (new-mutex))))
@@ -1182,15 +1182,37 @@
 ;;
 ;;*****************************************************************************
 
+(define hi-score-filename ".spaceinvaders")
+
+(define (retrieve-hi-score)
+  (with-exception-catcher
+   (lambda (e)
+     (case e ((bad-hi-score-file) (delete-file hi-score-filename)))
+     0)
+   (lambda ()
+     (let ((hi-score
+            (with-input-from-file `(path: ,hi-score-filename)
+              (lambda () (read)))))
+       (if (not (number? hi-score))
+           (raise 'bad-hi-score-file)
+           hi-score)))))
+
+(define (save-hi-score hi-score)
+  (with-output-to-file `(path: ,hi-score-filename create: maybe truncate: #t)
+    (lambda ()
+      (write hi-score))))
+
 ;; Setup of initial game events and start the simulation.
 (define (game-loop ui-thread)
-  (define hi-score 0)
+  (define init-high-score (retrieve-hi-score))
   (set! user-interface-thread ui-thread)
     (lambda ()
-      (let inf-loop ((hi-score hi-score)
-                     (result (play-level (new-animation-level-A hi-score))))
+      (let inf-loop ((hi-score init-high-score)
+                     (result (play-level
+                              (new-animation-level-A init-high-score))))
         (cond
          ((and (number? result) (> result hi-score))
+          (save-hi-score result)
           (inf-loop result
                     (play-level (new-animation-level-A result))))
          ((eq? result 'game)

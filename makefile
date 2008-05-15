@@ -2,7 +2,7 @@ GLUT_FILES = scm-lib.scm opengl.scm opengl-header.scm glu.scm glu-header.scm glu
 
 GRAPHICS_FILES = $(wildcard sprites/*.ppm)
 
-SPACE_INVADERS_FILES = engine.scm user-interface.scm ppm-reader.scm event-simulation.scm sprite.scm
+SPACE_INVADERS_FILES =  scm-lib.scm ppm-reader.scm event-simulation.scm sprite.scm coroutine.scm engine.scm user-interface.scm
 
 PATH_TO_GAMBIT=/opt/gambit-c/current
 GAMBIT_LIB=$(PATH_TO_GAMBIT)/lib
@@ -28,7 +28,7 @@ space-invaders_.c: $(GLUT_FILES:.scm=.c) $(SPACE_INVADERS_FILES:.scm=.c)
 user-interface.c: user-interface.scm $(GRAPHICS_FILES) ppm-reader.scm scm-lib.scm sprite.scm
 	$(GSC) -c user-interface.scm
 
-engine.c: engine.scm scm-lib.scm event-simulation.scm ppm-reader.scm
+engine.c: engine.scm scm-lib.scm event-simulation.scm ppm-reader.scm coroutine.scm
 	$(GSC) -c engine.scm
 
 .scm.c: 

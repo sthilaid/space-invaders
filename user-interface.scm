@@ -301,22 +301,18 @@ end
 
 (c-define (keyboard key x y) (unsigned-char int int) void "keyboard" ""
  (case key
-   ((#\s #\S) (register-user-action 'show-score))
    ((#\f #\F) (show "average FPS = " (FPS) "\n"))
-   ((#\p #\P) (register-user-action 'pause))
-   ((#\space) (register-user-action 'shoot-laser))
    ;; On Escape, Ctl-q, Ctl-c, Ctl-w, q -> terminate the program
    ((#\x1b #\x11 #\x03 #\x17 #\q) (quit))
-   ((#\r #\R) (register-user-action 'reset))
-   (else (show "received keyboard input: " key ". Mouse is @ ("x","y")\n"))))
+   (else (register-user-action key))))
 
 (c-define (special-keyboard key x y)
           (unsigned-char int int) void "special_keyboard" ""
  (case key
-   ((#\e) (pp 'up))
-   ((#\g) (pp 'down))
-   ((#\f) (register-user-action 'move-right))
-   ((#\d) (register-user-action 'move-left))
+;;    ((#\e) (pp 'up))
+;;    ((#\g) (pp 'down))
+   ((#\f) (register-user-action 'right-arrow))
+   ((#\d) (register-user-action 'left-arrow))
    
    (else (show "received special keyboard input: " key
                ". Mouse is @ ("x","y")\n"))))

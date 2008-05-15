@@ -287,6 +287,8 @@
 
 ;; Randomize current mrg's seed
 (random-source-randomize! default-random-source)
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;; Data Structures ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
@@ -302,4 +304,20 @@
 ;;       (cdr stack)))
 
 
+;; Queue implementation
+(define (new-queue) (cons '() '()))
+(define queue-list car)
+(define queue-list-set! set-car!)
 
+(define (enqueue! queue val)
+  (queue-list-set! queue (cons val (queue-list queue))))
+
+(define (dequeue! queue)
+  (define list (queue-list queue))
+  (if (empty-queue? queue)
+      (raise 'empty-q)
+      (let ((queue-head (car (take-right list 1))))
+        (queue-list-set! queue (drop-right list 1))
+        queue-head)))
+
+(define (empty-queue? q) (not (pair? (queue-list q))))

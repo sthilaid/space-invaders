@@ -671,6 +671,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define (start-of-game-animation-event level text continuation)
+  (define animation-duration 3)
   (synchronized-event-thunk level
     (let* ((pos (make-pos2d 61 (- screen-max-y 136)))
            (type (get-type 'message))
@@ -684,7 +685,7 @@
       (in 0 (create-text-flash-animation-event
              level
              (level-get level 'player1-score-msg)
-             3 new-cont)))))
+             animation-duration new-cont)))))
 
 (define (generate-invaders-event level continuation)
   (define animation-delay 0.01)
@@ -929,7 +930,8 @@
   
   (let ((cont (if (<= (level-lives level) 0)
                   (game-over-animation-event level)
-                  (lambda () (sem-unlock! (level-mutex level))
+                  (lambda () (yield-corout)
+                          (sem-unlock! (level-mutex level))
                           (new-player! level)))))
     (in 0 (lambda ()
             (sem-lock! (level-mutex level))
@@ -1115,34 +1117,41 @@
             (msg (thread-receive 0 #f)))
         (if msg
             (case msg
-              ((shoot-laser)
+              ((#\space)
                (if (player-can-move?)
                    (shoot-laser! level 'laserP
                                  (level-player level)
                                  player-laser-speed)))
-              ((move-right)
+              ((right-arrow)
                (if (player-can-move?)
                    (let ((new-speed (make-pos2d player-movement-speed 0)))
                      (game-object-speed-set! player new-speed)
                      (move-object! level player))))
               
-              ((move-left)
+              ((left-arrow)
                (if (player-can-move?)
                    (let ((new-speed (make-pos2d (- player-movement-speed) 0)))
                      (game-object-speed-set! player new-speed)
                      (move-object! level player))))
               
-              ((show-score) (pp `(score is ,(level-score level))))
+              ((#\s #\S) (pp `(score is ,(level-score level))))
+
+              ((#\t #\T)
+               (call/cc
+                (lambda (k)
+                  (play-level (new-animation-level-A 1010))
+                  (k 'go))))
               
-              ((pause)
+              ((#\p #\P)
                (if game-paused?
                    (sem-unlock! (level-mutex level))
                    (sem-lock! (level-mutex level)))
                (set! game-paused? (not game-paused?)))
 
-              ((reset) (exit-simulation 'intro-A))
+              ((#\r #\R) (exit-simulation 'intro-A))
                
-              (else (error "Unknown message received in manager event."))))
+              (else
+               (show "received keyboard input: " msg ".\n"))))
         (in manager-time-interfal manager-event))))
 
   manager-event)
@@ -1154,8 +1163,11 @@
       (let ((msg (thread-receive 0 #f)))
         (if msg
             (case msg
-              ((shoot-laser) (exit-simulation 'game))
-              ((reset) (exit-simulation 'intro-A))))
+              ((#\1) (exit-simulation 'start-1p-game))
+              ((#\2) (exit-simulation 'start-2p-game))
+              ((#\r #\R) (exit-simulation 'intro-A))
+              (else
+               (show "received keyboard input: " msg ".\n"))))
         (in manager-time-interfal manager-event))))
   manager-event)
 
@@ -1215,9 +1227,18 @@
           (save-hi-score result)
           (inf-loop result
                     (play-level (new-animation-level-A result))))
-         ((eq? result 'game)
-          (inf-loop hi-score
-                    (play-level (new-level hi-score))))
+         ((eq? result 'start-1p-game)
+          (let ((p1 (new-corout '
+                     'p1 (lambda () (play-level (new-level hi-score))))))
+            (inf-loop hi-score (corout-boot p1))))
+
+         ((eq? result 'start-2p-game)
+          (let ((p1 (new-corout '
+                     'p1 (lambda () (play-level (new-level hi-score)))))
+                (p2 (new-corout '
+                     'p2 (lambda () (play-level (new-level hi-score))))))
+            (inf-loop hi-score (corout-boot p1 p2))))
+         
          (else
           (inf-loop hi-score
                     (play-level (new-animation-level-A hi-score))))))))

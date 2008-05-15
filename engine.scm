@@ -285,8 +285,11 @@
 
 ;;;; Game level description ;;;;
 (define-type level
-  height width object-table walls wall-damage shields
-  score hi-score lives sim mutex)
+  height width object-table hi-score sim mutex
+  extender: define-type-of-level)
+
+(define-type-of-level game-level number-of-players player-id score lives shields
+walls wall-damage)
 
 (define (level-add-object! lvl obj)
    (table-set! (level-object-table lvl) (game-object-id obj) obj))
@@ -306,20 +309,21 @@
    (filter invader-ship? (level-all-objects lvl)))
 
 (define (level-loose-1-life! lvl)
-  (level-lives-set! lvl (- (level-lives lvl) 1)))
+  (game-level-lives-set! lvl (- (game-level-lives lvl) 1)))
 
 (define (level-increase-score! level obj)
-  (level-score-set! level
-                    (+ (level-score level)
+  (game-level-score-set! level
+                    (+ (game-level-score level)
                        (object-type-score-value (game-object-type obj)))))
 
 (define (level-damage-wall! level damage)
-  (define current-damage (level-wall-damage level))
-  (level-wall-damage-set! level (union current-damage damage)))
+  (define current-damage (game-level-wall-damage level))
+  (game-level-wall-damage-set! level (union current-damage damage)))
 
 (define (game-over! level)
-  (show "Game over with " (level-score level) " points.\n")
-  (exit-simulation (level-score level)))
+  (show "Game over with " (game-level-score level) " points.\n")
+  ;;(exit-simulation (game-level-score level)))
+  (terminate-corout (game-level-score level)))
 
 
 ;; Returns (not efficiently) the list of all invaders located on the
@@ -389,15 +393,17 @@
     (make-message-obj 'player2-score-msg type
                       (make-pos2d 173 (- y 17)) state speed ""))))
 
-(define (new-level hi-score)
+(define (new-level hi-score number-of-players player-id)
   (let* ((walls (generate-walls))
          (wall-damage '())
          (shields (generate-shields))
          (sim (create-simulation))
-         (lives 3)
-         (level (make-level screen-max-y screen-max-x (make-table)
-                          walls wall-damage shields 0 hi-score
-                          lives sim (new-mutex))))
+         (lives 1)
+         (score 0)
+         (level (make-game-level screen-max-y screen-max-x (make-table)
+                                 hi-score sim (new-mutex)
+                                 number-of-players player-id score lives
+                                 shields walls wall-damage)))
     (add-global-score-messages! level)
     
     (schedule-event!
@@ -418,14 +424,9 @@
     level))
 
 (define (new-animation-level-A hi-score)
-  (let* ((invaders '())
-         (walls '())
-         (wall-damage '())
-         (shields '())
-         (sim (create-simulation))
+  (let* ((sim (create-simulation))
          (level (make-level screen-max-y screen-max-x (make-table)
-                            walls wall-damage shields 0 hi-score
-                            0 sim (new-mutex))))
+                            hi-score sim (new-mutex))))
     (add-global-score-messages! level)
     
     (schedule-event! sim 0 (create-animation-A-event level))
@@ -490,8 +491,8 @@
   ;; exists is exptected to return the object that satisfy the condition
   (or (exists (lambda (collision-obj) (obj-obj-collision? obj collision-obj))
               (level-all-objects level))
-      (obj-shield-collision? obj (level-shields level))
-      (obj-wall-collision? obj (level-walls level))))
+      (obj-shield-collision? obj (game-level-shields level))
+      (obj-wall-collision? obj (game-level-walls level))))
 
 ;; collision detection between 2 game objects
 (define (obj-obj-collision? obj1 obj2)
@@ -732,7 +733,7 @@
 (define (create-init-invader-move-event level)
   (synchronized-event-thunk level
     (let* ((rows (get-all-invader-rows level))
-           (walls (level-walls level))
+           (walls (game-level-walls level))
            (wall-collision?
             (exists
              (lambda (row)
@@ -927,12 +928,13 @@
   (level-loose-1-life! level)
   (level-add-object! level expl-obj)
   (level-remove-object! level player)
-  
-  (let ((cont (if (<= (level-lives level) 0)
-                  (game-over-animation-event level)
-                  (lambda () (yield-corout)
-                          (sem-unlock! (level-mutex level))
-                          (new-player! level)))))
+
+  (let ((cont
+         (if (<= (game-level-lives level) 0)
+             (game-over-animation-event level (lambda () (game-over! level)))
+             (lambda () (yield-corout)
+                     (sem-unlock! (level-mutex level))
+                     (new-player! level)))))
     (in 0 (lambda ()
             (sem-lock! (level-mutex level))
             (in 0 (player-explosion-animation-event
@@ -1083,7 +1085,7 @@
               (level-get level 'easy) "=10 POINTS"
               (lambda () 'animation-finished))))))))
 
-(define (game-over-animation-event level)
+(define (game-over-animation-event level continuation)
   (lambda ()
     (let* ((type (get-type 'message))
            (pos (make-pos2d 77 (- screen-max-y 60)))
@@ -1092,7 +1094,7 @@
       (level-add-object! level msg-obj)
       (in 0 (animate-message
              msg-obj "GAME OVER"
-             (lambda () (in 2 (lambda () (game-over! level)))))))))
+             (lambda () (in 2 continuation)))))))
 
   
 
@@ -1134,7 +1136,7 @@
                      (game-object-speed-set! player new-speed)
                      (move-object! level player))))
               
-              ((#\s #\S) (pp `(score is ,(level-score level))))
+              ((#\s #\S) (pp `(score is ,(game-level-score level))))
 
               ((#\t #\T)
                (call/cc
@@ -1177,8 +1179,13 @@
   ;;TODO: Dummy duplication!!
   (define (duplicate obj) obj) 
   (define (update-score-msg! level)
-    (let ((msg-obj (level-get level 'player1-score-msg)))
-      (message-obj-text-set! msg-obj (get-score-string (level-score level)))))
+    (if (game-level? level) 
+        (let ((msg-obj
+               (level-get level (if (eq? (game-level-player-id level) 'p2)
+                                    'player2-score-msg
+                                    'player1-score-msg))))
+          (message-obj-text-set!
+           msg-obj (get-score-string (game-level-score level))))))
   (define (redraw-event)
     (update-score-msg! level)
     (thread-send ui-thread (duplicate level))
@@ -1229,15 +1236,18 @@
                     (play-level (new-animation-level-A result))))
          ((eq? result 'start-1p-game)
           (let ((p1 (new-corout '
-                     'p1 (lambda () (play-level (new-level hi-score))))))
-            (inf-loop hi-score (corout-boot p1))))
+                     'p1 (lambda () (play-level (new-level hi-score 1 'p1))))))
+            (inf-loop hi-score (corout-simple-boot p1))))
 
          ((eq? result 'start-2p-game)
           (let ((p1 (new-corout '
-                     'p1 (lambda () (play-level (new-level hi-score)))))
+                     'p1 (lambda () (play-level (new-level hi-score 2 'p1)))))
                 (p2 (new-corout '
-                     'p2 (lambda () (play-level (new-level hi-score))))))
-            (inf-loop hi-score (corout-boot p1 p2))))
+                     'p2 (lambda () (play-level (new-level hi-score 2 'p2))))))
+            (inf-loop hi-score (corout-boot
+                                (lambda (acc v) (pp `(acc ,acc v ,v))
+                                        (max acc v))
+                                p1 p2))))
          
          (else
           (inf-loop hi-score

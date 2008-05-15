@@ -196,7 +196,7 @@ end
                 (glEnd)))
             (shield-particles shield)))
 
-(define (render-level level)
+(define (render-game-level level)
   ;; Draw horizontal bottom green wall and remove damaged parts by
   ;; redrawing over it in black.
   (set-openGL-color 'green)
@@ -210,13 +210,23 @@ end
               (glBegin GL_POINTS)
               (glVertex2i (pos2d-x p) (pos2d-y p))
               (glEnd))
-            (level-wall-damage level))
-              
+            (game-level-wall-damage level))
 
-  (let ((nb-lives (level-lives level)))
+    (let ((nb-lives (game-level-lives level)))
     (display-message 13 0 (number->string nb-lives) 'white)
     (for i 0 (< i (- nb-lives 1))
-         (player-renderer (+ 30 (* i 15)) 0 0))))
+         (player-renderer (+ 30 (* i 15)) 0 0)))
+
+  (for-each render-shield (game-level-shields level)))
+  
+
+(define (render-level level)
+  ;; Draw all objects
+  (for-each render-object (level-all-objects level))
+
+  (if (game-level? level)
+      (render-game-level level)))
+
 
 (define (display-message x y msg color)
   (let ((chars (map char->integer (string->list msg)))
@@ -250,11 +260,6 @@ end
       ;; Draw background stuff
       (render-level level)
       
-      ;; Draw all objects
-      (for-each render-object (level-all-objects level))
-      (for-each render-shield (level-shields level))
-
-
       (let ((now (time->seconds (current-time))))
         (if (not (= last-render-time 0))
             (FPS (/ 1 (- now last-render-time))))

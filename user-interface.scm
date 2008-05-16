@@ -197,27 +197,42 @@ end
             (shield-particles shield)))
 
 (define (render-game-level level)
-  ;; Draw horizontal bottom green wall and remove damaged parts by
-  ;; redrawing over it in black.
-  (set-openGL-color 'green)
-  (glBegin GL_LINES)
-  (glVertex2i 0 9)
-  (glVertex2i screen-max-x 9)
-  (glEnd)
-;;  (glBlendFunc GL_ONE GL_ZERO)
-  (set-openGL-color 'black)
-  (for-each (lambda (p)
-              (glBegin GL_POINTS)
-              (glVertex2i (pos2d-x p) (pos2d-y p))
-              (glEnd))
-            (game-level-wall-damage level))
+  ;; Must verify if the game field should be drawn or not...
+  (if (game-level-draw-game-field? level)
+      (begin
+        ;; Draw horizontal bottom green wall and remove damaged parts by
+        ;; redrawing over it in black.
+        (set-openGL-color 'green)
+        (glBegin GL_LINES)
+        (glVertex2i 0 9)
+        (glVertex2i screen-max-x 9)
+        (glEnd)
+        ;;  (glBlendFunc GL_ONE GL_ZERO)
+        (set-openGL-color 'black)
+        (for-each (lambda (p)
+                    (glBegin GL_POINTS)
+                    (glVertex2i (pos2d-x p) (pos2d-y p))
+                    (glEnd))
+                  (game-level-wall-damage level))
 
-    (let ((nb-lives (game-level-lives level)))
+        (for-each render-shield (game-level-shields level)))
+      (begin
+        (set-openGL-color 'black)
+        (glBegin GL_QUADS)
+        (glVertex2i 0 0)
+        (glVertex2i screen-max-x 0)
+        (glVertex2i screen-max-x screen-max-y)
+        (glVertex2i 0 screen-max-y)
+        (glEnd)
+      ;; Re-draw all message over the black screen
+        (for-each (lambda (msg) (render-object msg))
+                  (level-messages level))))
+
+    ;; Draw lives
+  (let ((nb-lives (game-level-lives level)))
     (display-message 13 0 (number->string nb-lives) 'white)
     (for i 0 (< i (- nb-lives 1))
-         (player-renderer (+ 30 (* i 15)) 0 0)))
-
-  (for-each render-shield (game-level-shields level)))
+         (player-renderer (+ 30 (* i 15)) 0 0))))
   
 
 (define (render-level level)

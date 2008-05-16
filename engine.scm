@@ -316,7 +316,7 @@
   extender: define-type-of-level)
 
 (define-type-of-level game-level
-  player-id score lives shields walls wall-damage
+  player-id score lives shields walls wall-damage draw-game-field?
   extender: define-type-of-game-level)
 
 (define-type-of-game-level 2p-game-level
@@ -338,6 +338,9 @@
 
 (define (level-invaders lvl)
    (filter invader-ship? (level-all-objects lvl)))
+
+(define (level-messages lvl)
+   (filter message-obj? (level-all-objects lvl)))
 
 (define (level-loose-1-life! lvl)
   (game-level-lives-set! lvl (- (game-level-lives lvl) 1)))
@@ -436,18 +439,21 @@
          (score 0)
          (other-finished? #f)  ;; only used for 2p games
          (other-score 0)       ;; only used for 2p games
+         (draw-game-field? #t)
          (level (if (= number-of-players 2)
 
                     (make-2p-game-level
                      screen-max-y screen-max-x (make-table)
                      hi-score sim (new-mutex)
-                     player-id score lives shields walls wall-damage
+                     player-id score lives shields
+                     walls wall-damage draw-game-field?
                      other-finished? other-score)
                     
                     (make-game-level
                      screen-max-y screen-max-x (make-table)
                      hi-score sim (new-mutex)
-                     player-id score lives shields walls wall-damage))))
+                     player-id score lives shields
+                     walls wall-damage draw-game-field?))))
     
     (add-global-score-messages! level)
     
@@ -478,6 +484,7 @@
     (schedule-event! sim 0 (create-intro-manager-event level))
     (schedule-event! sim 0 (create-redraw-event user-interface-thread level))
     level))
+
 
 
 ;;*****************************************************************************
@@ -729,8 +736,11 @@
                      "PLAY  PLAYER<1>"))
            (msg (make-message-obj 'start-msg type pos state speed text))
            (new-cont
-            (lambda () (level-remove-object! level msg)
-                    (in 0 continuation))))
+            (lambda ()
+              (level-remove-object! level msg)
+              (game-level-draw-game-field?-set! level #t)
+              (in 0 continuation))))
+      (game-level-draw-game-field?-set! level #f)
       (level-add-object! level msg)
       (let ((score-msg-obj (if (eq? player-id 'p2)
                                'player2-score-msg
@@ -1350,6 +1360,7 @@
                 (p2
                  (new-corout 
                   'p2 (lambda () (play-level (new-level hi-score 2 'p2))))))
+
             (parameterize ((p1-corout p1)
                            (p2-corout p2))
               (inf-loop hi-score (corout-boot (lambda (acc v) (max acc v))
@@ -1357,4 +1368,3 @@
          (else
           (inf-loop hi-score
                     (play-level (new-animation-level-A hi-score))))))))
-

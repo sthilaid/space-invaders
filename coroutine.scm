@@ -1,9 +1,19 @@
 (include "scm-lib.scm")
 
-(define-type corout id kont)
+(define-type corout id kont mailbox)
 
 (define (new-corout id thunk)
-  (make-corout id (lambda (dummy) (thunk))))
+  (make-corout id (lambda (dummy) (thunk)) (new-queue)))
+
+(define (?)
+  (define mail (corout-mailbox (current-coroutine)))
+  (if (empty-queue? mail)
+      (begin (yield-corout)
+             (?))
+      (dequeue! mail)))
+
+(define (! dest-corout msg)
+  (enqueue! (corout-mailbox dest-corout) msg))
 
 (define (yield-corout)
   (call/cc
@@ -46,7 +56,7 @@
        (if (not (return-value))
            (current-coroutine)
            ((return-value-handler) (return-value) (current-coroutine)))))
-  
+
   ;; Get the next coroutine, if one is available
   (with-exception-catcher
    (lambda (e) (case e ((empty-q) #f) (else (raise e))))
@@ -57,3 +67,65 @@
   (if (corout? (current-coroutine))
       ((corout-kont (current-coroutine)) 'go)
       ((root-k) (return-value))))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Tests
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; simple test: expected output
+(define (simple-test)
+  (let ((c1 (new-corout 'c1 (lambda ()
+                              (pp 'A)
+                              (yield-corout)
+                              (pp 'B)
+                              (terminate-corout 'C))))
+        (c2 (new-corout 'c2 (lambda ()
+                              (pp 1)
+                              (yield-corout)
+                              (pp 2)
+                              (terminate-corout 3)))))
+    (corout-simple-boot c1 c2)))
+
+;; Return handling test
+(define (test-ret-val-handler)
+  (let ((c1 (new-corout 'c1 (lambda ()
+                              (pp 'A)
+                              (yield-corout)
+                              (pp 'B)
+                              (terminate-corout '1))))
+        (c2 (new-corout 'c2 (lambda ()
+                              (pp 1)
+                              (yield-corout)
+                              (pp 2)
+                              (terminate-corout 2))))
+        (c3 (new-corout 'c3 (lambda ()
+                              (pp #\a)
+                              (yield-corout)
+                              (pp #\b)
+                              (terminate-corout 3)))))
+    (pp `(return value (expecting 6) =
+                 ,(corout-boot (lambda (acc v) (+ acc v))
+                               c1 c2 c3)))))
+
+(define (test-mailboxes)
+  (let* ((c1 (new-corout 'c1 (lambda ()
+                               (pp `(c1 received ,(?)))
+                               (pp `(c1 received ,(?)))
+                               (terminate-corout 'done))))
+         (c2 (new-corout 'c2 (lambda ()
+                               (pp 'sending-data-from-c2)
+                               (! c1 'allo)
+                               (terminate-corout 'do))))
+         (c3 (new-corout 'c3 (lambda ()
+                               (pp 'sending-data-from-c3)
+                               (! c1 'salut)
+                               (terminate-corout 'ne)))))
+    (corout-simple-boot c1 c2 c3)))
+
+(define (corout-tests)
+  (simple-test)
+  (newline)
+  (test-ret-val-handler)
+  (newline)
+  (test-mailboxes))

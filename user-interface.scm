@@ -149,6 +149,18 @@ end
          (state (game-object-state msg-obj)))
     (display-message x y (message-obj-text msg-obj) state)))
 
+(define (render-shield shield)
+  (set-openGL-color 'green)
+  (for-each (lambda (particle)
+              (let* ((shield-x (pos2d-x (game-object-pos shield)))
+                     (shield-y (pos2d-y (game-object-pos shield)))
+                     (x (+ shield-x (pos2d-x particle)))
+                     (y (+ shield-y (pos2d-y particle))))
+                (glBegin GL_POINTS)
+                (glVertex2i x y)
+                (glEnd)))
+            (shield-particles shield)))
+
 (define (render-object obj)
   (define x (pos2d-x (game-object-pos obj)))
   (define y (pos2d-y (game-object-pos obj)))
@@ -168,6 +180,7 @@ end
     ((explodeP) (explodeP-renderer x y state))
     ((mothership) (mothership-renderer x y state))
     ((message) (render-message obj))
+    ((shield) (render-shield obj))
     (else (error (string-append "Cannot render unknown object type:"
                                 (symbol->string type))))))
 
@@ -183,18 +196,6 @@ end
     ((black)
      (glColor3f 0. 0. 0.))
     (else (error "unknown color"))))
-
-(define (render-shield shield)
-  (set-openGL-color 'green)
-  (for-each (lambda (particle)
-              (let* ((shield-x (pos2d-x (game-object-pos shield)))
-                     (shield-y (pos2d-y (game-object-pos shield)))
-                     (x (+ shield-x (pos2d-x particle)))
-                     (y (+ shield-y (pos2d-y particle))))
-                (glBegin GL_POINTS)
-                (glVertex2i x y)
-                (glEnd)))
-            (shield-particles shield)))
 
 (define (render-game-level level)
   ;; Must verify if the game field should be drawn or not...
@@ -224,11 +225,11 @@ end
         (glVertex2i screen-max-x screen-max-y)
         (glVertex2i 0 screen-max-y)
         (glEnd)
-      ;; Re-draw all message over the black screen
+        ;; Re-draw all message over the black screen
         (for-each (lambda (msg) (render-object msg))
                   (level-messages level))))
 
-    ;; Draw lives
+  ;; Draw lives
   (let ((nb-lives (game-level-lives level)))
     (display-message 13 0 (number->string nb-lives) 'white)
     (for i 0 (< i (- nb-lives 1))
@@ -380,9 +381,9 @@ end
 (define (quit) (return 0))
 (define (main)
   (define (start heigth width)
-      (glut-init heigth width)
+    (glut-init heigth width)
       ;(display-instructions)
-      (call/cc (lambda (k) (set! return k) (glutMainLoop))))
+    (call/cc (lambda (k) (set! return k) (glutMainLoop))))
 
   ;; Start a debug/developpement repl in a seperate thread
   ;;   (thread-start! (make-thread (lambda () (##repl))))
@@ -395,4 +396,4 @@ end
     (display usage-message))))
 
 
-(main)
+(time (main))

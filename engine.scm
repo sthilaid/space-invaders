@@ -316,17 +316,17 @@
   extender: define-type-of-level)
 
 (define-type-of-level game-level
-  player-id score lives shields walls wall-damage draw-game-field?
+  player-id score lives walls wall-damage draw-game-field?
   extender: define-type-of-game-level)
 
 (define-type-of-game-level 2p-game-level
   other-finished? other-score)
 
 (define (level-add-object! lvl obj)
-   (table-set! (level-object-table lvl) (game-object-id obj) obj))
+  (table-set! (level-object-table lvl) (game-object-id obj) obj))
 
 (define (level-remove-object! lvl obj)
-   (table-set! (level-object-table lvl) (game-object-id obj)))
+  (table-set! (level-object-table lvl) (game-object-id obj)))
 
 (define (level-exists lvl obj-id)
   (table-ref (level-object-table lvl) obj-id #f))
@@ -334,13 +334,16 @@
 (define level-get level-exists)
 
 (define (level-all-objects lvl)
-   (map cdr (table->list (level-object-table lvl))))
+  (map cdr (table->list (level-object-table lvl))))
 
 (define (level-invaders lvl)
-   (filter invader-ship? (level-all-objects lvl)))
+  (filter invader-ship? (level-all-objects lvl)))
 
 (define (level-messages lvl)
-   (filter message-obj? (level-all-objects lvl)))
+  (filter message-obj? (level-all-objects lvl)))
+
+(define (game-level-shields level)
+  (filter shield? (level-all-objects level)))
 
 (define (level-loose-1-life! lvl)
   (game-level-lives-set! lvl (- (game-level-lives lvl) 1)))
@@ -437,25 +440,26 @@
          (sim (create-simulation))
          (lives 3)
          (score 0)
+         (draw-game-field? #t)
          (other-finished? #f)  ;; only used for 2p games
          (other-score 0)       ;; only used for 2p games
-         (draw-game-field? #t)
          (level (if (= number-of-players 2)
 
                     (make-2p-game-level
                      screen-max-y screen-max-x (make-table)
                      hi-score sim (new-mutex)
-                     player-id score lives shields
+                     player-id score lives 
                      walls wall-damage draw-game-field?
                      other-finished? other-score)
                     
                     (make-game-level
                      screen-max-y screen-max-x (make-table)
                      hi-score sim (new-mutex)
-                     player-id score lives shields
+                     player-id score lives 
                      walls wall-damage draw-game-field?))))
     
     (add-global-score-messages! level)
+    (for-each (lambda (s) (level-add-object! level s)) shields)
     
     (schedule-event!
      sim 0
@@ -541,9 +545,12 @@
 ;; multiple collision are occurring.
 (define (detect-collision? obj level)
   ;; exists is exptected to return the object that satisfy the condition
-  (or (exists (lambda (collision-obj) (obj-obj-collision? obj collision-obj))
+  (or (exists (lambda (collision-obj)
+                (if (shield? collision-obj)
+                    (obj-shield-collision? obj collision-obj)
+                    (obj-obj-collision? obj collision-obj)))
               (level-all-objects level))
-      (obj-shield-collision? obj (game-level-shields level))
+;;      (obj-shield-collision? obj (game-level-shields level))
       (obj-wall-collision? obj (game-level-walls level))))
 
 ;; collision detection between 2 game objects
@@ -562,16 +569,14 @@
              (wall-rect wall)))
           walls))
 
-(define (obj-shield-collision? obj shields)
-  (exists (lambda (shield)
-            (if (obj-obj-collision? obj shield)
-                (let* ((pos (game-object-pos shield)))
-                  (exists (lambda (particle)
-                            (point-rect-collision? (pos2d-add pos particle)
-                                                   (get-bounding-box obj)))
-                          (shield-particles shield)))
-                #f))
-          shields))
+(define (obj-shield-collision? obj shield)
+  (if (obj-obj-collision? obj shield)
+      (let* ((pos (game-object-pos shield)))
+        (exists (lambda (particle)
+                  (point-rect-collision? (pos2d-add pos particle)
+                                         (get-bounding-box obj)))
+                (shield-particles shield)))
+      #f))
 
 ;; Simple rectangular collision detection. Not optimized.
 (define (rectangle-collision? r1 r2)

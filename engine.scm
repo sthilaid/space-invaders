@@ -65,6 +65,33 @@
 
 
 
+
+;;*****************************************************************************
+;;
+;;             Multiplayer coroutines stuff
+;;
+;;*****************************************************************************
+
+;; dynamically scoped coroutines pointers that should be available
+;; inside 2 players level simulations
+(define p1-corout (make-parameter #f))
+(define p2-corout (make-parameter #f))
+
+(define (send-update-msg-to-other level finished?)
+  (let ((msg (cons (game-level-score level) finished?)))
+    (if (eq? (game-level-player-id level) 'p2)
+        (! (p1-corout) msg)
+        (! (p2-corout) msg))))
+
+(define (receive-update-msg-from-other! level)
+  (if (and (2p-game-level? level)
+           (not (corout-empty-mailbox?)))
+      (let ((msg (?)))
+        (2p-game-level-other-score-set! level (car msg))
+        (2p-game-level-other-finished?-set! level (cdr msg)))))
+
+
+
 ;;*****************************************************************************
 ;;
 ;;             Data Structures definitions and operations
@@ -288,8 +315,12 @@
   height width object-table hi-score sim mutex
   extender: define-type-of-level)
 
-(define-type-of-level game-level number-of-players player-id score lives shields
-walls wall-damage)
+(define-type-of-level game-level
+  player-id score lives shields walls wall-damage
+  extender: define-type-of-game-level)
+
+(define-type-of-game-level 2p-game-level
+  other-finished? other-score)
 
 (define (level-add-object! lvl obj)
    (table-set! (level-object-table lvl) (game-object-id obj) obj))
@@ -381,35 +412,49 @@ walls wall-damage)
   (define hi-score (level-hi-score level))
   (for-each
    (lambda (m) (level-add-object! level m))
-   (list
-    (make-message-obj 'top-banner type (make-pos2d 13 y) state speed
-                      "SCORE<1>  HI-SCORE  SCORE<2>")
-    (make-message-obj 'player1-score-msg type
-                      (make-pos2d 30 (- y 17)) state speed
-                      (get-score-string 0))
-    (make-message-obj 'hi-score-msg type
-                      (make-pos2d 93 (- y 17)) state speed
-                      (get-score-string hi-score))
-    (make-message-obj 'player2-score-msg type
-                      (make-pos2d 173 (- y 17)) state speed ""))))
-
+   (append 
+    (list
+     (make-message-obj 'top-banner type (make-pos2d 13 y) state speed
+                       "SCORE<1>  HI-SCORE  SCORE<2>")
+     (make-message-obj 'hi-score-msg type
+                       (make-pos2d 93 (- y 17)) state speed
+                       (get-score-string hi-score)))
+    (if (game-level? level)
+        (list
+         (make-message-obj 'player2-score-msg type
+                           (make-pos2d 173 (- y 17)) state speed "")
+         (make-message-obj 'player1-score-msg type
+                           (make-pos2d 30 (- y 17)) state speed ""))
+        '()))))
+    
 (define (new-level hi-score number-of-players player-id)
   (let* ((walls (generate-walls))
          (wall-damage '())
          (shields (generate-shields))
          (sim (create-simulation))
-         (lives 1)
+         (lives 3)
          (score 0)
-         (level (make-game-level screen-max-y screen-max-x (make-table)
-                                 hi-score sim (new-mutex)
-                                 number-of-players player-id score lives
-                                 shields walls wall-damage)))
+         (other-finished? #f)  ;; only used for 2p games
+         (other-score 0)       ;; only used for 2p games
+         (level (if (= number-of-players 2)
+
+                    (make-2p-game-level
+                     screen-max-y screen-max-x (make-table)
+                     hi-score sim (new-mutex)
+                     player-id score lives shields walls wall-damage
+                     other-finished? other-score)
+                    
+                    (make-game-level
+                     screen-max-y screen-max-x (make-table)
+                     hi-score sim (new-mutex)
+                     player-id score lives shields walls wall-damage))))
+    
     (add-global-score-messages! level)
     
     (schedule-event!
      sim 0
      (start-of-game-animation-event
-      level "PLAY  PLAYER<1>"
+      level 
       (generate-invaders-event
        level
        (lambda ()
@@ -671,22 +716,29 @@ walls wall-damage)
 ;; Start of game level animations
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define (start-of-game-animation-event level text continuation)
+(define (start-of-game-animation-event level continuation)
   (define animation-duration 3)
-  (synchronized-event-thunk level
+  (define player-id (game-level-player-id level))
+  (lambda ()
     (let* ((pos (make-pos2d 61 (- screen-max-y 136)))
            (type (get-type 'message))
            (state 'white)
            (speed (make-pos2d 0 0))
+           (text (if (eq? player-id 'p2)
+                     "PLAY  PLAYER<2>"
+                     "PLAY  PLAYER<1>"))
            (msg (make-message-obj 'start-msg type pos state speed text))
            (new-cont
             (lambda () (level-remove-object! level msg)
                     (in 0 continuation))))
       (level-add-object! level msg)
-      (in 0 (create-text-flash-animation-event
-             level
-             (level-get level 'player1-score-msg)
-             animation-duration new-cont)))))
+      (let ((score-msg-obj (if (eq? player-id 'p2)
+                               'player2-score-msg
+                               'player1-score-msg)))
+        (in 0 (create-text-flash-animation-event
+               level
+               (level-get level score-msg-obj)
+               animation-duration new-cont))))))
 
 (define (generate-invaders-event level continuation)
   (define animation-delay 0.01)
@@ -928,17 +980,43 @@ walls wall-damage)
   (level-loose-1-life! level)
   (level-add-object! level expl-obj)
   (level-remove-object! level player)
-
-  (let ((cont
+  (let ((continuation
          (if (<= (game-level-lives level) 0)
-             (game-over-animation-event level (lambda () (game-over! level)))
-             (lambda () (yield-corout)
+             (if (2p-game-level? level)
+                 (if (2p-game-level-other-finished? level)
+                     (begin
+                       (game-over-2p-animation-event
+                        level
+                        (game-over-animation-event
+                         level (lambda () (game-over! level)))))
+                     (begin
+                       (send-update-msg-to-other level #t)
+                       (game-over-2p-animation-event
+                        level (lambda () (game-over! level)))))
+                 (game-over-animation-event
+                  level (lambda () (game-over! level))))
+             (lambda ()
+               (if (2p-game-level? level)
+                   (begin
+                     (send-update-msg-to-other level #f)
+                     (in NOW! (start-of-game-animation-event
+                               level (return-to-player-event level)))
+                     (yield-corout))
+                   (begin
+                     (yield-corout)
                      (sem-unlock! (level-mutex level))
-                     (new-player! level)))))
+                     (new-player! level)))))))
     (in 0 (lambda ()
             (sem-lock! (level-mutex level))
             (in 0 (player-explosion-animation-event
-                   level expl-obj animation-duration cont))))))
+                   level expl-obj animation-duration continuation))))))
+
+;; Event used in 2 player games, where the games returns to the
+;; current game.
+(define (return-to-player-event level)
+  (lambda ()
+    (sem-unlock! (level-mutex level))
+    (new-player! level)))
         
 
 (define (player-explosion-animation-event level expl-obj duration continuation)
@@ -1019,7 +1097,7 @@ walls wall-damage)
        msg-obj
        (if (eq? current-state 'black) original-color 'black))))
   (define (flash-ev dt)
-    (synchronized-event-thunk level
+    (lambda ()
       (if (< dt duration)
           (begin (cycle-msg-state! msg-obj)
                  (in animation-delay (flash-ev (+ dt animation-delay))))
@@ -1085,7 +1163,24 @@ walls wall-damage)
               (level-get level 'easy) "=10 POINTS"
               (lambda () 'animation-finished))))))))
 
+(define (game-over-2p-animation-event level continuation)
+  (define continuation-delay 1.2)
+  (lambda ()
+    (let* ((player-id (game-level-player-id level))
+           (text (if (eq? player-id 'p2)
+                     "GAME OVER PLAYER<2>"
+                     "GAME OVER PLAYER<1>"))
+           (type (get-type 'message))
+           (pos (make-pos2d 37 (- screen-max-y 248)))
+           (speed (make-pos2d 0 0))
+           (msg-obj (make-message-obj 'game-over-msg type pos 'green speed "")))
+      (level-add-object! level msg-obj)
+      (in 0 (animate-message
+             msg-obj text
+             (lambda () (in continuation-delay continuation)))))))
+
 (define (game-over-animation-event level continuation)
+  (define continuation-delay 2)
   (lambda ()
     (let* ((type (get-type 'message))
            (pos (make-pos2d 77 (- screen-max-y 60)))
@@ -1094,7 +1189,7 @@ walls wall-damage)
       (level-add-object! level msg-obj)
       (in 0 (animate-message
              msg-obj "GAME OVER"
-             (lambda () (in 2 continuation)))))))
+             (lambda () (in continuation-delay continuation)))))))
 
   
 
@@ -1173,19 +1268,28 @@ walls wall-damage)
         (in manager-time-interfal manager-event))))
   manager-event)
 
-
 ;; Event that will send a message to the ui asking for a redraw.
 (define (create-redraw-event ui-thread level)
   ;;TODO: Dummy duplication!!
   (define (duplicate obj) obj) 
   (define (update-score-msg! level)
     (if (game-level? level) 
-        (let ((msg-obj
-               (level-get level (if (eq? (game-level-player-id level) 'p2)
-                                    'player2-score-msg
-                                    'player1-score-msg))))
+        (let* ((is-player2? (eq? (game-level-player-id level) 'p2))
+               (score-obj
+                (level-get level (if is-player2?
+                                     'player2-score-msg
+                                     'player1-score-msg)))
+               (other-score-obj
+                (level-get level (if is-player2?
+                                     'player1-score-msg
+                                     'player2-score-msg))))
+          (receive-update-msg-from-other! level)
           (message-obj-text-set!
-           msg-obj (get-score-string (game-level-score level))))))
+           score-obj (get-score-string (game-level-score level)))
+          (if (2p-game-level? level)
+              (message-obj-text-set!
+               other-score-obj
+               (get-score-string (2p-game-level-other-score level)))))))
   (define (redraw-event)
     (update-score-msg! level)
     (thread-send ui-thread (duplicate level))
@@ -1235,20 +1339,21 @@ walls wall-damage)
           (inf-loop result
                     (play-level (new-animation-level-A result))))
          ((eq? result 'start-1p-game)
-          (let ((p1 (new-corout '
+          (let ((p1 (new-corout 
                      'p1 (lambda () (play-level (new-level hi-score 1 'p1))))))
             (inf-loop hi-score (corout-simple-boot p1))))
 
          ((eq? result 'start-2p-game)
-          (let ((p1 (new-corout '
-                     'p1 (lambda () (play-level (new-level hi-score 2 'p1)))))
-                (p2 (new-corout '
-                     'p2 (lambda () (play-level (new-level hi-score 2 'p2))))))
-            (inf-loop hi-score (corout-boot
-                                (lambda (acc v) (pp `(acc ,acc v ,v))
-                                        (max acc v))
-                                p1 p2))))
-         
+          (let ((p1
+                 (new-corout
+                  'p1 (lambda () (play-level (new-level hi-score 2 'p1)))))
+                (p2
+                 (new-corout 
+                  'p2 (lambda () (play-level (new-level hi-score 2 'p2))))))
+            (parameterize ((p1-corout p1)
+                           (p2-corout p2))
+              (inf-loop hi-score (corout-boot (lambda (acc v) (max acc v))
+                                              p1 p2)))))
          (else
           (inf-loop hi-score
                     (play-level (new-animation-level-A hi-score))))))))

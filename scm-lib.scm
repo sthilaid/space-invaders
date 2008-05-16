@@ -321,3 +321,6 @@
         queue-head)))
 
 (define (empty-queue? q) (not (pair? (queue-list q))))
+
+(define (queue-find-obj? q predicate)
+  (exists predicate (queue-list q)))

@@ -8,7 +8,7 @@ PATH_TO_GAMBIT=/opt/gambit-c/current
 GAMBIT_LIB=$(PATH_TO_GAMBIT)/lib
 GAMBIT_INCLUDE=$(PATH_TO_GAMBIT)/include
 GSC=gsc -:=$(PATH_TO_GAMBIT) -debug
-CC=gcc 
+CC=gcc -g
 INCLUDE_OPTIONS=-I$(GAMBIT_INCLUDE)
 LD_OPTIONS =-lglut -lgambc -lutil -L$(GAMBIT_LIB)
 

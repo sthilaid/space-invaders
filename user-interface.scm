@@ -38,109 +38,122 @@
 
 (include "opengl-header.scm")
 (include "ppm-reader.scm")
-(c-declare #<<end
-  #include <GL/gl.h>
-  
-  typedef struct{
-    GLsizei width;
-    GLsizei height;
-    GLubyte* pointer;} pixelmap;
-end
-)
 
-(include-ppm-pixel-sprite "sprites/laserA0.ppm")
-(include-ppm-pixel-sprite "sprites/laserA1.ppm")
-(include-ppm-pixel-sprite "sprites/laserB0.ppm")
-(include-ppm-pixel-sprite "sprites/laserB1.ppm")
-(include-ppm-pixel-sprite "sprites/laserB2.ppm")
-(include-ppm-pixel-sprite "sprites/laserB3.ppm")
-(include-ppm-pixel-sprite "sprites/laserB4.ppm")
-(include-ppm-pixel-sprite "sprites/laserP0.ppm")
-(include-ppm-pixel-sprite "sprites/shield0.ppm")
-(include-ppm-pixel-sprite "sprites/easy0.ppm")
-(include-ppm-pixel-sprite "sprites/easy1.ppm")
-(include-ppm-pixel-sprite "sprites/medium0.ppm")
-(include-ppm-pixel-sprite "sprites/medium1.ppm")
-(include-ppm-pixel-sprite "sprites/hard0.ppm")
-(include-ppm-pixel-sprite "sprites/hard1.ppm")
-(include-ppm-pixel-sprite "sprites/mothership0.ppm")
-(include-ppm-pixel-sprite "sprites/player0.ppm")
-(include-ppm-pixel-sprite "sprites/player1.ppm")
-(include-ppm-pixel-sprite "sprites/explodeI0.ppm")
-(include-ppm-pixel-sprite "sprites/explodeS0.ppm")
-(include-ppm-pixel-sprite "sprites/explodeP0.ppm")
-(include-ppm-pixel-sprite "sprites/explodeP1.ppm")
-(include-ppm-pixel-sprite "sprites/explodeInvL0.ppm")
+;; (define-sprite "sprites/easy0.ppm")
+;; (test-image-code "sprites/easy0.ppm")
 
-(define-macro (cast-pointer new-type old-type val)
-  `((c-lambda (,old-type) ,new-type
-              ,(string-append "___result_voidstar = ("
-                              (symbol->string new-type)
-                              ")___arg1;"))
-    ,val))
+(define-sprite "sprites/laserA0.ppm")
+(define-sprite "sprites/laserA1.ppm")
+(define-sprite "sprites/laserB0.ppm")
+(define-sprite "sprites/laserB1.ppm")
+(define-sprite "sprites/laserB2.ppm")
+(define-sprite "sprites/laserB3.ppm")
+(define-sprite "sprites/laserB4.ppm")
+(define-sprite "sprites/laserP0.ppm")
+(define-sprite "sprites/shield0.ppm")
+(define-sprite "sprites/easy0.ppm")
+(define-sprite "sprites/easy1.ppm")
+(define-sprite "sprites/medium0.ppm")
+(define-sprite "sprites/medium1.ppm")
+(define-sprite "sprites/hard0.ppm")
+(define-sprite "sprites/hard1.ppm")
+(define-sprite "sprites/mothership0.ppm")
+(define-sprite "sprites/player0.ppm")
+(define-sprite "sprites/player1.ppm")
+(define-sprite "sprites/explodeI0.ppm")
+(define-sprite "sprites/explodeS0.ppm")
+(define-sprite "sprites/explodeP0.ppm")
+(define-sprite "sprites/explodeP1.ppm")
+(define-sprite "sprites/explodeInvL0.ppm")
 
-(define-macro (get-pixelmap-param name param)
-  (let ((result-type (cond ((eq? param 'pointer)     'GLubyte*)
-                           ((or (eq? param 'width)
-                                (eq? param 'height)) 'GLsizei)))
-        (result (if (eq? param 'pointer)
-                    "___result_voidstar"
-                    "___result")))
-    `((c-lambda () ,result-type
-                ,(string-append result " = "
-                                (symbol->string name) "."
-                                (symbol->string param) ";")))))
+(test-image-code "sprites/laserA0.ppm")
+(test-image-code "sprites/laserA1.ppm")
+(test-image-code "sprites/laserB0.ppm")
+(test-image-code "sprites/laserB1.ppm")
+(test-image-code "sprites/laserB2.ppm")
+(test-image-code "sprites/laserB3.ppm")
+(test-image-code "sprites/laserB4.ppm")
+(test-image-code "sprites/laserP0.ppm")
+(test-image-code "sprites/shield0.ppm")
+(test-image-code "sprites/easy0.ppm")
+(test-image-code "sprites/easy1.ppm")
+(test-image-code "sprites/medium0.ppm")
+(test-image-code "sprites/medium1.ppm")
+(test-image-code "sprites/hard0.ppm")
+(test-image-code "sprites/hard1.ppm")
+(test-image-code "sprites/mothership0.ppm")
+(test-image-code "sprites/player0.ppm")
+(test-image-code "sprites/player1.ppm")
+(test-image-code "sprites/explodeI0.ppm")
+(test-image-code "sprites/explodeS0.ppm")
+(test-image-code "sprites/explodeP0.ppm")
+(test-image-code "sprites/explodeP1.ppm")
+(test-image-code "sprites/explodeInvL0.ppm")
 
-(define-macro (render-pixel-sprite name sprite-index)
-  (let ((id (string->symbol (string-append (symbol->string name)
-                                           (number->string sprite-index)))))
-    `(glDrawPixels (get-pixelmap-param ,id width)
-                   (get-pixelmap-param ,id height)
-                   GL_RGB
-                   GL_UNSIGNED_BYTE
-                   (cast-pointer GLvoid* GLubyte*
-                                 (get-pixelmap-param ,id pointer)))))
 
-(define-macro (create-single-state-renderer obj-type)
-  `(lambda (x y state)
-     (glRasterPos2i x y)
-     (case state
-       ((0) (render-pixel-sprite ,obj-type 0))
-       (else
-        (error "cannot draw sprite: invalid state.")))))
+;; (define-macro (cast-pointer new-type old-type val)
+;;   `((c-lambda (,old-type) ,new-type
+;;               ,(string-append "___result_voidstar = ("
+;;                               (symbol->string new-type)
+;;                               ")___arg1;"))
+;;     ,val))
 
-(define-macro (create-2-state-renderer ship-type)
-  `(lambda (x y state)
-     (glRasterPos2i x y)
-     (case state
-       ((0) (render-pixel-sprite ,ship-type 0))
-       ((1) (render-pixel-sprite ,ship-type 1))
-       (else
-        (error "cannot draw sprite: invalid state.")))))
+;; (define-macro (get-pixelmap-param name param)
+;;   (let ((result-type (cond ((eq? param 'pointer)     'GLubyte*)
+;;                            ((or (eq? param 'width)
+;;                                 (eq? param 'height)) 'GLsizei)))
+;;         (result (if (eq? param 'pointer)
+;;                     "___result_voidstar"
+;;                     "___result")))
+;;     `((c-lambda () ,result-type
+;;                 ,(string-append result " = "
+;;                                 (symbol->string name) "."
+;;                                 (symbol->string param) ";")))))
 
-(define-macro (create-4-state-renderer obj-type)
-  `(lambda (x y state)
-     (glRasterPos2i x y)
-     (case state
-       ((0) (render-pixel-sprite ,obj-type 0))
-       ((1) (render-pixel-sprite ,obj-type 1))
-       ((2) (render-pixel-sprite ,obj-type 2))
-       ((3) (render-pixel-sprite ,obj-type 3))
-       (else
-        (error "cannot draw sprite: invalid state.")))))
+;; (define-macro (render-pixel-sprite name sprite-index)
+;;   (let ((id (string->symbol (string-append (symbol->string name)
+;;                                            (number->string sprite-index)))))
+;;     `(glDrawPixels (get-pixelmap-param ,id width)
+;;                    (get-pixelmap-param ,id height)
+;;                    GL_RGB
+;;                    GL_UNSIGNED_BYTE
+;;                    (cast-pointer GLvoid* GLubyte*
+;;                                  (get-pixelmap-param ,id pointer)))))
 
-(define easy-renderer   (create-2-state-renderer easy))
-(define medium-renderer (create-2-state-renderer medium))
-(define hard-renderer   (create-2-state-renderer hard))
-(define player-renderer (create-single-state-renderer player))
-(define laserA-renderer  (create-2-state-renderer laserA))
-(define laserB-renderer  (create-4-state-renderer laserB))
-(define laserP-renderer  (create-single-state-renderer laserP))
-(define explodeI-renderer (create-single-state-renderer explodeI))
-(define explodeInvL-renderer (create-single-state-renderer explodeInvL))
-(define explodeS-renderer (create-single-state-renderer explodeS))
-(define explodeP-renderer (create-2-state-renderer explodeP))
-(define mothership-renderer (create-single-state-renderer mothership))
+;; (define-macro (create-single-state-renderer obj-type)
+;;   `(lambda (x y state)
+;;      (glRasterPos2i x y)
+;;      (case state
+;;        ((0) (render-pixel-sprite ,obj-type 0))
+;;        (else
+;;         (error "cannot draw sprite: invalid state.")))))
+
+;; (define-macro (create-2-state-renderer ship-type)
+;;   `(lambda (x y state)
+;;      (glRasterPos2i x y)
+;;      (case state
+;;        ((0) (render-pixel-sprite ,ship-type 0))
+;;        ((1) (render-pixel-sprite ,ship-type 1))
+;;        (else
+;;         (error "cannot draw sprite: invalid state.")))))
+
+;; (define-macro (create-4-state-renderer obj-type)
+;;   `(lambda (x y state)
+;;      (glRasterPos2i x y)
+;;      (case state
+;;        ((0) (render-pixel-sprite ,obj-type 0))
+;;        ((1) (render-pixel-sprite ,obj-type 1))
+;;        ((2) (render-pixel-sprite ,obj-type 2))
+;;        ((3) (render-pixel-sprite ,obj-type 3))
+;;        (else
+;;         (error "cannot draw sprite: invalid state.")))))
+
+(define (render-sprite sprite-name x y state)
+  (if (not (number? state)) (error "sprite state must be a number."))
+  (let ((sprite-name
+         (string-append (symbol->string sprite-name)
+                        (number->string state))))
+    (draw-sprite sprite-name x y)))
 
 (define (render-message msg-obj)
   (let* ((pos (game-object-pos msg-obj))
@@ -167,18 +180,18 @@ end
   (define type (type-id (game-object-type obj)))
   (define state (game-object-state obj))
   (case type
-    ((easy)   (easy-renderer x y state))
-    ((medium) (medium-renderer x y state))
-    ((hard)   (hard-renderer x y state))
-    ((player) (player-renderer x y state))
-    ((laserA) (laserA-renderer x y state))
-    ((laserB) (laserB-renderer x y state))
-    ((laserP) (laserP-renderer x y state))
-    ((explodeI) (explodeI-renderer x y state))
-    ((explodeInvL) (explodeInvL-renderer x y state))
-    ((explodeS) (explodeS-renderer x y state))
-    ((explodeP) (explodeP-renderer x y state))
-    ((mothership) (mothership-renderer x y state))
+    ((easy)   (render-sprite 'easy x y state))
+    ((medium) (render-sprite 'medium x y state))
+    ((hard)   (render-sprite 'hard x y state))
+    ((player) (render-sprite 'player x y state))
+    ((laserA) (render-sprite 'laserA x y state))
+    ((laserB) (render-sprite 'laserB x y state))
+    ((laserP) (render-sprite 'laserP x y state))
+    ((explodeI) (render-sprite 'explodeI x y state))
+    ((explodeInvL) (render-sprite 'explodeInvL x y state))
+    ((explodeS) (render-sprite 'explodeS x y state))
+    ((explodeP) (render-sprite 'explodeP x y state))
+    ((mothership) (render-sprite 'mothership x y state))
     ((message) (render-message obj))
     ((shield) (render-shield obj))
     (else (error (string-append "Cannot render unknown object type:"
@@ -233,7 +246,7 @@ end
   (let ((nb-lives (game-level-lives level)))
     (display-message 13 0 (number->string nb-lives) 'white)
     (for i 0 (< i (- nb-lives 1))
-         (player-renderer (+ 30 (* i 15)) 0 0))))
+         (render-sprite 'player (+ 30 (* i 15)) 0 0))))
   
 
 (define (render-level level)
@@ -286,7 +299,8 @@ end
        0 11 
        (with-output-to-string "" (lambda () (show "FPS: " (FPS))))
        'white)
-
+      
+      (glFlush)
       (glutSwapBuffers))))
       
 
@@ -295,11 +309,20 @@ end
 ;;;;;;;;;;;;;;;;;;;;;;; Viewport and projection ;;;;;;;;;;;;;;;;;;;;;;;
 
 (c-define (reshape w h) (int int) void "reshape" ""
+;;   (glViewport 0 0 w h)
+;;   (glMatrixMode GL_PROJECTION)
+;;   (glLoadIdentity);
+;;   (gluPerspective 60.0 (exact->inexact (/ w h)) 1.0 30.0)
+;;   (glMatrixMode GL_MODELVIEW);
+;;   (glLoadIdentity);
+;;   (glTranslatef 0.0 0.0 -3.6))
+
 ;;    (glViewport 0 0 w h)
 ;;    (glMatrixMode GL_PROJECTION)
 ;;    (glLoadIdentity)
 ;;    (glOrtho 0. (exact->inexact w) 0. (exact->inexact h) -1.0 1.0)
 ;;    (glMatrixMode GL_MODELVIEW))
+
   (let* ((zoom-x (/ w screen-max-x))
          (zoom-y (/ h screen-max-y))
          (factor (exact->inexact (ceiling (max zoom-x zoom-y)))))
@@ -363,9 +386,12 @@ end
     (glDisable GL_POINT_SMOOTH)
 
     (glPixelStorei GL_UNPACK_ALIGNMENT 1)
+    (glShadeModel GL_FLAT)
 
     (glEnable GL_BLEND)
     (glBlendFunc GL_SRC_ALPHA GL_ONE)
+
+    (initialize-textures!)
 
     ;(create-menu)
     

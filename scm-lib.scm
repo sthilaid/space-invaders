@@ -149,6 +149,12 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;; Math stuff ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(define (next-power-of-2 n)
+  (let ((current-power (expt 2 (- (integer-length n) 1))))
+    (if (= n current-power)
+        n
+        (* current-power 2))))
+
 (define maximum (extremum-fonction > -inf.0))
 (define minimum (extremum-fonction < +inf.0))
 
@@ -238,6 +244,42 @@
 (define-macro (xor b1 b2) `(not (eq? ,b1 ,b2)))
   
 
+;;;;;;;;;;;;;;;;;;;;;;;; Data Structures ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+;; (push element stack) -> new stack
+;; (peek stack)         -> top stack element
+;; (pop stack)          -> new stack
+;; (define make-stack '())
+;; (define push cons)   
+;; (define peek car)    
+;; (define (pop stack)  
+;;   (if (null? stack)
+;;       (error "cannot pop from empty stack")
+;;       (cdr stack)))
+
+
+;; Queue implementation
+(define (new-queue) (cons '() '()))
+(define queue-list car)
+(define queue-list-set! set-car!)
+
+(define (enqueue! queue val)
+  (queue-list-set! queue (cons val (queue-list queue))))
+
+(define (dequeue! queue)
+  (define list (queue-list queue))
+  (if (empty-queue? queue)
+      (raise 'empty-q)
+      (let ((queue-head (car (take-right list 1))))
+        (queue-list-set! queue (drop-right list 1))
+        queue-head)))
+
+(define (empty-queue? q) (not (pair? (queue-list q))))
+
+(define (queue-find-obj? q predicate)
+  (exists predicate (queue-list q)))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;; Simple macros ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -289,38 +331,3 @@
 (random-source-randomize! default-random-source)
 
 
-;;;;;;;;;;;;;;;;;;;;;;;; Data Structures ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-
-;; (push element stack) -> new stack
-;; (peek stack)         -> top stack element
-;; (pop stack)          -> new stack
-;; (define make-stack '())
-;; (define push cons)   
-;; (define peek car)    
-;; (define (pop stack)  
-;;   (if (null? stack)
-;;       (error "cannot pop from empty stack")
-;;       (cdr stack)))
-
-
-;; Queue implementation
-(define (new-queue) (cons '() '()))
-(define queue-list car)
-(define queue-list-set! set-car!)
-
-(define (enqueue! queue val)
-  (queue-list-set! queue (cons val (queue-list queue))))
-
-(define (dequeue! queue)
-  (define list (queue-list queue))
-  (if (empty-queue? queue)
-      (raise 'empty-q)
-      (let ((queue-head (car (take-right list 1))))
-        (queue-list-set! queue (drop-right list 1))
-        queue-head)))
-
-(define (empty-queue? q) (not (pair? (queue-list q))))
-
-(define (queue-find-obj? q predicate)
-  (exists predicate (queue-list q)))

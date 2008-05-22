@@ -66,29 +66,29 @@
 (define-sprite "sprites/explodeP1.ppm")
 (define-sprite "sprites/explodeInvL0.ppm")
 
-(test-image-code "sprites/laserA0.ppm")
-(test-image-code "sprites/laserA1.ppm")
-(test-image-code "sprites/laserB0.ppm")
-(test-image-code "sprites/laserB1.ppm")
-(test-image-code "sprites/laserB2.ppm")
-(test-image-code "sprites/laserB3.ppm")
-(test-image-code "sprites/laserB4.ppm")
-(test-image-code "sprites/laserP0.ppm")
-(test-image-code "sprites/shield0.ppm")
-(test-image-code "sprites/easy0.ppm")
-(test-image-code "sprites/easy1.ppm")
-(test-image-code "sprites/medium0.ppm")
-(test-image-code "sprites/medium1.ppm")
-(test-image-code "sprites/hard0.ppm")
-(test-image-code "sprites/hard1.ppm")
-(test-image-code "sprites/mothership0.ppm")
-(test-image-code "sprites/player0.ppm")
-(test-image-code "sprites/player1.ppm")
-(test-image-code "sprites/explodeI0.ppm")
-(test-image-code "sprites/explodeS0.ppm")
-(test-image-code "sprites/explodeP0.ppm")
-(test-image-code "sprites/explodeP1.ppm")
-(test-image-code "sprites/explodeInvL0.ppm")
+;; (test-image-code "sprites/laserA0.ppm")
+;; (test-image-code "sprites/laserA1.ppm")
+;; (test-image-code "sprites/laserB0.ppm")
+;; (test-image-code "sprites/laserB1.ppm")
+;; (test-image-code "sprites/laserB2.ppm")
+;; (test-image-code "sprites/laserB3.ppm")
+;; (test-image-code "sprites/laserB4.ppm")
+;; (test-image-code "sprites/laserP0.ppm")
+;; (test-image-code "sprites/shield0.ppm")
+;; (test-image-code "sprites/easy0.ppm")
+;; (test-image-code "sprites/easy1.ppm")
+;; (test-image-code "sprites/medium0.ppm")
+;; (test-image-code "sprites/medium1.ppm")
+;; (test-image-code "sprites/hard0.ppm")
+;; (test-image-code "sprites/hard1.ppm")
+;; (test-image-code "sprites/mothership0.ppm")
+;; (test-image-code "sprites/player0.ppm")
+;; (test-image-code "sprites/player1.ppm")
+;; (test-image-code "sprites/explodeI0.ppm")
+;; (test-image-code "sprites/explodeS0.ppm")
+;; (test-image-code "sprites/explodeP0.ppm")
+;; (test-image-code "sprites/explodeP1.ppm")
+;; (test-image-code "sprites/explodeInvL0.ppm")
 
 
 ;; (define-macro (cast-pointer new-type old-type val)
@@ -156,6 +156,7 @@
     (draw-sprite sprite-name x y)))
 
 (define (render-message msg-obj)
+  (glBlendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA)
   (let* ((pos (game-object-pos msg-obj))
          (x (pos2d-x pos))
          (y (pos2d-y pos))
@@ -163,6 +164,7 @@
     (display-message x y (message-obj-text msg-obj) state)))
 
 (define (render-shield shield)
+  (glBlendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA)
   (set-openGL-color 'green)
   (for-each (lambda (particle)
               (let* ((shield-x (pos2d-x (game-object-pos shield)))
@@ -211,6 +213,8 @@
     (else (error "unknown color"))))
 
 (define (render-game-level level)
+  (glBlendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA)
+
   ;; Must verify if the game field should be drawn or not...
   (if (game-level-draw-game-field? level)
       (begin
@@ -252,7 +256,7 @@
 (define (render-level level)
   ;; Draw all objects
   (for-each render-object (level-all-objects level))
-
+  
   (if (game-level? level)
       (render-game-level level)))
 

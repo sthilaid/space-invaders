@@ -1,3 +1,10 @@
+;;(include "scm-lib.scm")
+;;(include "opengl-header.scm")
+(c-declare "#include <GL/gl.h>\n")
+
+(define-type font id texture-id width height table)
+(define (font-get-char-font font-obj color char)
+  (table-ref (font-table font-obj) `(,color ,char)))
 
 (define (get-char pixels-vector x y width height char-width char-height)
   (let* ((x0 (- width (* (+ x 1) char-width)))
@@ -29,7 +36,7 @@
             (display "_"))
         (if (= x (- w 1)) (newline))))))
 
-(define (define-symetric-font font-name char-width char-height)
+(define (get-font-table font-name char-width char-height)
   (include "ppm-reader.scm")
   (include "scm-lib.scm")
   
@@ -79,3 +86,73 @@
 ;;                     (pp `(set (,(car colors) ,(car chars)) to:))
 ;;                     (test (car chars-pixels) 8 8)
                     (loop-chars (cdr chars) (cdr chars-pixels))))))))))
+
+(define-macro (define-symmetric-font font-name char-width char-height)
+  (define (show . args)
+    (for-each (lambda (x) (if (string? x) (display x) (write x))) args))
+
+  (let ((declaration-code ";")
+;;          (with-output-to-string
+;;            ""
+;;            (lambda ()
+;;              (show "GLubyte internal_font_image["char-height"]["
+;;                    char-width"][4];\n"))))
+        ;; dummy texture generation code used. Will be set later,
+        ;; before being drawn.
+        (generation-code "1+1;"))
+    `(begin
+       (define-texture ,declaration-code ,generation-code
+         "internal_font_image" ,char-width ,char-height)
+       (define current-font
+         (make-font ,font-name
+                    (texture-id
+                     (table-ref texture-table "internal_font_image"))
+                    ,char-width ,char-height
+                    (get-font-table ,font-name ,char-width ,char-height)))
+       
+       (define update-current-char-font!
+         (c-lambda (int int unsigned-int
+                        unsigned-int unsigned-int unsigned-int) void
+#<<end
+  internal_font_image[___arg2][___arg1][0] = ___arg3;
+  internal_font_image[___arg2][___arg1][0] = ___arg4;
+  internal_font_image[___arg2][___arg1][0] = ___arg5;
+  internal_font_image[___arg2][___arg1][0] = ___arg6;
+end
+)))))
+
+k
+(c-declare "GLubyte internal_font_image[8][8][4];\n")
+(define current-font #f)
+
+(define (draw-char color char x y)
+  (include "texture.scm")
+  (define-macro (for var init-val condition true . false)
+  (let ((loop (gensym 'loop)))
+    `(let ,loop ((,var ,init-val))
+          (if ,condition
+              (begin ,true (,loop (+ ,var 1)))
+              ,(if (not (null? false))
+                   false)))))
+
+  (let ((char-font (font-get-char-font current-font color char))
+        (char-width (font-width current-font))
+        (char-height (font-height current-font))
+        (texture-id (font-texture-id current-font)))
+    (for y 0 (< y char-height)
+      (for x 0 (< x char-width)
+        (let* ((current-pix (list-ref char-font (+ (* y char-width) x)))
+               (r (car current-pix))
+               (g (cadr current-pix))
+               (b (caddr current-pix))
+               (a (if (< (+ r g b) 10) 0 255)))
+            (update-current-char-font! x y r g b a))))
+
+    (glBindTexture GL_TEXTURE_2D texture-id)
+    (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_S GL_CLAMP)
+    (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_T GL_CLAMP)
+    (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MAG_FILTER GL_NEAREST)
+    (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MIN_FILTER GL_NEAREST)
+    (create-texture "internal_font_image" 8 8))
+
+  (draw-texture "internal_font_image" x y))

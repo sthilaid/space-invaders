@@ -1,5 +1,7 @@
-(include "scm-lib.scm") 
+(include "scm-lib.scm")
+(include "texture.scm")
 (include "sprite.scm")
+(include "font.scm")
 
 
 ;;;;;;;;;;;;;;;;;;;;;;; Global state variables  ;;;;;;;;;;;;;;;;;;;;;;;
@@ -39,9 +41,6 @@
 (include "opengl-header.scm")
 (include "ppm-reader.scm")
 
-;; (define-sprite "sprites/easy0.ppm")
-;; (test-image-code "sprites/easy0.ppm")
-
 (define-sprite "sprites/laserA0.ppm")
 (define-sprite "sprites/laserA1.ppm")
 (define-sprite "sprites/laserB0.ppm")
@@ -66,87 +65,7 @@
 (define-sprite "sprites/explodeP1.ppm")
 (define-sprite "sprites/explodeInvL0.ppm")
 
-;; (test-image-code "sprites/laserA0.ppm")
-;; (test-image-code "sprites/laserA1.ppm")
-;; (test-image-code "sprites/laserB0.ppm")
-;; (test-image-code "sprites/laserB1.ppm")
-;; (test-image-code "sprites/laserB2.ppm")
-;; (test-image-code "sprites/laserB3.ppm")
-;; (test-image-code "sprites/laserB4.ppm")
-;; (test-image-code "sprites/laserP0.ppm")
-;; (test-image-code "sprites/shield0.ppm")
-;; (test-image-code "sprites/easy0.ppm")
-;; (test-image-code "sprites/easy1.ppm")
-;; (test-image-code "sprites/medium0.ppm")
-;; (test-image-code "sprites/medium1.ppm")
-;; (test-image-code "sprites/hard0.ppm")
-;; (test-image-code "sprites/hard1.ppm")
-;; (test-image-code "sprites/mothership0.ppm")
-;; (test-image-code "sprites/player0.ppm")
-;; (test-image-code "sprites/player1.ppm")
-;; (test-image-code "sprites/explodeI0.ppm")
-;; (test-image-code "sprites/explodeS0.ppm")
-;; (test-image-code "sprites/explodeP0.ppm")
-;; (test-image-code "sprites/explodeP1.ppm")
-;; (test-image-code "sprites/explodeInvL0.ppm")
-
-
-;; (define-macro (cast-pointer new-type old-type val)
-;;   `((c-lambda (,old-type) ,new-type
-;;               ,(string-append "___result_voidstar = ("
-;;                               (symbol->string new-type)
-;;                               ")___arg1;"))
-;;     ,val))
-
-;; (define-macro (get-pixelmap-param name param)
-;;   (let ((result-type (cond ((eq? param 'pointer)     'GLubyte*)
-;;                            ((or (eq? param 'width)
-;;                                 (eq? param 'height)) 'GLsizei)))
-;;         (result (if (eq? param 'pointer)
-;;                     "___result_voidstar"
-;;                     "___result")))
-;;     `((c-lambda () ,result-type
-;;                 ,(string-append result " = "
-;;                                 (symbol->string name) "."
-;;                                 (symbol->string param) ";")))))
-
-;; (define-macro (render-pixel-sprite name sprite-index)
-;;   (let ((id (string->symbol (string-append (symbol->string name)
-;;                                            (number->string sprite-index)))))
-;;     `(glDrawPixels (get-pixelmap-param ,id width)
-;;                    (get-pixelmap-param ,id height)
-;;                    GL_RGB
-;;                    GL_UNSIGNED_BYTE
-;;                    (cast-pointer GLvoid* GLubyte*
-;;                                  (get-pixelmap-param ,id pointer)))))
-
-;; (define-macro (create-single-state-renderer obj-type)
-;;   `(lambda (x y state)
-;;      (glRasterPos2i x y)
-;;      (case state
-;;        ((0) (render-pixel-sprite ,obj-type 0))
-;;        (else
-;;         (error "cannot draw sprite: invalid state.")))))
-
-;; (define-macro (create-2-state-renderer ship-type)
-;;   `(lambda (x y state)
-;;      (glRasterPos2i x y)
-;;      (case state
-;;        ((0) (render-pixel-sprite ,ship-type 0))
-;;        ((1) (render-pixel-sprite ,ship-type 1))
-;;        (else
-;;         (error "cannot draw sprite: invalid state.")))))
-
-;; (define-macro (create-4-state-renderer obj-type)
-;;   `(lambda (x y state)
-;;      (glRasterPos2i x y)
-;;      (case state
-;;        ((0) (render-pixel-sprite ,obj-type 0))
-;;        ((1) (render-pixel-sprite ,obj-type 1))
-;;        ((2) (render-pixel-sprite ,obj-type 2))
-;;        ((3) (render-pixel-sprite ,obj-type 3))
-;;        (else
-;;         (error "cannot draw sprite: invalid state.")))))
+;;(define-symmetric-font 'bb_fonts 8 8)
 
 (define (render-sprite sprite-name x y state)
   (if (not (number? state)) (error "sprite state must be a number."))
@@ -271,6 +190,10 @@
 
 (define FPS (create-simple-moving-avg))
 
+;; (define (render-string x y str)
+;;   (for-each (lambda (char) (draw-char 'white char x y))
+;;             (string->list str)))
+
 (define render-scene
   (let ((last-render-time 0))
     (lambda (level)
@@ -303,6 +226,8 @@
        0 11 
        (with-output-to-string "" (lambda () (show "FPS: " (FPS))))
        'white)
+
+;;      (render-string 20 20 "TESTING 1 - 2")
       
       (glFlush)
       (glutSwapBuffers))))

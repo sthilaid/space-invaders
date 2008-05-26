@@ -1,7 +1,9 @@
-(include "scm-lib.scm")
-(include "texture.scm")
-(include "sprite.scm")
-(include "font.scm")
+(include "scm-lib-macro.scm")
+(include "texture-macro.scm")
+(include "sprite-macro.scm")
+(include "font-macro.scm")
+(include "opengl-header.scm")
+;;(include "ppm-reader.scm")
 
 
 ;;;;;;;;;;;;;;;;;;;;;;; Global state variables  ;;;;;;;;;;;;;;;;;;;;;;;
@@ -38,9 +40,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;; Render-Sceneing function ;;;;;;;;;;;;;;;;;;;;;;;
 
-(include "opengl-header.scm")
-(include "ppm-reader.scm")
-
 (define-sprite "sprites/laserA0.ppm")
 (define-sprite "sprites/laserA1.ppm")
 (define-sprite "sprites/laserB0.ppm")
@@ -65,7 +64,7 @@
 (define-sprite "sprites/explodeP1.ppm")
 (define-sprite "sprites/explodeInvL0.ppm")
 
-;;(define-symmetric-font 'bb_fonts 8 8)
+(define-symmetric-font 'bb_fonts 8 8)
 
 (define (render-sprite sprite-name x y state)
   (if (not (number? state)) (error "sprite state must be a number."))
@@ -79,8 +78,10 @@
   (let* ((pos (game-object-pos msg-obj))
          (x (pos2d-x pos))
          (y (pos2d-y pos))
-         (state (game-object-state msg-obj)))
-    (display-message x y (message-obj-text msg-obj) state)))
+         (color (game-object-state msg-obj))
+         (str (message-obj-text msg-obj)))
+    (render-string x y str color)))
+    ;;(display-message x y (message-obj-text msg-obj) state)))
 
 (define (render-shield shield)
   (glBlendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA)
@@ -167,7 +168,7 @@
 
   ;; Draw lives
   (let ((nb-lives (game-level-lives level)))
-    (display-message 13 0 (number->string nb-lives) 'white)
+    (render-string 13 0 (number->string nb-lives) 'white)
     (for i 0 (< i (- nb-lives 1))
          (render-sprite 'player (+ 30 (* i 15)) 0 0))))
   
@@ -180,19 +181,23 @@
       (render-game-level level)))
 
 
-(define (display-message x y msg color)
-  (let ((chars (map char->integer (string->list msg)))
-        (font GLUT_BITMAP_HELVETICA_12))
-    (set-openGL-color color)
-    (glRasterPos2i x y)
-    (for-each (lambda (char) (glutBitmapCharacter font char))
-              chars)))
+;; (define (display-message x y msg color)
+;;   (let ((chars (map char->integer (string->list msg)))
+;;         (font GLUT_BITMAP_HELVETICA_12))
+;;     (set-openGL-color color)
+;;     (glRasterPos2i x y)
+;;     (for-each (lambda (char) (glutBitmapCharacter font char))
+;;               chars)))
 
 (define FPS (create-simple-moving-avg))
 
-;; (define (render-string x y str)
-;;   (for-each (lambda (char) (draw-char 'white char x y))
-;;             (string->list str)))
+(define (render-string x y str color)
+  (if (not (eq? color 'black))
+      (let loop ((i 0) (chars (string->list str)))
+        (if (pair? chars)
+            (begin
+              (draw-char color (car chars) x y i)
+              (loop (+ i 1) (cdr chars)))))))
 
 (define render-scene
   (let ((last-render-time 0))
@@ -222,12 +227,12 @@
         (set! last-render-time now))
 
       ;;draw frame-rate just over the green line
-      (display-message
+      (render-string
        0 11 
        (with-output-to-string "" (lambda () (show "FPS: " (FPS))))
        'white)
 
-;;      (render-string 20 20 "TESTING 1 - 2")
+      ;;(render-string 20 20 "TESTING 1 - 2")
       
       (glFlush)
       (glutSwapBuffers))))

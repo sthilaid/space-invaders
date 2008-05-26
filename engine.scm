@@ -1,6 +1,6 @@
-(include "scm-lib.scm")
-(include "ppm-reader.scm")
-(include "event-simulation.scm")
+;; (include "scm-lib.scm")
+;; (include "ppm-reader.scm")
+(include "event-simulation-macro.scm")
 
 ;;*****************************************************************************
 ;;
@@ -420,17 +420,17 @@
    (lambda (m) (level-add-object! level m))
    (append 
     (list
-     (make-message-obj 'top-banner type (make-pos2d 13 y) state speed
+     (make-message-obj 'top-banner type (make-pos2d 2 y) state speed
                        "SCORE<1>  HI-SCORE  SCORE<2>")
      (make-message-obj 'hi-score-msg type
-                       (make-pos2d 93 (- y 17)) state speed
+                       (make-pos2d 95 (- y 17)) state speed
                        (get-score-string hi-score)))
     (if (game-level? level)
         (list
          (make-message-obj 'player2-score-msg type
-                           (make-pos2d 173 (- y 17)) state speed "")
+                           (make-pos2d 175 (- y 17)) state speed "")
          (make-message-obj 'player1-score-msg type
-                           (make-pos2d 30 (- y 17)) state speed ""))
+                           (make-pos2d 15 (- y 17)) state speed ""))
         '()))))
     
 (define (new-level hi-score number-of-players player-id)

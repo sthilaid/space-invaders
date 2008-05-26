@@ -11,15 +11,14 @@
 
 (define-macro (define-texture declaration-code generation-code
                 tex-pointer width height)
-  (include "ppm-reader.scm")
-  (include "scm-lib.scm")
+;;   (include "ppm-reader.scm")
+;;   (include "scm-lib.scm")
 
   (let* ((tex-id (gensym 'tex-id))
          ;; this init script code must be embeded in an environment
          ;; that will bind the ,tex-id variable.
          (init-script
           `(begin
-             (pp (list 'generating 'texture ,tex-id))
              (glBindTexture GL_TEXTURE_2D ,tex-id)
              (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_S GL_CLAMP)
              (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_T GL_CLAMP)

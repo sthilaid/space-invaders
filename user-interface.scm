@@ -64,7 +64,20 @@
 (define-sprite "sprites/explodeP1.ppm")
 (define-sprite "sprites/explodeInvL0.ppm")
 
-(define-symmetric-font 'bb_fonts 8 8)
+(define display-fps? #f)
+
+(define-symmetric-font "bb_fonts" 8 8)
+(define-symmetric-font "f_operationwolf" 8 8)
+(define-symmetric-font "f_syvalion" 16 16)
+(define current-font "bb_fonts")
+(define cycle-font!
+  (let* ((fonts (map car (table->list global-fonts-table)))
+         (index 0)
+         (fonts-nb (length fonts)))
+    (lambda ()
+      (set! index (modulo (+ index 1) fonts-nb))
+      (set! current-font (list-ref fonts index))
+      (pp `(current-font is now ,current-font)))))
 
 (define (render-sprite sprite-name x y state)
   (if (not (number? state)) (error "sprite state must be a number."))
@@ -196,7 +209,7 @@
       (let loop ((i 0) (chars (string->list str)))
         (if (pair? chars)
             (begin
-              (draw-char color (car chars) x y i)
+              (draw-char current-font color (car chars) x y i)
               (loop (+ i 1) (cdr chars)))))))
 
 (define render-scene
@@ -220,17 +233,18 @@
       
       ;; Draw background stuff
       (render-level level)
-      
+
       (let ((now (time->seconds (current-time))))
         (if (not (= last-render-time 0))
             (FPS (/ 1 (- now last-render-time))))
         (set! last-render-time now))
 
       ;;draw frame-rate just over the green line
-      (render-string
-       0 11 
-       (with-output-to-string "" (lambda () (show "FPS: " (FPS))))
-       'white)
+      (if display-fps?
+          (render-string
+           0 11 
+           (with-output-to-string "" (lambda () (show "FPS: " (FPS))))
+           'white))
 
       ;;(render-string 20 20 "TESTING 1 - 2")
       
@@ -279,7 +293,8 @@
 
 (c-define (keyboard key x y) (unsigned-char int int) void "keyboard" ""
  (case key
-   ((#\f #\F) (show "average FPS = " (FPS) "\n"))
+   ((#\f #\F) (set! display-fps? (not display-fps?)))
+   ((#\n #\N) (cycle-font!))
    ;; On Escape, Ctl-q, Ctl-c, Ctl-w, q -> terminate the program
    ((#\x1b #\x11 #\x03 #\x17 #\q) (quit))
    (else (register-user-action key))))

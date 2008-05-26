@@ -7,6 +7,7 @@
 
 (define (initialize-textures!)
   (for-each (lambda (t)
+              (pp `(initializing texture ,(car t)))
               ((texture-init-script (cdr t))))
             (table->list texture-table)))
 

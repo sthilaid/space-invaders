@@ -41,11 +41,8 @@
 ;;  (include "ppm-reader.scm")
 ;;  (include "scm-lib.scm")
   
-  (let* ((image-file (string-append "fonts/" (symbol->string font-name )
-                                    ".ppm"))
-         (font-data-file
-          (string-append "fonts/" (symbol->string font-name )
-                         ".scm"))
+  (let* ((image-file     (string-append "fonts/" font-name ".ppm"))
+         (font-data-file (string-append "fonts/" font-name ".scm"))
          (ppm-data (parse-ppm-image-file image-file))
          (font-data (with-input-from-file font-data-file
                       (lambda () (read))))
@@ -93,14 +90,23 @@
 
 (define current-font #f)
 
-(define (draw-char color char x y x-offset)
+(define global-fonts-table (make-table))
+
+(define (add-new-font! font-name font-obj)
+  (table-set! global-fonts-table font-name font-obj))
+
+(define (get-font font-name)
+  (table-ref global-fonts-table font-name))
+
+
+(define (draw-char font-name color char x y x-offset)
 ;;  (include "texture.scm")
 
-  (let ((font-name (font-id current-font))
-        (char-font (font-get-char-font current-font color char))
-        (char-width (font-width current-font))
-        (char-height (font-height current-font))
-        (texture-id (font-texture-id current-font))
-        (font-update-fun (font-update-fun current-font)))
+  (let* ((current-font (get-font font-name))
+         (char-font (font-get-char-font current-font color char))
+         (char-width (font-width current-font))
+         (char-height (font-height current-font))
+         (texture-id (font-texture-id current-font))
+         (font-update-fun (font-update-fun current-font)))
     (font-update-fun char-font texture-id)
-    (draw-texture "internal_font_image" (+ x (* x-offset char-width)) y)))
+    (draw-texture font-name (+ x (* x-offset char-width)) y)))

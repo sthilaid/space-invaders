@@ -46,21 +46,21 @@
          (with-output-to-string
            ""
            (lambda ()
-             (show "GLubyte internal_font_image["char-height"]["
-                   char-width"][4];\n"))))
+             (show "GLubyte "font-name"["char-height"]"
+                   "["char-width"][4];\n"))))
         ;; dummy texture generation code used. Will be set later,
         ;; before being drawn.
         (generation-code "1+1;")
-        (update-fun 'todo))
+        (update-fun
+         `(generate-update-function ,font-name
+                                    ,char-width ,char-height)))
     `(begin
        (define-texture ,declaration-code ,generation-code
-         "internal_font_image" ,char-width ,char-height)
-       (define current-font
-         (make-font ,font-name
-                    (texture-id
-                     (table-ref texture-table "internal_font_image"))
-                    ,char-width ,char-height
-                    (get-font-table ,font-name ,char-width ,char-height)
-                    (generate-update-function "internal_font_image"
-                                              ,char-width
-                                              ,char-height))))))
+         ,font-name ,char-width ,char-height)
+       (add-new-font!
+        ,font-name
+        (make-font ,font-name
+                   (texture-id (table-ref texture-table ,font-name))
+                   ,char-width ,char-height
+                   (get-font-table ,font-name ,char-width ,char-height)
+                   ,update-fun)))))

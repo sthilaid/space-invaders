@@ -115,7 +115,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;; General game object description ;;;;
-(define-type game-object id type pos state speed
+(define-type game-object id type pos state color speed
   extender: define-type-of-game-object)
 
 (define (cycle-state! obj)
@@ -132,6 +132,14 @@
                 (rect-y (object-type-bbox (game-object-type obj))))
              (type-width (game-object-type obj))
              (type-height (game-object-type obj))))
+
+(define (choose-color pos)
+  (let ((y (pos2d-y pos)))
+    (cond 
+     ((> y 200) 'red)
+     ((> y 100) 'white)
+     ((> y 10) 'green)
+     (else 'white))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -166,14 +174,20 @@
      (hard ,(make-object-type 'hard (make-rect 0 0 12 8) 2 30))
      (mothership ,(make-object-type 'mothership (make-rect 0 0 16 7) 1 100))
      (player ,(make-object-type 'player (make-rect 0 0 13 8) 1 0))
-     (laserA ,(make-object-type 'laserA (make-rect 1 0 1 6) 2 0))
-     (laserB ,(make-object-type 'laserB (make-rect 1 0 1 6) 3 0))
-     (laserP ,(make-object-type 'laserP (make-rect 0 0 1 5) 1 0))
+     (laserA ,(make-object-type 'laserA (make-rect 1 0 1 7) 6 0))
+     (laserB ,(make-object-type 'laserB (make-rect 1 0 1 7) 8 0))
+     (laserC ,(make-object-type 'laserC (make-rect 1 0 1 7) 4 0))
+     (player_laser
+      ,(make-object-type 'player_laser (make-rect 0 0 1 7) 1 0))
      (shield ,(make-object-type 'shield (make-rect 0 0 22 16) 1 0))
-     (explodeI ,(make-object-type 'explodeI (make-rect 0 0 13 8) 1 0))
-     (explodeInvL ,(make-object-type 'explodeInvL (make-rect 0 0 6 8) 1 0))
-     (explodeS ,(make-object-type 'explodeS (make-rect 0 0 8 8) 1 0))
-     (explodeP ,(make-object-type 'explodeP (make-rect 0 0 16 8) 2 0))
+     (invader_explosion
+      ,(make-object-type 'invader_explosion (make-rect 0 0 13 8) 1 0))
+     (invader_laser_explosion
+      ,(make-object-type 'invader_laser_explosion (make-rect 0 0 6 8) 1 0))
+     (player_laser_explosion
+      ,(make-object-type 'player_laser_explosion (make-rect 0 0 8 8) 1 0))
+     (player-explosion
+      ,(make-object-type 'player_explsion (make-rect 0 0 16 8) 2 0))
      (message ,(make-object-type 'message (make-rect 0 0 0 0) 0 0))
    ))
 
@@ -229,18 +243,18 @@
       (rgb-pixels-to-boolean-point-list
        (parse-ppm-image-file "sprites/shield0.ppm")))
 
-  (list (make-shield 'shield1 shield-type (make-pos2d  36 40) 0
+  (list (make-shield 'shield1 shield-type (make-pos2d  36 40) 0 'green
                      speed (generate-particles))
-        (make-shield 'shield2 shield-type (make-pos2d  81 40) 0
+        (make-shield 'shield2 shield-type (make-pos2d  81 40) 0 'green
                      speed (generate-particles))
-        (make-shield 'shield3 shield-type (make-pos2d 126 40) 0
+        (make-shield 'shield3 shield-type (make-pos2d 126 40) 0 'green
                      speed (generate-particles))
-        (make-shield 'shield4 shield-type (make-pos2d 171 40) 0
+        (make-shield 'shield4 shield-type (make-pos2d 171 40) 0 'green
                      speed (generate-particles))))
 
 (define (get-explosion-particles colliding-obj)
   (let ((type-id (type-id (game-object-type colliding-obj))))
-    (cond ((eq? type-id 'laserP) player-laser-explosion-particles)
+    (cond ((eq? type-id 'player_laser) player-laser-explosion-particles)
           ((or (eq? type-id 'laserA)
                (eq? type-id 'laserB))
            invader-laser-explosion-particles)
@@ -390,7 +404,7 @@
          (state 0)
          (speed (make-pos2d 0 0))
          (player-ship (make-player-ship 'player
-                                        player-type pos state speed)))
+                                        player-type pos state 'green speed)))
     (level-add-object! level player-ship)))
 
 (define (play-level level)
@@ -420,17 +434,17 @@
    (lambda (m) (level-add-object! level m))
    (append 
     (list
-     (make-message-obj 'top-banner type (make-pos2d 2 y) state speed
+     (make-message-obj 'top-banner type (make-pos2d 2 y) state 'white speed
                        "SCORE<1>  HI-SCORE  SCORE<2>")
      (make-message-obj 'hi-score-msg type
-                       (make-pos2d 95 (- y 17)) state speed
+                       (make-pos2d 95 (- y 17)) state 'white speed
                        (get-score-string hi-score)))
     (if (game-level? level)
         (list
          (make-message-obj 'player2-score-msg type
-                           (make-pos2d 175 (- y 17)) state speed "")
+                           (make-pos2d 175 (- y 17)) state 'white speed "")
          (make-message-obj 'player1-score-msg type
-                           (make-pos2d 15 (- y 17)) state speed ""))
+                           (make-pos2d 15 (- y 17)) state 'white speed ""))
         '()))))
     
 (define (new-level hi-score number-of-players player-id)
@@ -635,7 +649,7 @@
 
 (define (destroy-laser! level laser-obj)
   (level-remove-object! level laser-obj)
-  (if (not (eq? (object-type-id (game-object-type laser-obj)) 'laserP))
+  (if (not (eq? (object-type-id (game-object-type laser-obj)) 'player_laser))
       (in next-invader-laser-interval (create-invader-laser-event level))
       (set! player-laser-last-destruction-time
             (time->seconds (current-time)))))
@@ -651,7 +665,7 @@
         
         ((laser-obj? collision-obj)
          (let ((inv-laser
-                (if (not (eq? type-id 'laserP)) laser-obj collision-obj)))
+                (if (not (eq? type-id 'player_laser)) laser-obj collision-obj)))
            (explode-laser! level inv-laser)
            (destroy-laser! level inv-laser)))
         
@@ -739,7 +753,7 @@
            (text (if (eq? player-id 'p2)
                      "PLAY  PLAYER<2>"
                      "PLAY  PLAYER<1>"))
-           (msg (make-message-obj 'start-msg type pos state speed text))
+           (msg (make-message-obj 'start-msg type pos state 'white speed text))
            (new-cont
             (lambda ()
               (level-remove-object! level msg)
@@ -774,7 +788,7 @@
            (speed (make-pos2d invader-x-movement-speed 0))
            (invader
             (make-invader-ship
-             (gensym 'inv) current-type pos state speed row col)))
+             (gensym 'inv) current-type pos state 'white speed row col)))
       (level-add-object! level invader)))
                          
   (define (generate-inv-event row col)
@@ -859,6 +873,7 @@
                             (get-type 'mothership)
                             (make-pos2d wall-x-offset 201)
                             0
+                            'red
                             mothership-movement-speed)))
     (level-add-object! level mothership)
     (in 0 (create-mothership-event level)))))
@@ -905,7 +920,7 @@
     (if (not (exists (lambda (obj)
                        (and (laser-obj? obj)
                             (not (eq? (object-type-id (game-object-type obj))
-                                      'laserP))))
+                                      'player_laser))))
                      (level-all-objects level)))
         (let* ((candidates (get-candidates))
                (canditate-nb (length candidates))
@@ -926,7 +941,7 @@
   ;; if the shot laser is a player laser, there must not be another
   ;; player laser in the game or the player-laser-refresh-constraint
   ;; must be elabsed before shooting a new one.
-  (if (not (and (eq? laser-type 'laserP)
+  (if (not (and (eq? laser-type 'player_laser)
                 (or (level-player-laser level)
                     (< (- (time->seconds (current-time))
                           player-laser-last-destruction-time)
@@ -942,7 +957,7 @@
                        invader-y-movement-speed)
                     (+ shooter-y
                        (type-height (game-object-type shooter-obj)))))
-             (laser-id (if (eq? laser-type 'laserP)
+             (laser-id (if (eq? laser-type 'player_laser)
                            'player-laser
                            (gensym 'inv-laser)))
              (laser-obj (make-laser-obj
@@ -950,6 +965,7 @@
                          (get-type laser-type)
                          (make-pos2d x y)
                          0
+                         'white
                          (make-pos2d 0 dy))))
         (level-add-object! level laser-obj)
         (in 0 (create-laser-event laser-obj level)))))
@@ -981,7 +997,7 @@
 ;; original game.
 (define (explode-invader! level inv)
   (define animation-duration 0.3)
-  (game-object-type-set! inv (get-type 'explodeI))
+  (game-object-type-set! inv (get-type 'invader-explosion))
   (game-object-state-set! inv 0)
   (in animation-duration (create-explosion-end-event! level inv)))
 
@@ -991,7 +1007,8 @@
     (make-game-object (gensym 'explosion)
                       (get-type 'explodeP)
                       (game-object-pos player)
-                      0 (make-pos2d 0 0)))
+                      0 (choose-color (game-object-pos player))
+                      (make-pos2d 0 0)))
   (level-loose-1-life! level)
   (level-add-object! level expl-obj)
   (level-remove-object! level player)
@@ -1049,14 +1066,14 @@
 (define (explode-laser! level laser-obj)
   (define animation-duration 0.3)
   (define (laser-type-id) (object-type-id (game-object-type laser-obj)))
-  (define expl-type (if (eq? (laser-type-id) 'laserP)
-                        (get-type 'explodeS)
-                        (get-type 'explodeInvL)))
+  (define expl-type (if (eq? (laser-type-id) 'player_laser)
+                        (get-type 'player_laser_explosion)
+                        (get-type 'invader-laser-explosion)))
   (define (center-pos pos)
     ;; FIXME: ugly hack where only player laser's explotion are
     ;; centered in x. I'm unsure why other lasers don't require this
     ;; shift so far...
-    (if (eq? (laser-type-id) 'laserP)
+    (if (eq? (laser-type-id) 'player_laser)
         (pos2d-sub pos (make-pos2d (floor (/ (type-width expl-type) 2))
                                    0))
         pos))
@@ -1064,7 +1081,9 @@
     (make-game-object (gensym 'explosion)
                       expl-type
                       (center-pos (game-object-pos laser-obj))
-                      0 (make-pos2d 0 0)))
+                      0
+                      (choose-color (game-object-pos laser-obj))
+                      (make-pos2d 0 0)))
   (level-add-object! level obj)
   (in animation-duration (create-explosion-end-event! level obj)))
 
@@ -1128,19 +1147,25 @@
 
   (lambda ()
     (let* ((play (let ((pos (make-pos2d 101 (- screen-max-y 88))))
-                   (make-message-obj 'play msg-type pos state speed "")))
+                   (make-message-obj 'play msg-type
+                                     pos state state speed "")))
            (space (let ((pos (make-pos2d 61 (- screen-max-y 112))))
-                    (make-message-obj 'space msg-type pos state speed "")))
+                    (make-message-obj 'space msg-type
+                                      pos state state speed "")))
            (score (let ((pos (make-pos2d 37 (- screen-max-y 144))))
-                    (make-message-obj 'score msg-type pos state speed "")))
+                    (make-message-obj 'score msg-type
+                                      pos state state speed "")))
            (mother (let ((pos (make-pos2d 85 (- screen-max-y 160))))
-                     (make-message-obj 'mother msg-type pos state speed "")))
+                     (make-message-obj 'mother msg-type
+                                       pos state state speed "")))
            (hard (let ((pos (make-pos2d 85 (- screen-max-y 176))))
-                   (make-message-obj 'hard msg-type pos state speed "")))
+                   (make-message-obj 'hard msg-type
+                                     pos state state speed "")))
            (medium (let ((pos (make-pos2d 85 (- screen-max-y 192))))
-                     (make-message-obj 'medium msg-type pos state speed "")))
+                     (make-message-obj 'medium msg-type
+                                       pos state state speed "")))
            (easy (let ((pos (make-pos2d 85 (- screen-max-y 208))))
-               (make-message-obj 'easy msg-type pos state speed "")))
+               (make-message-obj 'easy msg-type pos state state speed "")))
            (anim-messages
             (list play space score mother hard medium easy)))
              
@@ -1155,14 +1180,33 @@
   (define speed (make-pos2d 0 0))
   (define (pos x y) (make-pos2d x (- screen-max-y y)))
   (lambda ()
-    (let ((mothership (make-mothership 'mothership (get-type 'mothership)
-                                   (pos 68 160) 0 speed))
-          (hard-ship (make-invader-ship 'hard-ship (get-type 'hard)
-                                   (pos 72 176) 0 speed 0 0))
-          (medium-ship (make-invader-ship 'medium-ship (get-type 'medium)
-                                     (pos 71 192) 0 speed 0 0))
-          (easy-ship (make-invader-ship 'easy-ship (get-type 'easy)
-                                   (pos 70 208) 0 speed 0 0))
+    (let ((mothership (make-mothership 'mothership
+                                       (get-type 'mothership)
+                                       (pos 68 160)
+                                       0
+                                       (choose-color (pos 68 160))
+                                       speed))
+          (hard-ship (make-invader-ship 'hard-ship
+                                        (get-type 'hard)
+                                        (pos 72 176)
+                                        0
+                                        (choose-color (pos 72 176))
+                                        speed
+                                        0 0))
+          (medium-ship (make-invader-ship 'medium-ship
+                                          (get-type 'medium)
+                                          (pos 71 192)
+                                          0
+                                          (choose-color (pos 72 176))
+                                          speed
+                                          0 0))
+          (easy-ship (make-invader-ship 'easy-ship
+                                        (get-type 'easy)
+                                        (pos 70 208)
+                                        0
+                                        (choose-color (pos 72 176))
+                                        speed
+                                        0 0))
           (score-msg-obj (level-get level 'score)))
       (for-each (lambda (ship) (level-add-object! level ship))
                 (list mothership hard-ship medium-ship easy-ship))
@@ -1188,7 +1232,8 @@
            (type (get-type 'message))
            (pos (make-pos2d 37 (- screen-max-y 248)))
            (speed (make-pos2d 0 0))
-           (msg-obj (make-message-obj 'game-over-msg type pos 'green speed "")))
+           (msg-obj (make-message-obj 'game-over-msg type
+                                      pos 'green 'green speed "")))
       (level-add-object! level msg-obj)
       (in 0 (animate-message
              msg-obj text
@@ -1200,7 +1245,8 @@
     (let* ((type (get-type 'message))
            (pos (make-pos2d 77 (- screen-max-y 60)))
            (speed (make-pos2d 0 0))
-           (msg-obj (make-message-obj 'game-over-msg type pos 'red speed "")))
+           (msg-obj (make-message-obj 'game-over-msg type
+                                      pos 'red 'red speed "")))
       (level-add-object! level msg-obj)
       (in 0 (animate-message
              msg-obj "GAME OVER"
@@ -1231,7 +1277,7 @@
             (case msg
               ((#\space)
                (if (player-can-move?)
-                   (shoot-laser! level 'laserP
+                   (shoot-laser! level 'player_laser
                                  (level-player level)
                                  player-laser-speed)))
               ((right-arrow)

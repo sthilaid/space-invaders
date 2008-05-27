@@ -1,10 +1,9 @@
 (include "scm-lib-macro.scm")
 
-(define-type font id texture-id width height table update-fun)
+(define-type font id texture-id width height table)
 
-(define (font-get-char-font font-obj color char)
-  (table-ref (font-table font-obj) `(,color ,char)))
-
+(define (change-current-char! font color char)
+  ((table-ref (font-table font) (list color char))))
 
 
 (define (get-char pixels-vector x y width height char-width char-height)
@@ -100,13 +99,7 @@
 
 
 (define (draw-char font-name color char x y x-offset)
-;;  (include "texture.scm")
-
   (let* ((current-font (get-font font-name))
-         (char-font (font-get-char-font current-font color char))
-         (char-width (font-width current-font))
-         (char-height (font-height current-font))
-         (texture-id (font-texture-id current-font))
-         (font-update-fun (font-update-fun current-font)))
-    (font-update-fun char-font texture-id)
+         (char-width (font-width current-font)))
+    (change-current-char! current-font color char)
     (draw-texture font-name (+ x (* x-offset char-width)) y)))

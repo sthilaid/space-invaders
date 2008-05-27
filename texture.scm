@@ -1,4 +1,6 @@
 (define-type texture id width height init-script)
+(define (retrieve-texture texture-name)
+  (table-ref texture-table texture-name))
 
 (define texture-table (make-table))
 

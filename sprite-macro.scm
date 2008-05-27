@@ -43,6 +43,18 @@
                              image-name "["y"]["x"][1] = "g";\n"
                              image-name "["y"]["x"][2] = "b";\n"
                              image-name "["y"]["x"][3] = "
-                             alpha";\n"))))))))
-    `(define-texture ,declaration-code ,image-generation-code
+                             alpha";\n")))))))
+         (init-script
+          (let ((tex-id-sym (gensym 'tex-id)))
+          `(lambda (,tex-id-sym)
+             (lambda ()
+               (glBindTexture GL_TEXTURE_2D ,tex-id-sym)
+               (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_S GL_CLAMP)
+               (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_T GL_CLAMP)
+               (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MAG_FILTER GL_NEAREST)
+               (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MIN_FILTER GL_NEAREST)
+               (attach-texture ,image-name ,width-power-of-2
+                               ,height-power-of-2))))))
+
+    `(define-texture ,declaration-code ,image-generation-code ,init-script
        ,image-name ,width-power-of-2 ,height-power-of-2)))

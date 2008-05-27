@@ -67,8 +67,8 @@
 (define display-fps? #f)
 
 (define-symmetric-font "bb_fonts" 8 8)
-(define-symmetric-font "f_operationwolf" 8 8)
-(define-symmetric-font "f_syvalion" 16 16)
+;;(define-symmetric-font "f_operationwolf" 8 8)
+;;(define-symmetric-font "f_syvalion" 16 16)
 (define current-font "bb_fonts")
 (define cycle-font!
   (let* ((fonts (map car (table->list global-fonts-table)))

@@ -1,7 +1,7 @@
 (include "scm-lib-macro.scm")
-(include "texture-macro.scm")
-(include "sprite-macro.scm")
-(include "font-macro.scm")
+;; (include "texture-macro.scm")
+;; (include "sprite-macro.scm")
+;; (include "font-macro.scm")
 (include "opengl-header.scm")
 ;;(include "ppm-reader.scm")
 
@@ -40,35 +40,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;; Render-Sceneing function ;;;;;;;;;;;;;;;;;;;;;;;
 
-(define-sprite "sprites/laserA0.ppm")
-(define-sprite "sprites/laserA1.ppm")
-(define-sprite "sprites/laserB0.ppm")
-(define-sprite "sprites/laserB1.ppm")
-(define-sprite "sprites/laserB2.ppm")
-(define-sprite "sprites/laserB3.ppm")
-(define-sprite "sprites/laserB4.ppm")
-(define-sprite "sprites/laserP0.ppm")
-(define-sprite "sprites/shield0.ppm")
-(define-sprite "sprites/easy0.ppm")
-(define-sprite "sprites/easy1.ppm")
-(define-sprite "sprites/medium0.ppm")
-(define-sprite "sprites/medium1.ppm")
-(define-sprite "sprites/hard0.ppm")
-(define-sprite "sprites/hard1.ppm")
-(define-sprite "sprites/mothership0.ppm")
-(define-sprite "sprites/player0.ppm")
-(define-sprite "sprites/player1.ppm")
-(define-sprite "sprites/explodeI0.ppm")
-(define-sprite "sprites/explodeS0.ppm")
-(define-sprite "sprites/explodeP0.ppm")
-(define-sprite "sprites/explodeP1.ppm")
-(define-sprite "sprites/explodeInvL0.ppm")
 
 (define display-fps? #f)
 
-(define-symmetric-font "bb_fonts" 8 8)
-;;(define-symmetric-font "f_operationwolf" 8 8)
-;;(define-symmetric-font "f_syvalion" 16 16)
 (define current-font "bb_fonts")
 (define cycle-font!
   (let* ((fonts (map car (table->list global-fonts-table)))
@@ -85,6 +59,17 @@
          (string-append (symbol->string sprite-name)
                         (number->string state))))
     (draw-sprite sprite-name x y)))
+
+(define (render-string x y str color)
+  (if (not (eq? color 'black))
+      (let loop ((i 0) (chars (string->list str)))
+        (if (pair? chars)
+            (begin
+              (draw-char current-font color (car chars) x y i)
+              (loop (+ i 1) (cdr chars)))))))
+
+(define (render-fontified-sprite sprite-name x y state color)
+  (draw-char (symbol->string sprite-name) color state x y 0))
 
 (define (render-message msg-obj)
   (glBlendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA)
@@ -120,7 +105,9 @@
     ((hard)   (render-sprite 'hard x y state))
     ((player) (render-sprite 'player x y state))
     ((laserA) (render-sprite 'laserA x y state))
-    ((laserB) (render-sprite 'laserB x y state))
+    ((laserB) ;;(render-sprite 'laserB x y state))
+     (render-fontified-sprite
+      'laserB x y state (list-ref '(white green red) (random-integer 3))))
     ((laserP) (render-sprite 'laserP x y state))
     ((explodeI) (render-sprite 'explodeI x y state))
     ((explodeInvL) (render-sprite 'explodeInvL x y state))
@@ -203,14 +190,6 @@
 ;;               chars)))
 
 (define FPS (create-simple-moving-avg))
-
-(define (render-string x y str color)
-  (if (not (eq? color 'black))
-      (let loop ((i 0) (chars (string->list str)))
-        (if (pair? chars)
-            (begin
-              (draw-char current-font color (car chars) x y i)
-              (loop (+ i 1) (cdr chars)))))))
 
 (define render-scene
   (let ((last-render-time 0))

@@ -30,7 +30,8 @@
       (glTexCoord2f 1.0 0.0) (glVertex2i (+ x width) y))
     (glEnd)
     (glDisable GL_TEXTURE_2D)
-    ;;(glBlendFunc GL_DST_COLOR GL_DST_ALPHA)
+    
+;;     (glBlendFunc GL_DST_COLOR GL_DST_ALPHA)
 ;;     (glBlendFunc GL_ZERO GL_SRC_COLOR)
 ;;     (glColor4f 0. 0. 1. 1.)
 ;;     (glBegin GL_QUADS)

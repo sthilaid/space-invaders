@@ -2,13 +2,13 @@ GLUT_FILES = opengl.scm opengl-header.scm glu.scm glu-header.scm glut.scm glut-h
 
 GRAPHICS_FILES = $(wildcard sprites/*.ppm)
 
-SPACE_INVADERS_FILES =  scm-lib.scm rbtree.scm ppm-reader.scm event-simulation.scm texture.scm sprite.scm font.scm coroutine.scm engine.scm user-interface.scm 
+SPACE_INVADERS_FILES =  scm-lib.scm rbtree.scm ppm-reader.scm event-simulation.scm texture.scm sprite.scm font.scm coroutine.scm engine.scm user-interface-images.scm user-interface.scm 
 
 PATH_TO_GAMBIT=/opt/gambit-c/current
 GAMBIT_LIB=$(PATH_TO_GAMBIT)/lib
 GAMBIT_INCLUDE=$(PATH_TO_GAMBIT)/include
 GSC=gsc -:=$(PATH_TO_GAMBIT) -debug
-CC=gcc -g
+CC=gcc
 INCLUDE_OPTIONS=-I$(GAMBIT_INCLUDE)
 LD_OPTIONS =-lglut -lgambc -lutil -L$(GAMBIT_LIB)
 
@@ -18,7 +18,7 @@ LD_OPTIONS =-lglut -lgambc -lutil -L$(GAMBIT_LIB)
 
 all: welcome space-invaders 
 
-space-invaders: $(GLUT_FILES:.scm=.c) $(SPACE_INVADERS_FILES:.scm=.c) space-invaders_.c 
+space-invaders: $(GLUT_FILES:.scm=.o) $(SPACE_INVADERS_FILES:.scm=.o) space-invaders_.o 
 	$(CC) $(INCLUDE_OPTIONS) -o $@ $^ $(LD_OPTIONS)
 
 space-invaders_.c: $(GLUT_FILES:.scm=.c) $(SPACE_INVADERS_FILES:.scm=.c)
@@ -30,6 +30,9 @@ user-interface.c: user-interface.scm scm-lib-macro.scm texture-macro.scm font-ma
 
 engine.c: engine.scm scm-lib.scm event-simulation.scm ppm-reader.scm coroutine.scm
 	$(GSC) -c engine.scm
+
+.c.o:
+	$(CC) $(INCLUDE_OPTIONS) -c $*.c
 
 .scm.c: 
 	$(GSC) -c $*

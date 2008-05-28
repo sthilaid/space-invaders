@@ -76,7 +76,7 @@
   (let* ((pos (game-object-pos msg-obj))
          (x (pos2d-x pos))
          (y (pos2d-y pos))
-         (color (game-object-state msg-obj))
+         (color (game-object-color msg-obj))
          (str (message-obj-text msg-obj)))
     (render-string x y str color)))
     ;;(display-message x y (message-obj-text msg-obj) state)))

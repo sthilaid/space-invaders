@@ -131,13 +131,17 @@
              (type-width (game-object-type obj))
              (type-height (game-object-type obj))))
 
-(define (choose-color pos)
-  (let ((y (pos2d-y pos)))
-    (cond 
-     ((> y 200) 'red)
-     ((> y 100) 'white)
-     ((> y 10) 'green)
-     (else 'white))))
+(define choose-color
+  (let ((red-bottom (- screen-max-y 81))
+        (normal-bottom (- screen-max-y 201))
+        (green-bottom (- screen-max-y 259)))
+    (lambda (pos)
+      (let ((y (pos2d-y pos)))
+        (cond 
+         ((> y red-bottom) 'red)
+         ((> y normal-bottom) 'white)
+         ((> y green-bottom) 'green)
+         (else 'white))))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -520,6 +524,7 @@
            (dx (pos2d-x speed))
            (dy (pos2d-y speed)))
       (cycle-state! obj)
+      (game-object-color-set! obj (choose-color pos))
       (pos2d-x-set! pos (+ x dx))
       (pos2d-y-set! pos (+ y dy))))
   
@@ -1125,10 +1130,10 @@
   (define animation-delay 0.2)
   (define original-color (game-object-state msg-obj))
   (define (cycle-msg-state! msg-obj)
-    (let ((current-state (game-object-state msg-obj)))
-      (game-object-state-set!
+    (let ((current-color (game-object-color msg-obj)))
+      (game-object-color-set!
        msg-obj
-       (if (eq? current-state 'black) original-color 'black))))
+       (if (eq? current-color 'black) original-color 'black))))
   (define (flash-ev dt)
     (lambda ()
       (if (< dt duration)
@@ -1146,25 +1151,26 @@
 
   (lambda ()
     (let* ((play (let ((pos (make-pos2d 101 (- screen-max-y 88))))
-                   (make-message-obj 'play msg-type
-                                     pos state state speed "")))
+                   (make-message-obj
+                    'play msg-type pos state (choose-color pos) speed "")))
            (space (let ((pos (make-pos2d 61 (- screen-max-y 112))))
-                    (make-message-obj 'space msg-type
-                                      pos state state speed "")))
+                    (make-message-obj
+                     'space msg-type pos state (choose-color pos) speed "")))
            (score (let ((pos (make-pos2d 37 (- screen-max-y 144))))
-                    (make-message-obj 'score msg-type
-                                      pos state state speed "")))
+                    (make-message-obj
+                     'score msg-type pos state (choose-color pos) speed "")))
            (mother (let ((pos (make-pos2d 85 (- screen-max-y 160))))
-                     (make-message-obj 'mother msg-type
-                                       pos state state speed "")))
+                     (make-message-obj
+                      'mother msg-type pos state (choose-color pos) speed "")))
            (hard (let ((pos (make-pos2d 85 (- screen-max-y 176))))
-                   (make-message-obj 'hard msg-type
-                                     pos state state speed "")))
+                   (make-message-obj
+                    'hard msg-type pos state (choose-color pos) speed "")))
            (medium (let ((pos (make-pos2d 85 (- screen-max-y 192))))
-                     (make-message-obj 'medium msg-type
-                                       pos state state speed "")))
+                     (make-message-obj
+                      'medium msg-type pos state (choose-color pos) speed "")))
            (easy (let ((pos (make-pos2d 85 (- screen-max-y 208))))
-               (make-message-obj 'easy msg-type pos state state speed "")))
+                   (make-message-obj
+                    'easy msg-type pos state (choose-color pos) speed "")))
            (anim-messages
             (list play space score mother hard medium easy)))
              
@@ -1196,14 +1202,14 @@
                                           (get-type 'medium)
                                           (pos 71 192)
                                           0
-                                          (choose-color (pos 72 176))
+                                          (choose-color (pos 71 192))
                                           speed
                                           0 0))
           (easy-ship (make-invader-ship 'easy-ship
                                         (get-type 'easy)
                                         (pos 70 208)
                                         0
-                                        (choose-color (pos 72 176))
+                                        (choose-color (pos 70 208))
                                         speed
                                         0 0))
           (score-msg-obj (level-get level 'score)))

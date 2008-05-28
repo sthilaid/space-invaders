@@ -1,4 +1,5 @@
-
+(include "opengl-header.scm")
+(include "glu-header.scm")
 (include "glut-header.scm")
 
 (c-declare #<<declare-end

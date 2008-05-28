@@ -24,11 +24,13 @@ space-invaders: $(GLUT_FILES:.scm=.o) $(SPACE_INVADERS_FILES:.scm=.o) space-inva
 space-invaders_.c: $(GLUT_FILES:.scm=.c) $(SPACE_INVADERS_FILES:.scm=.c)
 	$(GSC) -o $@ -link $^ 
 
+user-interface-images.c: user-interface-images.scm texture-macro.scm font-macro.scm scm-lib-macro.scm
+	$(GSC) -c user-interface-images.scm 
 
-user-interface.c: user-interface.scm scm-lib-macro.scm texture-macro.scm font-macro.scm sprite-macro.scm opengl-header.scm
+user-interface.c: user-interface.scm scm-lib-macro.scm opengl-header.scm
 	$(GSC) -c user-interface.scm 
 
-engine.c: engine.scm scm-lib.scm event-simulation.scm ppm-reader.scm coroutine.scm
+engine.c: engine.scm event-simulation-macro.scm
 	$(GSC) -c engine.scm
 
 .c.o:

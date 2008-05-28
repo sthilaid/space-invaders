@@ -241,10 +241,10 @@
       
       (glFlush)
       (glutSwapBuffers))))
-      
 
 
 
+  
 ;;;;;;;;;;;;;;;;;;;;;;; Viewport and projection ;;;;;;;;;;;;;;;;;;;;;;;
 
 (c-define (reshape w h) (int int) void "reshape" ""

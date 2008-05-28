@@ -1,5 +1,3 @@
-(include "opengl-header.scm")
-
 (c-define-type _GLUfuncptr "_GLUfuncptr")
 (c-define-type GLUnurbs (struct "GLUnurbs"))
 (c-define-type GLUquadric (struct "GLUquadric"))

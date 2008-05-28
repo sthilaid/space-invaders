@@ -1,6 +1,3 @@
-(include "glu-header.scm")
-
-
 (c-define-type int* (pointer int))
 
 

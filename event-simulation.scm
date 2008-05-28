@@ -1,4 +1,3 @@
-;;(include "rbtree.scm")
 (include "event-simulation-macro.scm")
 
 ;; (define-type event-simulation event-queue)

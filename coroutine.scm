@@ -1,5 +1,3 @@
-(include "scm-lib.scm")
-
 (define-type corout id kont mailbox)
 
 (define (new-corout id thunk)

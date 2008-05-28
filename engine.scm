@@ -1,5 +1,3 @@
-;; (include "scm-lib.scm")
-;; (include "ppm-reader.scm")
 (include "event-simulation-macro.scm")
 
 ;;*****************************************************************************

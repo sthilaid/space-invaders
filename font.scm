@@ -1,9 +1,33 @@
 (include "scm-lib-macro.scm")
 
-(define-type font id texture-id width height table)
+(define-type font id texture-id width height pointers)
+
+(define get-char-ptr-name
+  (let ((genid (let ((id 0))
+                 (lambda () (set! id (+ id 1)) id)))
+        (id-table (make-table)))
+    (lambda (font-name color char)
+      (let ((id (table-ref id-table (list color char) #f)))
+        (if (not id)
+            (let ((new-id (genid)))
+              (table-set! id-table (list color char) new-id)
+              (set! id new-id)))
+        (with-output-to-string
+          ""
+          (lambda ()
+            (show font-name "_" id)))))))
+
+(define (get-font-pointer font color char)
+  ;;(cdr (assoc (list color char) (font-pointers font))))
+  (table-ref (font-pointers font) (list color char)))
 
 (define (change-current-char! font color char)
-  ((table-ref (font-table font) (list color char))))
+  (let* ((ptr-name (get-char-ptr-name (font-id font) color char))
+         (ptr (get-font-pointer font color char)))
+    (glBindTexture GL_TEXTURE_2D (font-texture-id font))
+    (glTexImage2D GL_TEXTURE_2D 0 GL_RGBA
+                  (font-width font) (font-height font)
+                  0 GL_RGBA GL_UNSIGNED_BYTE ptr)))
 
 
 (define (get-char pixels-vector x y width height char-width char-height)
@@ -27,7 +51,6 @@
           (reverse acc-y)))))
 
 (define (test char w h)
-;;  (include "scm-lib.scm")
   (for y 0 (< y h)
     (for x 0 (< x w)
       (let ((p (list-ref char (+ (* y w) x))))
@@ -37,9 +60,6 @@
         (if (= x (- w 1)) (newline))))))
 
 (define (get-font-table font-name char-width char-height)
-;;  (include "ppm-reader.scm")
-;;  (include "scm-lib.scm")
-  
   (let* ((image-file     (string-append "fonts/" font-name ".ppm"))
          (font-data-file (string-append "fonts/" font-name ".scm"))
          (ppm-data (parse-ppm-image-file image-file))

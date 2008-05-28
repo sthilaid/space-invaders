@@ -1128,7 +1128,7 @@
     
 (define (create-text-flash-animation-event level msg-obj duration continuation)
   (define animation-delay 0.2)
-  (define original-color (game-object-state msg-obj))
+  (define original-color (game-object-color msg-obj))
   (define (cycle-msg-state! msg-obj)
     (let ((current-color (game-object-color msg-obj)))
       (game-object-color-set!
@@ -1140,7 +1140,7 @@
           (begin (cycle-msg-state! msg-obj)
                  (in animation-delay (flash-ev (+ dt animation-delay))))
           (begin
-            (game-object-state-set! msg-obj original-color)
+            (game-object-color-set! msg-obj original-color)
             (in 0 continuation)))))
   (flash-ev 0))
 

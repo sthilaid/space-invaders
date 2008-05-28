@@ -186,8 +186,8 @@
       ,(make-object-type 'invader_laser_explosion (make-rect 0 0 6 8) 1 0))
      (player_laser_explosion
       ,(make-object-type 'player_laser_explosion (make-rect 0 0 8 8) 1 0))
-     (player-explosion
-      ,(make-object-type 'player_explsion (make-rect 0 0 16 8) 2 0))
+     (player_explosion
+      ,(make-object-type 'player_explosion (make-rect 0 0 16 8) 2 0))
      (message ,(make-object-type 'message (make-rect 0 0 0 0) 0 0))
    ))
 
@@ -195,7 +195,7 @@
   (let ((type (assq type-name types)))
   (if type
       (cadr type)
-      (error (string-append "no such type: " type-name)))))
+      (error (string-append "no such type: " (symbol->string type-name))))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -930,7 +930,8 @@
                     #f)))
           (if shooting-invader
               (shoot-laser! level
-                            (list-ref (list 'laserA 'laserB) (random-integer 2))
+                            (list-ref (list 'laserA 'laserB 'laserC)
+                                      (random-integer 3))
                             shooting-invader
                             (- invader-laser-speed)))))))
 
@@ -997,7 +998,7 @@
 ;; original game.
 (define (explode-invader! level inv)
   (define animation-duration 0.3)
-  (game-object-type-set! inv (get-type 'invader-explosion))
+  (game-object-type-set! inv (get-type 'invader_explosion))
   (game-object-state-set! inv 0)
   (in animation-duration (create-explosion-end-event! level inv)))
 
@@ -1005,7 +1006,7 @@
   (define animation-duration 1.5)
   (define expl-obj
     (make-game-object (gensym 'explosion)
-                      (get-type 'explodeP)
+                      (get-type 'player_explosion)
                       (game-object-pos player)
                       0 (choose-color (game-object-pos player))
                       (make-pos2d 0 0)))
@@ -1068,7 +1069,7 @@
   (define (laser-type-id) (object-type-id (game-object-type laser-obj)))
   (define expl-type (if (eq? (laser-type-id) 'player_laser)
                         (get-type 'player_laser_explosion)
-                        (get-type 'invader-laser-explosion)))
+                        (get-type 'invader_laser_explosion)))
   (define (center-pos pos)
     ;; FIXME: ugly hack where only player laser's explotion are
     ;; centered in x. I'm unsure why other lasers don't require this

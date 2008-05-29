@@ -121,34 +121,26 @@
                     (loop-chars (cdr chars) (cdr chars-pixels))))))))))
 
 
-;; (define load-font-char
-;;   (define update-fun
-;;     (c-lambda
-;;      (int
-;;       int int unsigned-int unsigned-int unsigned-int unsigned-int) void
-;;       (to-string
-;;        (show font-name "[___arg1][___arg2][___arg3][0] = ___arg4;\n")
-;;        (show font-name "[___arg1][___arg2][___arg3][1] = ___arg5;\n")
-;;        (show font-name "[___arg1][___arg2][___arg3][2] = ___arg6;\n")
-;;        (show font-name "[___arg1][___arg2][___arg3][3] = ___arg7;\n"))))
-;;   (lambda (char)
-;;     (let* ((color (caar char))
-;;            (char (cadar char))
-;;            (pixels (cdr char))
-;;            (char-index (get-char-index font-name color char)))
-;;       (for y 0 (< y good-char-height)
-;;         (for x 0 (< x good-char-width)
-;;           (let* ((oob?
-;;                   (or (>= x char-width) (>= y char-height)))
-;;                  (current-pix
-;;                   (if (not oob?)
-;;                       (list-ref pixels (+ (* y char-width) x))
-;;                       '()))
-;;                  (r (if oob? 0 (car current-pix)))
-;;                  (g (if oob? 0 (cadr current-pix)))
-;;                  (b (if oob? 0 (caddr current-pix)))
-;;                  (a (if oob? 0 (if (< (+ r g b) 10) 0 255))))
-;;             (update-fun char-index y x r g b a))))))
+(define (load-font-char font-name char-table-data update-fun
+                        char-width char-height
+                        good-char-width good-char-height)
+  (let* ((color (caar char-table-data))
+         (char (cadar char-table-data))
+         (pixels (cdr char-table-data))
+         (char-index (get-char-index font-name color char)))
+    (for y 0 (< y good-char-height)
+      (for x 0 (< x good-char-width)
+        (let* ((oob?
+                (or (>= x char-width) (>= y char-height)))
+               (current-pix
+                (if (not oob?)
+                    (list-ref pixels (+ (* y char-width) x))
+                    '()))
+               (r (if oob? 0 (car current-pix)))
+               (g (if oob? 0 (cadr current-pix)))
+               (b (if oob? 0 (caddr current-pix)))
+               (a (if oob? 0 (if (< (+ r g b) 10) 0 255))))
+          (update-fun char-index y x r g b a))))))
 
 (define current-font #f)
 

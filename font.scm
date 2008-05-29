@@ -1,6 +1,6 @@
 (include "scm-lib-macro.scm")
 
-(define-type font id texture-id width height pointers)
+(define-type font id texture-id width height get-pointer)
 
 (define get-char-ptr-name
   (let ((genid (let ((id 0))
@@ -17,13 +17,42 @@
           (lambda ()
             (show font-name "_" id)))))))
 
-(define (get-font-pointer font color char)
-  ;;(cdr (assoc (list color char) (font-pointers font))))
+(define get-char-index
+  (let ((create-index-generator (lambda ()
+                                  (let ((id -1))
+                                    (lambda () (set! id (+ id 1)) id))))
+        (index-table (make-table)))
+    (lambda (font-name color char)
+      (let* ((key (list font-name color char))
+             (index (table-ref index-table key #f)))
+        (if (not index)
+            (let* ((index-gen (let ((gen (table-ref index-table font-name #f)))
+                          (if (not gen)
+                              (let ((i-gen (create-index-generator)))
+                                (table-set! index-table font-name i-gen)
+                                (set! gen i-gen)))
+                          gen))
+                   (new-index (index-gen)))
+              (table-set! index-table key new-index)
+              (set! index new-index)))
+        index))))
+
+
+#;(define (get-font-pointer font color char)
   (table-ref (font-pointers font) (list color char)))
 
-(define (change-current-char! font color char)
+#;(define (change-current-char! font color char)
   (let* ((ptr-name (get-char-ptr-name (font-id font) color char))
          (ptr (get-font-pointer font color char)))
+    (glBindTexture GL_TEXTURE_2D (font-texture-id font))
+    (glTexImage2D GL_TEXTURE_2D 0 GL_RGBA
+                  (font-width font) (font-height font)
+                  0 GL_RGBA GL_UNSIGNED_BYTE ptr)))
+
+(define (change-current-char! font color char)
+  (let* (#;(ptr-name (get-char-ptr-name (font-id font) color char))
+         (ptr-index (get-char-index (font-id font) color char))
+         (ptr ((font-get-pointer font) ptr-index)))
     (glBindTexture GL_TEXTURE_2D (font-texture-id font))
     (glTexImage2D GL_TEXTURE_2D 0 GL_RGBA
                   (font-width font) (font-height font)

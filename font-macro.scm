@@ -52,58 +52,80 @@
                        (,a (if ,oob? 0 (if (< (+ ,r ,g ,b) 10) 0 255))))
                   (,update-fun ,char-index ,y ,x ,r ,g ,b ,a))))))
         (table->list ,char-table)))))
-           
-       
+
 (define-macro (define-symmetric-font font-name char-width char-height)
   (include "font.scm")
   (include "scm-lib-macro.scm")
   (include "ppm-reader.scm")
   (include "scm-lib.scm")
 
+  (init-char-indexes! font-name)
   (let* ((good-char-width (next-power-of-2 char-width))
          (good-char-height (next-power-of-2 char-height))
          (font-char-table (get-font-table font-name char-width char-height))
-         (font-table->list (table->list font-char-table))
-#;         (font-elements-declarations
+         (font-elements-declarations
           (with-output-to-string
             ""
             (lambda ()
-              (for-each
-               (lambda (el)
-                 (let ((color (caar el))
-                       (char (cadar el))
-                       (pixels (cdr el)))
-                   (show "GLubyte "(get-char-ptr-name font-name color char)
-                         "["good-char-height"]["good-char-width"][4] = {")
-                   (for y 0 (< y good-char-height)
-                     (begin
-                       (for x 0 (< x good-char-width)
-                         (let* ((out-of-bounds?
-                                 (or (>= x char-width) (>= y char-height)))
-                                (current-pix
-                                 (if (not out-of-bounds?)
-                                     (list-ref pixels (+ (* y char-width) x))
-                                     '()))
-                                (r (if out-of-bounds? 0 (car current-pix)))
-                                (g (if out-of-bounds? 0 (cadr current-pix)))
-                                (b (if out-of-bounds? 0 (caddr current-pix)))
-                                (a (if out-of-bounds?
-                                       0
-                                       (if (< (+ r g b) 10) 0 255))))
-                           (show r "," g "," b "," a)
-                           (if (< x (- good-char-width 1)) (show ","))))
-                       (if (= y (- good-char-height 1))
-                           (show "};\n")
-                           (show ","))))))
-               font-table->list))))
-#;        (font-elements-generation "1+1;\n")
-         (font-elements-declarations
+              (show "GLubyte "font-name
+                    "["(table-length font-char-table)"]"
+                    "["good-char-height"]"
+                    "["good-char-width"]"
+                    "[4] = {")
+              (let ((n 0)
+                    (last-n (- (table-length font-char-table) 1))
+                    (sort-chars
+                     (lambda (char-list)
+                       (quick-sort
+                        (lambda (a b)
+                          (< (get-char-index font-name (caar a) (cadar a))
+                             (get-char-index font-name (caar b) (cadar b))))
+                        (lambda (a b)
+                          (= (get-char-index font-name (caar a) (cadar a))
+                             (get-char-index font-name (caar b) (cadar b))))
+                        (lambda (a b)
+                          (> (get-char-index font-name (caar a) (cadar a))
+                             (get-char-index font-name (caar b) (cadar b))))
+                        char-list))))
+                (for-each
+                 (lambda (el)
+                   (let ((color (caar el))
+                         (char (cadar el))
+                         (pixels (cdr el)))
+                     (show "{")
+                     (for y 0 (< y good-char-height)
+                       (begin
+                         (for x 0 (< x good-char-width)
+                           (let* ((out-of-bounds?
+                                   (or (>= x char-width) (>= y char-height)))
+                                  (current-pix
+                                   (if (not out-of-bounds?)
+                                       (list-ref pixels (+ (* y char-width) x))
+                                       '()))
+                                  (r (if out-of-bounds? 0 (car current-pix)))
+                                  (g (if out-of-bounds? 0 (cadr current-pix)))
+                                  (b (if out-of-bounds? 0 (caddr current-pix)))
+                                  (a (if out-of-bounds?
+                                         0
+                                         (if (< (+ r g b) 10) 0 255))))
+                             (show r "," g "," b "," a)
+                             (if (< x (- good-char-width 1)) (show ","))))
+                         (if (= y (- good-char-height 1))
+                             (show "}")
+                             (show ",")))))
+                   (if (< n last-n)
+                       (begin (set! n (+ n 1)) (show ","))))
+                 (sort-chars (table->list font-char-table))))
+              (show "};\n"))))
+         (font-elements-generation `(init-char-indexes! ,font-name))
+        
+#;         (font-elements-declarations
           (to-string (show "GLubyte "font-name
                            "["(table-length font-char-table)"]"
                            "["good-char-height"]"
                            "["good-char-width"]"
                            "[4]\n;")))
-         (font-elements-generation
+#;         (font-elements-generation
           `(runtime-font-generation-code ,font-name ,char-width ,char-height
                                          ,good-char-width ,good-char-height))
         (texture-declaration-code ";\n")
@@ -118,19 +140,6 @@
                (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MAG_FILTER GL_NEAREST)
                (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MIN_FILTER GL_NEAREST)
                ))))
-#;        (pointer-assq-list
-         (map (lambda (el)
-                (let* ((key (car el))
-                       (color (car key))
-                       (char (cadr key)))
-                  `(cons ,(list 'quote key)
-                         ((c-lambda
-                           () (pointer void)
-                           ,(string-append "___result_voidstar = (void*)"
-                                           (get-char-ptr-name font-name
-                                                              color char)
-                                          ";\n"))))))
-              font-table->list))
         (get-pointer-code
          `(c-lambda (int) (pointer void)
            ,(with-output-to-string ""

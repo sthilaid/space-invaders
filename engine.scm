@@ -201,6 +201,15 @@
       (cadr type)
       (error (string-append "no such type: " (symbol->string type-name))))))
 
+(define (is-explosion? obj)
+  (define type-id (object-type-id (game-object-type obj)))
+  (case type-id
+    ((invader_laser_explosion
+      player_laser_explosion invader_explosion player_explosion) #t)
+    (else #f)))
+      
+      
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Particles objects and functions
@@ -742,8 +751,9 @@
          (destroy-laser! level laser-obj))
 
         ((mothership? collision-obj)
-         (resolve-mothership-collision! level collision-obj laser-obj)
-         (destroy-laser! level laser-obj))
+         (destroy-laser! level laser-obj)
+         (level-increase-score! level collision-obj)
+         (explode-invader! level collision-obj))
 
         ((wall? collision-obj)
          (damage-wall! level laser-obj)
@@ -779,9 +789,9 @@
 (define (resolve-mothership-collision! level mothership collision-obj)
   (cond ((wall? collision-obj)
          (level-remove-object! level mothership))
-        ((laser-obj? collision-obj)
-         (level-increase-score! level mothership)
-         (explode-invader! level mothership)))
+        ((or (laser-obj? collision-obj)
+             (is-explosion? collision-obj))
+         (resolve-laser-collision! level collision-obj mothership)))
   ;; Schedule next mothership
   (let ((delta-t (mothership-random-delay)))
     (in delta-t (create-new-mothership-event level))))
@@ -1532,7 +1542,7 @@
 (define hi-score-filename ".spaceinvaders")
 
 (define (retrieve-hi-score)
-  (with-exception-catcher
+ (with-exception-catcher
    (lambda (e)
      (case e ((bad-hi-score-file) (delete-file hi-score-filename)))
      0)

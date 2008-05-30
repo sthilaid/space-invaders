@@ -536,6 +536,11 @@
                  walls wall-damage draw-game-field?)))
     
     (add-global-score-messages! level)
+    (level-add-object!
+     level
+     (make-message-obj 'demo-msg (get-type 'message)
+                       (make-pos2d 100 (- screen-max-y 60))
+                       'dummy 'white (make-pos2d 0 0) "DEMO"))
     (for-each (lambda (s) (level-add-object! level s)) shields)
     
     (schedule-event!
@@ -545,6 +550,10 @@
       (lambda ()
         (new-player! level)
         (schedule-event! sim 0 (create-ai-player-event level))
+        (in 0 (create-text-flash-animation-event
+               level
+               (level-get level 'demo-msg)
+               +inf.0 (lambda () (error "should not occur..."))))
         (schedule-event! sim 0 (create-init-invader-move-event level))
         (schedule-event! sim 1 (create-invader-laser-event level))
         (schedule-event! sim (mothership-random-delay)
@@ -1277,11 +1286,12 @@
               (lambda ()
                 (in animation-end-wait-delay
                     (lambda ()
+                      (set! other-animations-index
+                            (modulo (+ other-animations-index 1)
+                                    (length other-animations)))
                       (exit-simulation
-                       (let ((other-animations '(demo intro-B intro-B)))
-                         (list-ref other-animations
-                                   (random-integer
-                                    (length other-animations)))))))))))))))
+                       (list-ref other-animations
+                                 other-animations-index))))))))))))
 
 (define (create-animation-B-event level)
   (define msg-type (get-type 'message))
@@ -1538,6 +1548,9 @@
   (with-output-to-file `(path: ,hi-score-filename create: maybe truncate: #t)
     (lambda ()
       (write hi-score))))
+
+(define other-animations (list 'intro-B 'demo))
+(define other-animations-index 0)
 
 ;; Setup of initial game events and start the simulation.
 (define (game-loop ui-thread)

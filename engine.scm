@@ -31,7 +31,7 @@
 (define player-movement-speed 2)
 (define player-laser-speed 2)
 (define invader-laser-speed 2)
-(define mothership-movement-speed (make-pos2d 1 0))
+(define mothership-movement-speed 1)
 
 (define player-laser-last-destruction-time 0)
 
@@ -201,8 +201,13 @@
       (cadr type)
       (error (string-append "no such type: " (symbol->string type-name))))))
 
-(define (is-explosion? obj)
-  (define type-id (object-type-id (game-object-type obj)))
+(define (get-type-id obj)
+  (cond ((game-object? obj)
+         (object-type-id (game-object-type obj)))
+        ((wall-struct? obj) 'wall)
+        (else (error "unknown object type"))))
+
+(define (is-explosion? type-id)
   (case type-id
     ((invader_laser_explosion
       player_laser_explosion invader_explosion player_explosion) #t)
@@ -600,9 +605,7 @@
   (move-object-raw! obj)
   (let ((collision-obj (detect-collision? obj level)))
     (if collision-obj
-        (begin
-          (resolve-collision! level obj collision-obj)
-          #t)
+        (resolve-collision! level obj collision-obj)
         #f)))
   
 ;; Moves the entire ship row of specified index
@@ -714,8 +717,8 @@
    ((invader-ship? obj) (resolve-invader-collision! level obj collision-obj))
    ((mothership? obj) (resolve-mothership-collision! level obj collision-obj))
    (else
-    (error "cannot resolve object collision."))))
-
+    (error "cannot resolve object collision.")))
+  (get-type-id collision-obj))
 
 (define (destroy-laser! level laser-obj)
   (level-remove-object! level laser-obj)
@@ -753,7 +756,9 @@
         ((mothership? collision-obj)
          (destroy-laser! level laser-obj)
          (level-increase-score! level collision-obj)
-         (explode-invader! level collision-obj))
+         (explode-invader! level collision-obj)
+         (let ((delta-t (mothership-random-delay)))
+           (in delta-t (create-new-mothership-event level))))
 
         ((wall? collision-obj)
          (damage-wall! level laser-obj)
@@ -788,13 +793,13 @@
 
 (define (resolve-mothership-collision! level mothership collision-obj)
   (cond ((wall? collision-obj)
-         (level-remove-object! level mothership))
-        ((or (laser-obj? collision-obj)
-             (is-explosion? collision-obj))
-         (resolve-laser-collision! level collision-obj mothership)))
-  ;; Schedule next mothership
-  (let ((delta-t (mothership-random-delay)))
-    (in delta-t (create-new-mothership-event level))))
+         (level-remove-object! level mothership)
+         (let ((delta-t (mothership-random-delay)))
+           (in delta-t (create-new-mothership-event level))))
+        
+        ((laser-obj? collision-obj)
+         (resolve-laser-collision! level collision-obj mothership))))
+  
 
 
 ;;*****************************************************************************
@@ -939,13 +944,18 @@
 ;; Creates a new mothership and schedules its first move event.
 (define (create-new-mothership-event level)
   (synchronized-event-thunk level
-    (let ((mothership
-           (make-mothership 'mothership
-                            (get-type 'mothership)
-                            (make-pos2d wall-x-offset 201)
+    (let* ((dx-mult (list-ref '(1 -1) (random-integer 2)))
+           (mothership
+            (make-mothership 'mothership
+                             (get-type 'mothership)
+                             (make-pos2d (if (> dx-mult 0)
+                                             gamefield-min-x
+                                             (- gamefield-max-x 16))
+                                         201)
                             0
                             'red
-                            mothership-movement-speed)))
+                            (make-pos2d (* dx-mult mothership-movement-speed)
+                                        0))))
     (level-add-object! level mothership)
     (in 0 (create-mothership-event level)))))
 
@@ -956,7 +966,8 @@
       (let ((mothership (level-mothership level)))
         (if mothership
             (let ((collision-occured? (move-object! level mothership)))
-              (if (not collision-occured?)
+              (if (or (not collision-occured?)
+                      (is-explosion? collision-occured?))
                   (in mothership-update-interval mothership-event)))))))
   mothership-event)
     

@@ -212,6 +212,12 @@
     ((invader_laser_explosion
       player_laser_explosion invader_explosion player_explosion) #t)
     (else #f)))
+
+(define (get-object-score-value obj)
+  (define type-id (get-type-id obj))
+  (if (eq? type-id 'mothership)
+      (list-ref (list 50 100 150) (random-integer 3))
+      (object-type-score-value (game-object-type obj))))
       
       
 
@@ -383,7 +389,7 @@
 (define (level-increase-score! level obj)
   (game-level-score-set! level
                     (+ (game-level-score level)
-                       (object-type-score-value (game-object-type obj)))))
+                       (get-object-score-value obj))))
 
 (define (level-damage-wall! level damage)
   (define current-damage (game-level-wall-damage level))

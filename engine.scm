@@ -43,6 +43,8 @@
 (define next-invader-laser-interval 0.2)
 (define manager-time-interfal 0.001)
 (define redraw-interval 0.01)
+(define animation-end-wait-delay 2)
+
 
 (define player-laser-refresh-constraint 0.6)
 
@@ -505,6 +507,16 @@
     (schedule-event! sim 0 (create-redraw-event user-interface-thread level))
     level))
 
+(define (new-animation-level-B hi-score)
+  (let* ((sim (create-simulation))
+         (level (make-level screen-max-y screen-max-x (make-table)
+                            hi-score sim (new-mutex))))
+    (add-global-score-messages! level)
+    
+    (schedule-event! sim 0 (create-animation-B-event level))
+    (schedule-event! sim 0 (create-intro-manager-event level))
+    (schedule-event! sim 0 (create-redraw-event user-interface-thread level))
+    level))
 
 
 ;;*****************************************************************************
@@ -1225,7 +1237,58 @@
              (level-get level 'medium) "=20 POINTS"
              (animate-message
               (level-get level 'easy) "=10 POINTS"
-              (lambda () 'animation-finished))))))))
+              (lambda ()
+                (in animation-end-wait-delay
+                    (lambda ()
+                      (exit-simulation
+                       (list-ref '(animB) (random-integer 1)))))))))))))
+
+(define (create-animation-B-event level)
+  (define msg-type (get-type 'message))
+  (define speed (make-pos2d 0 0))
+  (define state 'white)
+
+  (lambda ()
+    (let* ((instruction
+            (let ((pos (make-pos2d 70 (- screen-max-y 100))))
+              (make-message-obj
+               'instruction msg-type pos state (choose-color pos) speed "")))
+           (press1 (let ((pos (make-pos2d 20 (- screen-max-y 130))))
+                    (make-message-obj
+                     'press1 msg-type pos state (choose-color pos) speed "")))
+           (press2 (let ((pos (make-pos2d 20 (- screen-max-y 154))))
+                     (make-message-obj
+                      'press2 msg-type pos state (choose-color pos) speed "")))
+           (score (let ((pos (make-pos2d 37 (- screen-max-y 144))))
+                    (make-message-obj
+                     'score msg-type pos state (choose-color pos) speed "")))
+           (anim-messages
+            (list instruction press1 press2 score)))
+      (for-each (lambda (m) (level-add-object! level m)) anim-messages )
+      (in 0 (animate-message
+             instruction "INSTRUCTIONS"
+             (animate-message
+              press1 "PRESS '1' FOR 1 PLAYER"
+              (animate-message
+               press2 "PRESS '2' FOR 2 PLAYERS"
+               (lambda ()
+                 (in animation-end-wait-delay
+                     (lambda () (exit-simulation 'animA)))))))))))
+
+;;(define (time
+
+(define (game-over-animation-event level continuation)
+  (define continuation-delay 2)
+  (lambda ()
+    (let* ((type (get-type 'message))
+           (pos (make-pos2d 77 (- screen-max-y 60)))
+           (speed (make-pos2d 0 0))
+           (msg-obj (make-message-obj 'game-over-msg type
+                                      pos 'red 'red speed "")))
+      (level-add-object! level msg-obj)
+      (in 0 (animate-message
+             msg-obj "GAME OVER"
+             (lambda () (in continuation-delay continuation)))))))
 
 (define (game-over-2p-animation-event level continuation)
   (define continuation-delay 1.2)
@@ -1242,19 +1305,6 @@
       (level-add-object! level msg-obj)
       (in 0 (animate-message
              msg-obj text
-             (lambda () (in continuation-delay continuation)))))))
-
-(define (game-over-animation-event level continuation)
-  (define continuation-delay 2)
-  (lambda ()
-    (let* ((type (get-type 'message))
-           (pos (make-pos2d 77 (- screen-max-y 60)))
-           (speed (make-pos2d 0 0))
-           (msg-obj (make-message-obj 'game-over-msg type
-                                      pos 'red 'red speed "")))
-      (level-add-object! level msg-obj)
-      (in 0 (animate-message
-             msg-obj "GAME OVER"
              (lambda () (in continuation-delay continuation)))))))
 
   
@@ -1401,6 +1451,15 @@
           (save-hi-score result)
           (inf-loop result
                     (play-level (new-animation-level-A result))))
+         
+         ((eq? result 'animA)
+          (inf-loop hi-score
+                    (play-level (new-animation-level-A hi-score))))
+
+         ((eq? result 'animB)
+          (inf-loop hi-score
+                    (play-level (new-animation-level-B hi-score))))
+         
          ((eq? result 'start-1p-game)
           (let ((p1 (new-corout 
                      'p1 (lambda () (play-level (new-level hi-score 1 'p1))))))

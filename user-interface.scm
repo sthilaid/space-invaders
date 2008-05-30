@@ -44,14 +44,14 @@
 (define display-fps? #f)
 
 (define current-font "bb_fonts")
-(define cycle-font!
-  (let* ((fonts (map car (table->list global-fonts-table)))
-         (index 0)
-         (fonts-nb (length fonts)))
-    (lambda ()
-      (set! index (modulo (+ index 1) fonts-nb))
-      (set! current-font (list-ref fonts index))
-      (pp `(current-font is now ,current-font)))))
+;; (define cycle-font!
+;;   (let* ((fonts (map car (table->list global-fonts-table)))
+;;          (index 0)
+;;          (fonts-nb (length fonts)))
+;;     (lambda ()
+;;       (set! index (modulo (+ index 1) fonts-nb))
+;;       (set! current-font (list-ref fonts index))
+;;       (pp `(current-font is now ,current-font)))))
 
 (define (render-sprite sprite-name x y state)
   (if (not (number? state)) (error "sprite state must be a number."))
@@ -285,7 +285,6 @@
 (c-define (keyboard key x y) (unsigned-char int int) void "keyboard" ""
  (case key
    ((#\f #\F) (set! display-fps? (not display-fps?)))
-   ((#\n #\N) (cycle-font!))
    ;; On Escape, Ctl-q, Ctl-c, Ctl-w, q -> terminate the program
    ((#\x1b #\x11 #\x03 #\x17 #\q) (quit))
    (else (register-user-action key))))

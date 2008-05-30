@@ -39,12 +39,16 @@
   (call/cc
    (lambda (k)
      (parameterize ((root-k k)
+                    (current-coroutine #f)
                     (corout-q (new-queue))
                     (return-value-handler return-handler)
                     (return-value #f))
        (for-each (lambda (c) (enqueue! (corout-q) c))
                  (cons c1 cs))
        (corout-scheduler)))))
+
+(define (corout-kill-all!)
+  ((root-k) 'reset))
 
 (define (corout-scheduler)
   

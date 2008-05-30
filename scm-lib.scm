@@ -263,6 +263,8 @@
 (define (new-queue) (cons '() '()))
 (define queue-list car)
 (define queue-list-set! set-car!)
+(define (queue-size queue)
+  (length (queue-list queue)))
 
 (define (enqueue! queue val)
   (queue-list-set! queue (cons val (queue-list queue))))

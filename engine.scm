@@ -1299,19 +1299,15 @@
               
               ((#\s #\S) (pp `(score is ,(game-level-score level))))
 
-              ((#\t #\T)
-               (call/cc
-                (lambda (k)
-                  (play-level (new-animation-level-A 1010))
-                  (k 'go))))
-              
               ((#\p #\P)
                (if game-paused?
                    (sem-unlock! (level-mutex level))
                    (sem-lock! (level-mutex level)))
                (set! game-paused? (not game-paused?)))
 
-              ((#\r #\R) (exit-simulation 'intro-A))
+              ((#\r #\R) (corout-kill-all!))
+
+              ((#\d #\D) (error "DEBUG"))
                
               (else
                (show "received keyboard input: " msg ".\n"))))
@@ -1329,6 +1325,7 @@
               ((#\1) (exit-simulation 'start-1p-game))
               ((#\2) (exit-simulation 'start-2p-game))
               ((#\r #\R) (exit-simulation 'intro-A))
+              ((#\d #\D) (error "DEBUG"))
               (else
                (show "received keyboard input: " msg ".\n"))))
         (in manager-time-interfal manager-event))))

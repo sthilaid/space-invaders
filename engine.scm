@@ -518,6 +518,43 @@
     (schedule-event! sim 0 (create-redraw-event user-interface-thread level))
     level))
 
+(define (new-animation-level-demo hi-score)
+  (let* ((walls (generate-walls))
+         (wall-damage '())
+         (shields (generate-shields))
+         (sim (create-simulation))
+         (player-id 'demo)
+         (lives 3)
+         (score 0)
+         (draw-game-field? #t)
+         (other-finished? #f)  ;; only used for 2p games
+         (other-score 0)       ;; only used for 2p games
+         (level (make-game-level
+                 screen-max-y screen-max-x (make-table)
+                 hi-score sim (new-mutex)
+                 player-id score lives 
+                 walls wall-damage draw-game-field?)))
+    
+    (add-global-score-messages! level)
+    (for-each (lambda (s) (level-add-object! level s)) shields)
+    
+    (schedule-event!
+     sim 0
+     (generate-invaders-event
+      level
+      (lambda ()
+        (new-player! level)
+        (schedule-event! sim 0 (create-ai-player-event level))
+        (schedule-event! sim 0 (create-init-invader-move-event level))
+        (schedule-event! sim 1 (create-invader-laser-event level))
+        (schedule-event! sim (mothership-random-delay)
+                         (create-new-mothership-event level)))))
+    
+    (schedule-event! sim 0 (create-main-manager-event level))
+    (schedule-event! sim 0 (create-redraw-event user-interface-thread level))
+    level))
+
+
 
 ;;*****************************************************************************
 ;;
@@ -1241,7 +1278,10 @@
                 (in animation-end-wait-delay
                     (lambda ()
                       (exit-simulation
-                       (list-ref '(animB) (random-integer 1)))))))))))))
+                       (let ((other-animations '(demo intro-B intro-B)))
+                         (list-ref other-animations
+                                   (random-integer
+                                    (length other-animations)))))))))))))))
 
 (define (create-animation-B-event level)
   (define msg-type (get-type 'message))
@@ -1273,9 +1313,70 @@
                press2 "PRESS '2' FOR 2 PLAYERS"
                (lambda ()
                  (in animation-end-wait-delay
-                     (lambda () (exit-simulation 'animA)))))))))))
+                     (lambda () (exit-simulation 'intro-A)))))))))))
 
-;;(define (time
+(define (create-ai-player-event level)
+  (define ai-reaction-interval 0.01)
+  (define ai-movement-duration-max 1)
+  (define ai-movement-delay 0.02)
+
+  (define (move-player! dx)
+    (let ((player (level-player level))
+          (new-speed (make-pos2d dx 0)))
+      (game-object-speed-set! player new-speed)
+      (move-object! level player)))
+  
+  (define (create-move-left-animation-event)
+    (define duration (* (random-real) ai-movement-duration-max))
+    (define (move-left-event dt)
+      (lambda ()
+        (if (level-player level)
+            (let ((collision?
+                   (move-player! (- player-movement-speed))))
+              (if (and (< dt duration) (not collision?))
+                  (in ai-movement-delay
+                      (move-left-event (+ dt ai-movement-delay)))
+                  (in ai-reaction-interval (create-ai-player-event level))))
+            (in NOW! end-of-demo-event))))
+    (move-left-event 0))
+  
+  (define (create-move-right-animation-event)
+    (define duration (* (random-real) ai-movement-duration-max))
+    (define (move-right-event dt)
+      (lambda ()
+        (if (level-player level)
+            (let ((collision?
+                   (move-player! player-movement-speed)))
+              (if (and (< dt duration) (not collision?))
+                  (in ai-movement-delay
+                      (move-right-event (+ dt ai-movement-delay)))
+                  (in ai-reaction-interval (create-ai-player-event level))))
+            (in NOW! end-of-demo-event))))
+    (move-right-event 0))
+  
+  (define (create-ai-laser-event)
+    (lambda ()
+      (if (level-player level)
+          (begin
+            (shoot-laser! level 'player_laser
+                          (level-player level)
+                          player-laser-speed)
+            (in ai-reaction-interval (create-ai-player-event level)))
+          (in NOW! end-of-demo-event))))
+  
+  (define end-of-demo-event
+    (synchronized-event-thunk level
+     (corout-kill-all!)))
+
+  (let ((actions (list create-move-left-animation-event
+                       create-move-right-animation-event
+                       create-ai-laser-event
+                       create-ai-laser-event
+                       create-ai-laser-event
+                       create-ai-laser-event
+                       create-ai-laser-event
+                       create-ai-laser-event)))
+    ((list-ref actions (random-integer (length actions))))))
 
 (define (game-over-animation-event level continuation)
   (define continuation-delay 2)
@@ -1452,13 +1553,20 @@
           (inf-loop result
                     (play-level (new-animation-level-A result))))
          
-         ((eq? result 'animA)
+         ((eq? result 'intro-A)
           (inf-loop hi-score
                     (play-level (new-animation-level-A hi-score))))
 
-         ((eq? result 'animB)
+         ((eq? result 'intro-B)
           (inf-loop hi-score
                     (play-level (new-animation-level-B hi-score))))
+
+         ((eq? result 'demo)
+          (let ((ai (new-corout 
+                     'ai (lambda ()
+                           (play-level
+                            (new-animation-level-demo hi-score))))))
+            (inf-loop hi-score (corout-simple-boot ai))))
          
          ((eq? result 'start-1p-game)
           (let ((p1 (new-corout 

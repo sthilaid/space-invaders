@@ -574,12 +574,12 @@
                level
                (level-get level 'demo-msg)
                +inf.0 (lambda () (error "should not occur..."))))
-        (schedule-event! sim 0 (create-init-invader-move-event level))
-        (schedule-event! sim 1 (create-invader-laser-event level))
-        (schedule-event! sim (mothership-random-delay)
-                         (create-new-mothership-event level)))))
-    
-    (schedule-event! sim 0 (create-main-manager-event level))
+        (in 0 (create-init-invader-move-event level))
+        (in 1 (create-invader-laser-event level))
+        (in (mothership-random-delay)
+            (create-new-mothership-event level)))))
+
+    (schedule-event! sim 0 (create-intro-manager-event level))
     (schedule-event! sim 0 (create-redraw-event user-interface-thread level))
     level))
 

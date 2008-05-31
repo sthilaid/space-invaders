@@ -762,7 +762,7 @@
         ((mothership? collision-obj)
          (destroy-laser! level laser-obj)
          (level-increase-score! level collision-obj)
-         (explode-invader! level collision-obj)
+         (explode-mothership! level collision-obj)
          (let ((delta-t (mothership-random-delay)))
            (in delta-t (create-new-mothership-event level))))
 
@@ -1089,6 +1089,21 @@
   (game-object-type-set! inv (get-type 'invader_explosion))
   (game-object-state-set! inv 0)
   (in animation-duration (create-explosion-end-event! level inv)))
+
+(define (explode-mothership! level mothership)
+  (define animation-duration 0.3)
+  (define pos (game-object-pos mothership))
+  (define expl-obj
+    (make-game-object (gensym 'explosion)
+                      (get-type 'player_explosion)
+                      pos
+                      0 (choose-color pos)
+                      (make-pos2d 0 0)))
+
+  (level-remove-object! level mothership)
+  (level-add-object! level expl-obj)
+  (in animation-duration (create-explosion-end-event! level expl-obj)))
+
 
 (define (explode-player! level player)
   (define animation-duration 1.5)

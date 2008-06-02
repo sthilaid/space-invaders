@@ -22,7 +22,7 @@
 (define invader-row-number 5)
 (define invader-col-number 11)
 ;; (define invader-row-number 2)
-;; (define invader-col-number 5)
+;; (define invader-col-number 2)
 
 (define invader-spacing 16)
 
@@ -55,8 +55,8 @@
   ;; invaders (55 invaders) then the delay is 0.1 and when there is
   ;; no invader left, it is 0.01. Thus the equation system:
   ;; 55x + xy = 1/10 and 0x + xy = 1/100 was solved.
-  (let* ((min-delta 1/100)
-         (max-delta 2/10)
+  (let* ((min-delta 0.0001)
+         (max-delta 0.1)
          (max-inv-nb 55)
          (slope (/ (- max-delta min-delta) max-inv-nb)))
     (lambda (level)
@@ -470,13 +470,12 @@
                            (make-pos2d 15 (- y 17)) state 'white speed ""))
         '()))))
     
-(define (new-level hi-score number-of-players player-id)
+(define (new-level init-score hi-score number-of-players player-id)
   (let* ((walls (generate-walls))
          (wall-damage '())
          (shields (generate-shields))
          (sim (create-simulation))
          (lives 3)
-         (score 0)
          (draw-game-field? #t)
          (other-finished? #f)  ;; only used for 2p games
          (other-score 0)       ;; only used for 2p games
@@ -485,14 +484,14 @@
                     (make-2p-game-level
                      screen-max-y screen-max-x (make-table)
                      hi-score sim (new-mutex)
-                     player-id score lives 
+                     player-id init-score lives 
                      walls wall-damage draw-game-field?
                      other-finished? other-score)
                     
                     (make-game-level
                      screen-max-y screen-max-x (make-table)
                      hi-score sim (new-mutex)
-                     player-id score lives 
+                     player-id init-score lives 
                      walls wall-damage draw-game-field?))))
     
     (add-global-score-messages! level)
@@ -902,7 +901,9 @@
                (exists (lambda (inv) (obj-wall-collision? inv walls)) row))
              rows)))
       (if (null? rows)
-          (game-over! level)
+          ;; Regenerate invaders
+          (in 0 (generate-invaders-event
+                 level (create-init-invader-move-event level)))
           (let* ((old-dx (pos2d-x (game-object-speed (caar rows))))
                  (dt (get-invader-move-refresh-rate level))
                  (duration (* (length rows) dt)))
@@ -921,7 +922,9 @@
   (synchronized-event-thunk level
     (let ((rows (get-all-invader-rows level)))
       (if (null? rows)
-          (game-over! level)
+          ;; Regenerate invaders
+          (in 0 (generate-invaders-event
+                 level (create-init-invader-move-event level)))
           (let* ((dt (get-invader-move-refresh-rate level)))
             (in 0
                 (create-invader-row-move-event!
@@ -1651,16 +1654,17 @@
          
          ((eq? result 'start-1p-game)
           (let ((p1 (new-corout 
-                     'p1 (lambda () (play-level (new-level hi-score 1 'p1))))))
+                     'p1
+                     (lambda () (play-level (new-level 0 hi-score 1 'p1))))))
             (inf-loop hi-score (corout-simple-boot p1))))
 
          ((eq? result 'start-2p-game)
           (let ((p1
                  (new-corout
-                  'p1 (lambda () (play-level (new-level hi-score 2 'p1)))))
+                  'p1 (lambda () (play-level (new-level 0 hi-score 2 'p1)))))
                 (p2
                  (new-corout 
-                  'p2 (lambda () (play-level (new-level hi-score 2 'p2))))))
+                  'p2 (lambda () (play-level (new-level 0 hi-score 2 'p2))))))
 
             (parameterize ((p1-corout p1)
                            (p2-corout p2))

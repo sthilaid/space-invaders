@@ -38,6 +38,7 @@
 (define-symmetric-font "invader_laser_explosion" 6 8)
 (define-symmetric-font "invader_explosion" 13 8)
 (define-symmetric-font "mothership" 16 7)
+(define-symmetric-font "mothership_explosion" 21 8)
 (define-symmetric-font "player" 13 8)
 (define-symmetric-font "player_explosion" 16 8)
 

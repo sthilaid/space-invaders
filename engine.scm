@@ -192,6 +192,8 @@
       ,(make-object-type 'player_laser_explosion (make-rect 0 0 8 8) 1 0))
      (player_explosion
       ,(make-object-type 'player_explosion (make-rect 0 0 16 8) 2 0))
+     (mothership_explosion
+      ,(make-object-type 'mothership_explosion (make-rect 0 0 21 8) 1 0))
      (message ,(make-object-type 'message (make-rect 0 0 0 0) 0 0))
    ))
 
@@ -214,10 +216,7 @@
     (else #f)))
 
 (define (get-object-score-value obj)
-  (define type-id (get-type-id obj))
-  (if (eq? type-id 'mothership)
-      (list-ref (list 50 100 150) (random-integer 3))
-      (object-type-score-value (game-object-type obj))))
+  (object-type-score-value (game-object-type obj)))
       
       
 
@@ -761,8 +760,8 @@
 
         ((mothership? collision-obj)
          (destroy-laser! level laser-obj)
-         (level-increase-score! level collision-obj)
          (explode-mothership! level collision-obj)
+         (level-increase-score! level collision-obj)
          (let ((delta-t (mothership-random-delay)))
            (in delta-t (create-new-mothership-event level))))
 
@@ -1081,6 +1080,8 @@
               (in delta-t laser-event))))))
   laser-event)
 
+(define (end-of-continuation-event) 'eoc-event)
+
 ;; dispalys an explosion where the invader was and removes it from the
 ;; level. This will freeze the game events, as it seem to do in the
 ;; original game.
@@ -1088,22 +1089,45 @@
   (define animation-duration 0.3)
   (game-object-type-set! inv (get-type 'invader_explosion))
   (game-object-state-set! inv 0)
-  (in animation-duration (create-explosion-end-event! level inv)))
+  (in animation-duration
+      (create-explosion-end-event! level inv end-of-continuation-event)))
 
 (define (explode-mothership! level mothership)
   (define animation-duration 0.3)
   (define pos (game-object-pos mothership))
+  (define score-val (list-ref '(50 100 150) (random-integer 3)))
   (define expl-obj
     (make-game-object (gensym 'explosion)
-                      (get-type 'player_explosion)
+                      (get-type 'mothership_explosion)
                       pos
                       0 (choose-color pos)
                       (make-pos2d 0 0)))
-
+  ;; Update the global mothership's score value to the current value...
+  (object-type-score-value-set! (get-type 'mothership) score-val)
   (level-remove-object! level mothership)
   (level-add-object! level expl-obj)
-  (in animation-duration (create-explosion-end-event! level expl-obj)))
+  (in animation-duration
+      (create-explosion-end-event!
+       level expl-obj
+       (show-points-event level pos score-val end-of-continuation-event))))
 
+(define (show-points-event level pos points continuation)
+  (define duration 1)
+  (define msg
+    (let ((id (gensym 'mothership-points))
+          (type (get-type 'message))
+          (state 'dummy-state)
+          (color (choose-color pos))
+          (speed (make-pos2d 0 0))
+          (text (number->string points)))
+    (make-message-obj id type pos state color speed text)))
+  (synchronized-event-thunk
+   level
+   (level-add-object! level msg)
+   (in duration
+       (synchronized-event-thunk level
+        (level-remove-object! level msg)
+        (in 0 continuation)))))
 
 (define (explode-player! level player)
   (define animation-duration 1.5)
@@ -1189,13 +1213,15 @@
                       (choose-color (game-object-pos laser-obj))
                       (make-pos2d 0 0)))
   (level-add-object! level obj)
-  (in animation-duration (create-explosion-end-event! level obj)))
+  (in animation-duration
+      (create-explosion-end-event! level obj end-of-continuation-event)))
 
 
 ;; Event that will stop an invader explosion animation
-(define (create-explosion-end-event! level inv)
+(define (create-explosion-end-event! level inv continuation)
   (synchronized-event-thunk level
-    (level-remove-object! level inv)))
+    (level-remove-object! level inv)
+    (in 0 continuation)))
 
 
 

@@ -121,6 +121,8 @@
     ((player_explosion)
      (render-fontified-sprite 'player_explosion x y state color))
     ((mothership) (render-fontified-sprite 'mothership x y state color))
+    ((mothership_explosion) (render-fontified-sprite 'mothership_explosion
+                                           x y state color))
     ((message) (render-message obj))
     ((shield) (render-shield obj))
     (else (error (string-append "Cannot render unknown object type:"

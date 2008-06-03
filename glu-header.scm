@@ -1,3 +1,13 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; filename: glu-header.scm
+;;
+;; description: Constant and type declarations for glu.scm
+;;
+;; author: David St-Hilaire
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (c-define-type _GLUfuncptr "_GLUfuncptr")
 (c-define-type GLUnurbs (struct "GLUnurbs"))
 (c-define-type GLUquadric (struct "GLUquadric"))

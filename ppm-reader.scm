@@ -1,4 +1,16 @@
-;;(include "scm-lib.scm")
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; filename: ppm-reader.scm
+;;
+;; description: ascii PPM image format parser. The parse-ppm-image-file
+;; function will parse the provided image file and return a ppm-image
+;; data where the pixels are a list of pixel '(r g b) such that the
+;; first pixel is the pixel corresponding to the lower right corner of
+;; the image, just as the PPM format gives it.
+;;
+;; author: David St-Hilaire
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define-type ppm-image width height color-depth pixels)
 
@@ -40,9 +52,13 @@
    (lambda () (with-input-from-file filename strip-comments))
    parse-ppm-image))
 
-(define (rgb-pixels-to-boolean-point-list ppm-data . options)
+;; Function that will return a list of 2d coordinate of type pos2d
+;; where each of the returned points are pixels in the image where a
+;; certain condition on the rgb color must be respected. The result of
+;; (test-rgb? r g b) is the condition used to determine which points
+;; are filtered and which are not.
+(define (rgb-pixels-to-boolean-point-list ppm-data test-rgb? . options)
   (define width (ppm-image-width ppm-data))
-  (define intensity-threshold 200)
   (define x-adjust (if (memq 'center options)
                        (lambda (x) (- x (floor (/ width 2))))
                        (lambda (x) x)))
@@ -56,7 +72,7 @@
                (b (caddr current-pixel))
                (new-c (modulo (+ x 1) width)))
           (loop (if (= new-c 0) (+ y 1) y) new-c (cdr pixels)
-                (cons (if (> (+ r g b) intensity-threshold)
+                (cons (if (test-rgb? r g b)
                           (make-pos2d (x-adjust x) y)
                           '())
                       acc))))))

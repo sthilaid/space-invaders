@@ -1,3 +1,60 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; filename: engine.scm
+;;
+;; description: Space invaders game engine. This source file contains
+;; all the definition required to model closely the orignal arcade
+;; version of space invaders, as can be seen on mame. The heart of the
+;; game is located into the game-loop function which has the task to
+;; start intro and game levels, handle hi-scores, etc...
+;;
+;; Here is the global architecture of the game model when an intro
+;; animation is being played:
+;;
+;; Gambit-thread:     game-loop
+;;                        |
+;;                        |
+;;                        |
+;; Event sim:     (play-level intro-lvl)
+;;
+;; Here is the global architecture of the game model when a game is
+;; being played:
+;;
+;; Gambit-thread:     game-loop
+;;                    |        \
+;;                    |         \ (optionnal for 2p games)
+;;                    |          \
+;; Coroutines:    p1-corout <-> p2-corout
+;;                    |              \
+;;                    |               \
+;; Event sim:  (play-level lvl-p1) (play-level lvl-p2)
+;;
+;; The model was designed to be as loosely coupled with the user
+;; interface as possible, but some coupling is necessary to be able to
+;; respond to user input inside the model. Maybe this is not the best
+;; way, but currently the user input is managed in the model. Also,
+;; the model controls the redraw commands that are to be sent to the
+;; user interface via gambit thread's mailbox system.
+;;
+;; All the game is designed to run in a discrete event
+;; simulation. This approach is a mix of a threading system and a
+;; coroutine system. Once an event gets the control of the simulation,
+;; it has it as long as it likes (which might be evil). But the usage
+;; of the event simulation enables to schedule nicely events in time
+;; such that the flow occurs naturally. There is basically two main
+;; types of events used in this game: Thread like types which
+;; automacially reschedule themselves in the futur (similar to a
+;; yield), and some animation threads which might reschedule
+;; themselves for a certain duration, but will eventually pass the
+;; event's place in the simulation to a *continuation* event. Thus the
+;; animations and some game events are using CPS to enable an easy
+;; abstraction and modularity of theses events.
+;;
+;; author: David St-Hilaire
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
 (include "event-simulation-macro.scm")
 
 ;;*****************************************************************************
@@ -133,6 +190,9 @@
              (type-width (game-object-type obj))
              (type-height (game-object-type obj))))
 
+;; In function of a certain coordinate, will choose the appropriate
+;; color for the object (red if in the upper-screen, white in the
+;; middle and green in the lower part).
 (define choose-color
   (let ((red-bottom (- screen-max-y 81))
         (normal-bottom (- screen-max-y 201))
@@ -178,6 +238,8 @@
      (hard ,(make-object-type 'hard (make-rect 0 0 12 8) 2 30))
      (mothership ,(make-object-type 'mothership (make-rect 0 0 16 7) 1 100))
      (player ,(make-object-type 'player (make-rect 0 0 13 8) 1 0))
+     ;; Little bounding box hack here to facilitate the laser
+     ;; penetration into shields.
      (laserA ,(make-object-type 'laserA (make-rect 1 0 1 7) 6 0))
      (laserB ,(make-object-type 'laserB (make-rect 1 0 1 7) 8 0))
      (laserC ,(make-object-type 'laserC (make-rect 1 0 1 7) 4 0))
@@ -209,6 +271,7 @@
         ((wall-struct? obj) 'wall)
         (else (error "unknown object type"))))
 
+;; Returns #t only if the type-id corresponds to an explosion
 (define (is-explosion? type-id)
   (case type-id
     ((invader_laser_explosion
@@ -225,11 +288,21 @@
 ;; Particles objects and functions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; Function used in the rgb-pixels-to-boolean-point-list calls to
+;; filter only pixels having some color in it. This will result in a
+;; point cloud corresponding to the read image.
+(define (rgb-threshold? r g b)
+  (> (+ r g b) 150))
+
 ;;;; centered explosion particle positions ;;;;
 (define invader-laser-explosion-particles
   (rgb-pixels-to-boolean-point-list
-   (parse-ppm-image-file "sprites/explodeInvL0.ppm") 'dont-center))
+   (parse-ppm-image-file "sprites/explodeInvL0.ppm")
+   rgb-threshold? 'dont-center))
 
+;; Generate a rectangle of points that should correspond to the
+;; specified invader's bounding box. This is used with the
+;; invader-shield collision resolution.
 (define (invader-ship-particles inv)
   (define height (type-height (game-object-type inv)))
   (define width (type-width (game-object-type inv)))
@@ -243,10 +316,14 @@
                         acc))
         acc)))
 
+;; Particles of a player laser explosion
 (define player-laser-explosion-particles
   (rgb-pixels-to-boolean-point-list
-   (parse-ppm-image-file "sprites/explodeL0.ppm") 'center))
+   (parse-ppm-image-file "sprites/explodeL0.ppm")
+   rgb-threshold? 'center))
 
+;; Calculate the interpenetration distance and add it to the laser's
+;; position. 
 (define (get-laser-penetration-pos laser-obj)
   (let* ((delta 2)
          (pos (game-object-pos laser-obj))
@@ -264,7 +341,8 @@
   (define speed (make-pos2d 0 0))
   (define (generate-particles)
       (rgb-pixels-to-boolean-point-list
-       (parse-ppm-image-file "sprites/shield0.ppm")))
+       (parse-ppm-image-file "sprites/shield0.ppm")
+       rgb-threshold?))
 
   (list (make-shield 'shield1 shield-type (make-pos2d  36 40) 0 'green
                      speed (generate-particles))
@@ -275,15 +353,19 @@
         (make-shield 'shield4 shield-type (make-pos2d 171 40) 0 'green
                      speed (generate-particles))))
 
+;; Get particle cloud associated with a certain colliding object.
 (define (get-explosion-particles colliding-obj)
   (let ((type-id (type-id (game-object-type colliding-obj))))
     (cond ((eq? type-id 'player_laser) player-laser-explosion-particles)
           ((or (eq? type-id 'laserA)
-               (eq? type-id 'laserB))
+               (eq? type-id 'laserB)
+               (eq? type-id 'laserC))
            invader-laser-explosion-particles)
           (else
            (invader-ship-particles colliding-obj)))))
 
+;; Damage the givent shield such that all the particles inside the
+;; colliding-obj are removed from the shield's particles.
 (define (shield-explosion! shield colliding-obj)
   (define explosion-particles (get-explosion-particles colliding-obj))
   (define explosion-pos (game-object-pos colliding-obj))
@@ -352,6 +434,12 @@
   height width object-table hi-score sim mutex
   extender: define-type-of-level)
 
+;; A word should be mentionned on the draw-game-field? parameter since
+;; it is mostly a hack to let know the user interface not to draw all
+;; the invaders, shields, etc... This will occur in a 2p mid-game when
+;; switching context from 1 player to another and that a PLAY
+;; PLAYER<X> will be redisplayed. I am conscient that this is not
+;; clean, but it greatly simplifies the problem.
 (define-type-of-level game-level
   player-id score lives walls wall-damage draw-game-field?
   extender: define-type-of-game-level)
@@ -359,6 +447,7 @@
 (define-type-of-game-level 2p-game-level
   other-finished? other-score)
 
+;; Level utilitary functions
 (define (level-add-object! lvl obj)
   (table-set! (level-object-table lvl) (game-object-id obj) obj))
 
@@ -447,6 +536,8 @@
 ;;
 ;;*****************************************************************************
 
+;; Abstraction that will add to the level all the usual top banner
+;; messages.
 (define (add-global-score-messages! level)
   (define y 254)
   (define type (get-type 'message))
@@ -469,7 +560,9 @@
          (make-message-obj 'player1-score-msg type
                            (make-pos2d 15 (- y 17)) state 'white speed ""))
         '()))))
-    
+
+;; New game level generation. Works for both single and 2 player
+;; games, but the behaviour will differ a bit in the 2 cases.
 (define (new-level init-score hi-score number-of-players player-id)
   (let* ((walls (generate-walls))
          (wall-damage '())
@@ -496,7 +589,8 @@
     
     (add-global-score-messages! level)
     (for-each (lambda (s) (level-add-object! level s)) shields)
-    
+
+    ;; Schedule the initial game animation and start events
     (schedule-event!
      sim 0
      (start-of-game-animation-event
@@ -505,15 +599,17 @@
        level
        (lambda ()
          (new-player! level)
-         (schedule-event! sim 0 (create-init-invader-move-event level))
-         (schedule-event! sim 1 (create-invader-laser-event level))
-         (schedule-event! sim (mothership-random-delay)
-                          (create-new-mothership-event level))))))
-    
+         (in 0 (create-init-invader-move-event level))
+         (in 1 (create-invader-laser-event level))
+         (in (mothership-random-delay)
+             (create-new-mothership-event level))))))
+
+    ;; Also schedule manager events
     (schedule-event! sim 0 (create-main-manager-event level))
     (schedule-event! sim 0 (create-redraw-event user-interface-thread level))
     level))
 
+;; Creation of the default initial intro movie
 (define (new-animation-level-A hi-score)
   (let* ((sim (create-simulation))
          (level (make-level screen-max-y screen-max-x (make-table)
@@ -525,6 +621,7 @@
     (schedule-event! sim 0 (create-redraw-event user-interface-thread level))
     level))
 
+;; Creation of the instructions intro movie
 (define (new-animation-level-B hi-score)
   (let* ((sim (create-simulation))
          (level (make-level screen-max-y screen-max-x (make-table)
@@ -536,6 +633,10 @@
     (schedule-event! sim 0 (create-redraw-event user-interface-thread level))
     level))
 
+;; Creation of a new demo movie. The demo movie is a tweaked normal
+;; game level where the user input manager is the same as for the
+;; other intro movies, and a special AI event is scheduled to control
+;; the player. The demo should stop as soon as the player dies.
 (define (new-animation-level-demo hi-score)
   (let* ((walls (generate-walls))
          (wall-damage '())
@@ -560,7 +661,8 @@
                        (make-pos2d 100 (- screen-max-y 60))
                        'dummy 'white (make-pos2d 0 0) "DEMO"))
     (for-each (lambda (s) (level-add-object! level s)) shields)
-    
+
+    ;; Schedule initial demo game events
     (schedule-event!
      sim 0
      (generate-invaders-event
@@ -568,10 +670,12 @@
       (lambda ()
         (new-player! level)
         (schedule-event! sim 0 (create-ai-player-event level))
+        ;; Extra: The flashing demo was not present in the arcade
+        ;; version, but I believe it is better to avoid confusion...
         (in 0 (create-text-flash-animation-event
                level
                (level-get level 'demo-msg)
-               +inf.0 (lambda () (error "should not occur..."))))
+               +inf.0 end-of-continuation-event))
         (in 0 (create-init-invader-move-event level))
         (in 1 (create-invader-laser-event level))
         (in (mothership-random-delay)
@@ -589,8 +693,13 @@
 ;;
 ;;*****************************************************************************
 
-;; Returns #t if a collision occured (and was resolved) during the
-;; movement.
+;; Will perform the object move. If a collision is detected, the
+;; collision resolution is automatically called and the result of the
+;; collision resolution (usually the obj with whoom the collision
+;; occured will be returned. Thus, a simple object movement is not
+;; limited to moving the obj, but may imply much more calculation
+;; depending on the collision type. If no collision is detected, #f is
+;; returned.
 (define (move-object! level obj)
   (define (move-object-raw! obj)
     (let* ((pos (game-object-pos obj) )
@@ -714,6 +823,8 @@
 ;; Collision resolution
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; Will resolve the collision between obj and collision-obj, depending
+;; on their types.
 (define (resolve-collision! level obj collision-obj)
   (cond
    ((player-ship? obj) (resolve-player-collision! level obj collision-obj))
@@ -724,6 +835,9 @@
     (error "cannot resolve object collision.")))
   (get-type-id collision-obj))
 
+;; Abstraction used to simplify the resolve-laser-collision!
+;; function. This will remove the laser object from the level and
+;; depending on the laser type, might re-scheduled a new laser shot.
 (define (destroy-laser! level laser-obj)
   (level-remove-object! level laser-obj)
   (if (not (eq? (object-type-id (game-object-type laser-obj)) 'player_laser))
@@ -733,8 +847,8 @@
 
 (define (resolve-laser-collision! level laser-obj collision-obj)
   (define type-id (object-type-id (game-object-type laser-obj)))
-  
-  ;;(show "collision occured with " collision-obj "\n")
+
+  ;; Collision resolution is straightforward
   (cond ((invader-ship? collision-obj) 
          (level-increase-score! level collision-obj)
          (explode-invader! level collision-obj)
@@ -770,7 +884,6 @@
          (destroy-laser! level laser-obj))))
 
   
-
 (define (resolve-invader-collision! level invader collision-obj)
   (cond ((laser-obj? collision-obj)
          (resolve-laser-collision! level collision-obj invader))
@@ -812,16 +925,23 @@
 ;;
 ;;*****************************************************************************
 
+;; Macro used to synchronize certain game events, such that the game
+;; may be paused.
 (define-macro (synchronized-event-thunk level action . actions)
   `(lambda ()
      (critical-section! (level-mutex ,level)
         ,action
         ,@actions)))
 
+;; A dummy event that just stop the continuation of a CPS event
+(define (end-of-continuation-event) 'eoc-event)
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Start of game level animations
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; Will animate a flashing PLAY PLAYER<X> in a black screen.
 (define (start-of-game-animation-event level continuation)
   (define animation-duration 3)
   (define player-id (game-level-player-id level))
@@ -849,6 +969,8 @@
                (level-get level score-msg-obj)
                animation-duration new-cont))))))
 
+;; Generate all the invaders in a level, with a little animation which
+;; displays them one after the other with a small dt interval.
 (define (generate-invaders-event level continuation)
   (define animation-delay 0.01)
   (define x-offset 30)
@@ -881,8 +1003,7 @@
          (in animation-delay continuation))))
   (generate-inv-event 0 0))
 
-    
-  ;(define (generate-inv-row index)
+
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -901,7 +1022,7 @@
                (exists (lambda (inv) (obj-wall-collision? inv walls)) row))
              rows)))
       (if (null? rows)
-          ;; Regenerate invaders
+          ;; Regenerate invaders when they all died
           (in 0 (generate-invaders-event
                  level (create-init-invader-move-event level)))
           (let* ((old-dx (pos2d-x (game-object-speed (caar rows))))
@@ -918,11 +1039,13 @@
                          dt old-dx 0 level
                          (create-init-invader-move-event level))))))))))
 
+;; Animation continuation that will be used after a wall collision to
+;; make the invader move in the opposite x direction.
 (define (create-invader-wall-movement-continuation-event old-dx level)
   (synchronized-event-thunk level
     (let ((rows (get-all-invader-rows level)))
       (if (null? rows)
-          ;; Regenerate invaders
+          ;; Regenerate invaders when they all died
           (in 0 (generate-invaders-event
                  level (create-init-invader-move-event level)))
           (let* ((dt (get-invader-move-refresh-rate level)))
@@ -931,6 +1054,8 @@
                  dt (- old-dx) 0 level
                  (create-init-invader-move-event level))))))))
 
+;; Will move the invaders, one row at a time of dx and dy, then call
+;; continuation event will be scheduled
 (define (create-invader-row-move-event! dt dx dy level continuation)
   (define rows (get-all-invader-rows level))
   (define (inv-row-move-event row-index)
@@ -1083,8 +1208,6 @@
               (in delta-t laser-event))))))
   laser-event)
 
-(define (end-of-continuation-event) 'eoc-event)
-
 ;; dispalys an explosion where the invader was and removes it from the
 ;; level. This will freeze the game events, as it seem to do in the
 ;; original game.
@@ -1095,6 +1218,9 @@
   (in animation-duration
       (create-explosion-end-event! level inv end-of-continuation-event)))
 
+;; dispalys the explosion of the mothership was and removes it from
+;; the level. The points for killing that mothership will then be
+;; randomly calculated and displayed after the explosion.
 (define (explode-mothership! level mothership)
   (define animation-duration 0.3)
   (define pos (game-object-pos mothership))
@@ -1114,6 +1240,7 @@
        level expl-obj
        (show-points-event level pos score-val end-of-continuation-event))))
 
+;; Will display the points value of a mothership kill at pos
 (define (show-points-event level pos points continuation)
   (define duration 1)
   (define msg
@@ -1132,6 +1259,14 @@
         (level-remove-object! level msg)
         (in 0 continuation)))))
 
+;; Event related to the explosion of the player ship. The continuation
+;; of this event is not trivial because of the many possibilities that
+;; the game can give in. The result for a single player is straight
+;; forward, but in a 2 player game, the game over animation will vary
+;; depending if the other player is also game-over or not, and if the
+;; player is not game over, the animation "PLAY PLAYER<X>" must be
+;; pre-scheduled before yielding the coroutine such that when it gets
+;; back, that animation must be loaded first.
 (define (explode-player! level player)
   (define animation-duration 1.5)
   (define expl-obj
@@ -1181,7 +1316,7 @@
     (sem-unlock! (level-mutex level))
     (new-player! level)))
         
-
+;; Animation of the player ship explosion
 (define (player-explosion-animation-event level expl-obj duration continuation)
   (define frame-rate 0.1)
   (define (animation-ev dt)
@@ -1194,6 +1329,7 @@
   (animation-ev 0))
 
 
+;; Destruction and animation of a laser explosion.
 (define (explode-laser! level laser-obj)
   (define animation-duration 0.3)
   (define (laser-type-id) (object-type-id (game-object-type laser-obj)))
@@ -1234,27 +1370,26 @@
 ;;
 ;;*****************************************************************************
 
-(define-macro (animate-message msg-obj msg cont)
-  (let ((animation-delay 0.1)
-        (anim-event      (gensym 'anim-event))
-        (str             (gensym 'str))
-        (current-text    (gensym 'current-text)))
-    `(letrec
-         ((,anim-event
-           (lambda (,str)
-             (lambda ()
-               (if (string=? ,str "")
-                   (in ,animation-delay ,cont)
-                   (let ((,current-text (message-obj-text ,msg-obj)))
-                     (message-obj-text-set!
-                      ,msg-obj
-                      (string-append ,current-text (substring ,str 0 1)))
-                     (in ,animation-delay
-                         (,anim-event (substring ,str 1
-                                                 (string-length ,str))))))))))
-       (,anim-event ,msg))))
+;; event that will use msg-obj and will gradually add the letters
+;; contained in the msg string to it, creating a type-writer effect.
+(define (animate-message msg-obj msg cont)
+  (define animation-delay 0.1)
+  (letrec
+      ((anim-event
+        (lambda (str)
+          (lambda ()
+            (if (string=? str "")
+                (in animation-delay cont)
+                (let ((current-text (message-obj-text msg-obj)))
+                  (message-obj-text-set!
+                   msg-obj
+                   (string-append current-text (substring str 0 1)))
+                  (in animation-delay
+                      (anim-event (substring str 1
+                                              (string-length str))))))))))
+    (anim-event msg)))
 
-    
+;; Flashing animation where the msg-obj will flash for a certain duration.
 (define (create-text-flash-animation-event level msg-obj duration continuation)
   (define animation-delay 0.2)
   (define original-color (game-object-color msg-obj))
@@ -1273,12 +1408,14 @@
             (in 0 continuation)))))
   (flash-ev 0))
 
+;; Special animation that occur in the intro movie A (main intro)
 (define (create-animation-A-event level)
   (define msg-type (get-type 'message))
   (define speed (make-pos2d 0 0))
   (define state 'white)
 
   (lambda ()
+    ;; messages declaration
     (let* ((play (let ((pos (make-pos2d 101 (- screen-max-y 88))))
                    (make-message-obj
                     'play msg-type pos state (choose-color pos) speed "")))
@@ -1302,18 +1439,22 @@
                     'easy msg-type pos state (choose-color pos) speed "")))
            (anim-messages
             (list play space score mother hard medium easy)))
-             
+      ;; add all the messages
       (for-each (lambda (m) (level-add-object! level m)) anim-messages )
+      ;; schedule the animation
       (in 0 (animate-message
              play "PLAY"
              (animate-message
               space "SPACE   INVADERS"
               (create-animate-score-adv-table-event level)))))))
 
+;; Animation A follow-up, which will create a table showing the score
+;; for killing each kind of invaders.
 (define (create-animate-score-adv-table-event level)
   (define speed (make-pos2d 0 0))
   (define (pos x y) (make-pos2d x (- screen-max-y y)))
   (lambda ()
+    ;; create the ship prototypes
     (let ((mothership (make-mothership 'mothership
                                        (get-type 'mothership)
                                        (pos 68 160)
@@ -1342,10 +1483,14 @@
                                         speed
                                         0 0))
           (score-msg-obj (level-get level 'score)))
+      ;; add all the new ships into the intro level
       (for-each (lambda (ship) (level-add-object! level ship))
                 (list mothership hard-ship medium-ship easy-ship))
+      ;; Display in one shot the score advance msg
       (message-obj-text-set! score-msg-obj "*SCORE ADVANCE TABLE*"))
-    
+
+    ;; and animate the other messages (where the msg-obj have been
+    ;; pre-allocated in the create-animation-A-event.
     (in 0 (animate-message
            (level-get level 'mother) "=? MYSTERY"
            (animate-message
@@ -1364,6 +1509,8 @@
                        (list-ref other-animations
                                  other-animations-index))))))))))))
 
+;; Similare to intro animation A, but more simple, where some very
+;; basic game instruction get displayed on screen.
 (define (create-animation-B-event level)
   (define msg-type (get-type 'message))
   (define speed (make-pos2d 0 0))
@@ -1396,69 +1543,79 @@
                  (in animation-end-wait-delay
                      (lambda () (exit-simulation 'intro-A)))))))))))
 
+;; Ai reaction event. This thread-like event will simulate a player
+;; behaviour, based on random "thoughts", where in fact a thought is
+;; an animation either moving the player or make him shoot.
 (define (create-ai-player-event level)
   (define ai-reaction-interval 0.01)
   (define ai-movement-duration-max 1)
   (define ai-movement-delay 0.02)
-
+  
+  ;; simple abastraction used in left/right movements
   (define (move-player! dx)
     (let ((player (level-player level))
           (new-speed (make-pos2d dx 0)))
       (game-object-speed-set! player new-speed)
       (move-object! level player)))
-  
+
+  ;; will move left the ai player for a random amount of time
   (define (create-move-left-animation-event)
     (define duration (* (random-real) ai-movement-duration-max))
     (define (move-left-event dt)
       (lambda ()
-        (if (level-player level)
-            (let ((collision?
-                   (move-player! (- player-movement-speed))))
-              (if (and (< dt duration) (not collision?))
-                  (in ai-movement-delay
-                      (move-left-event (+ dt ai-movement-delay)))
-                  (in ai-reaction-interval (create-ai-player-event level))))
-            (in NOW! end-of-demo-event))))
+        (let ((collision?
+               (move-player! (- player-movement-speed))))
+          (if (and (< dt duration) (not collision?))
+              (in ai-movement-delay
+                  (move-left-event (+ dt ai-movement-delay)))
+              (in ai-reaction-interval (create-ai-player-event level))))))
     (move-left-event 0))
-  
+
+  ;; will move right the ai player for a random amount of time
   (define (create-move-right-animation-event)
     (define duration (* (random-real) ai-movement-duration-max))
     (define (move-right-event dt)
       (lambda ()
-        (if (level-player level)
-            (let ((collision?
-                   (move-player! player-movement-speed)))
-              (if (and (< dt duration) (not collision?))
-                  (in ai-movement-delay
-                      (move-right-event (+ dt ai-movement-delay)))
-                  (in ai-reaction-interval (create-ai-player-event level))))
-            (in NOW! end-of-demo-event))))
+        (let ((collision?
+               (move-player! player-movement-speed)))
+          (if (and (< dt duration) (not collision?))
+              (in ai-movement-delay
+                  (move-right-event (+ dt ai-movement-delay)))
+              (in ai-reaction-interval (create-ai-player-event level))))))
     (move-right-event 0))
-  
+
+  ;; Will make the ai player shoot a laser
   (define (create-ai-laser-event)
     (lambda ()
-      (if (level-player level)
-          (begin
-            (shoot-laser! level 'player_laser
-                          (level-player level)
-                          player-laser-speed)
-            (in ai-reaction-interval (create-ai-player-event level)))
-          (in NOW! end-of-demo-event))))
-  
+      (shoot-laser! level 'player_laser
+                    (level-player level)
+                    player-laser-speed)
+      (in ai-reaction-interval (create-ai-player-event level))))
+
+  ;; This will end the demo. NOTE: here the synchronized-event-thunk
+  ;; is very important, even if the demo cannot be paused. This is so
+  ;; because the demo should end only when the player explosion is
+  ;; finished.
   (define end-of-demo-event
     (synchronized-event-thunk level
      (corout-kill-all!)))
 
-  (let ((actions (list create-move-left-animation-event
-                       create-move-right-animation-event
-                       create-ai-laser-event
-                       create-ai-laser-event
-                       create-ai-laser-event
-                       create-ai-laser-event
-                       create-ai-laser-event
-                       create-ai-laser-event)))
-    ((list-ref actions (random-integer (length actions))))))
+  ;; If the player is dead, end the demo, elso randomly choose an
+  ;; action. The action are determined using a cheap weighted
+  ;; distribution.
+  (if (not (level-player level))
+       end-of-demo-event
+      (let ((actions (list create-move-left-animation-event
+                           create-move-right-animation-event
+                           create-ai-laser-event
+                           create-ai-laser-event
+                           create-ai-laser-event
+                           create-ai-laser-event
+                           create-ai-laser-event
+                           create-ai-laser-event)))
+        ((list-ref actions (random-integer (length actions)))))))
 
+;; Will display in the top screen the final game over message.
 (define (game-over-animation-event level continuation)
   (define continuation-delay 2)
   (lambda ()
@@ -1472,6 +1629,9 @@
              msg-obj "GAME OVER"
              (lambda () (in continuation-delay continuation)))))))
 
+;; Will display in the lower scren the game over message for 1 player
+;; in a 2 player game. A final game over message should be displayed
+;; afterward if both player are game over.
 (define (game-over-2p-animation-event level continuation)
   (define continuation-delay 1.2)
   (lambda ()
@@ -1529,8 +1689,6 @@
                      (game-object-speed-set! player new-speed)
                      (move-object! level player))))
               
-              ((#\s #\S) (pp `(score is ,(game-level-score level))))
-
               ((#\p #\P)
                (if game-paused?
                    (sem-unlock! (level-mutex level))
@@ -1539,14 +1697,11 @@
 
               ((#\r #\R) (corout-kill-all!))
 
-              ((#\d #\D) (error "DEBUG"))
-               
-              (else
-               (show "received keyboard input: " msg ".\n"))))
+              ((#\d #\D) (error "DEBUG"))))
         (in manager-time-interfal manager-event))))
-
   manager-event)
 
+;; Simple key manager that is used durint the intro/demo screens
 (define (create-intro-manager-event level)
   (define game-paused? #f)
   (define manager-event
@@ -1557,16 +1712,13 @@
               ((#\1) (exit-simulation 'start-1p-game))
               ((#\2) (exit-simulation 'start-2p-game))
               ((#\r #\R) (exit-simulation 'intro-A))
-              ((#\d #\D) (error "DEBUG"))
-              (else
-               (show "received keyboard input: " msg ".\n"))))
+              ((#\d #\D) (error "DEBUG"))))
         (in manager-time-interfal manager-event))))
   manager-event)
 
 ;; Event that will send a message to the ui asking for a redraw.
 (define (create-redraw-event ui-thread level)
-  ;;TODO: Dummy duplication!!
-  (define (duplicate obj) obj) 
+  ;; will update the 2 top score messages if required.
   (define (update-score-msg! level)
     (if (game-level? level) 
         (let* ((is-player2? (eq? (game-level-player-id level) 'p2))
@@ -1587,7 +1739,7 @@
                (get-score-string (2p-game-level-other-score level)))))))
   (define (redraw-event)
     (update-score-msg! level)
-    (thread-send ui-thread (duplicate level))
+    (thread-send ui-thread level)
     (in redraw-interval redraw-event))
   
   redraw-event)
@@ -1600,8 +1752,11 @@
 ;;
 ;;*****************************************************************************
 
+;; high score will be stored in this file
 (define hi-score-filename ".spaceinvaders")
 
+;; Go read from the high-score file the current high-score, if none is
+;; found or if the file is mal formateed, 0 is taken as hi-score.
 (define (retrieve-hi-score)
  (with-exception-catcher
    (lambda (e)
@@ -1615,19 +1770,25 @@
            (raise 'bad-hi-score-file)
            hi-score)))))
 
+;; Save givent hi-score to the high-score file
 (define (save-hi-score hi-score)
   (with-output-to-file `(path: ,hi-score-filename create: maybe truncate: #t)
     (lambda ()
       (write hi-score))))
 
-(define other-animations (list 'intro-B 'demo))
+;; Global variables used by the intro-A event to alternate between the
+;; other intro movies.
+(define other-animations (list 'demo 'intro-B))
 (define other-animations-index 0)
 
-;; Setup of initial game events and start the simulation.
+;; Main game loop that dispatch and run the different intro/game levels
 (define (game-loop ui-thread)
   (define init-high-score (retrieve-hi-score))
   (set! user-interface-thread ui-thread)
     (lambda ()
+      ;; infinite loop, where the result of playing a level should
+      ;; either tell explicitely which level should be played next, or
+      ;; return the hi-score of the last played game.
       (let inf-loop ((hi-score init-high-score)
                      (result (play-level
                               (new-animation-level-A init-high-score))))

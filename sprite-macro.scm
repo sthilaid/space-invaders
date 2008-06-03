@@ -1,3 +1,22 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; filename: sprite-macro.scm
+;;
+;; description: This file contains the define-sprite macro which
+;; enables one to load an image in an ascii ppm image format as a
+;; sprite. This will parse the image and generate c-code that will
+;; fill save this image inside the video card using the texture
+;; abstraction defined in texture-macro.scm.
+;;
+;; Note: Since sprites are not used anymore in space-invaders, this
+;; macro was not updated and the generated c code should be very big
+;; and not very efficient. Please refert to the font-macro.scm file
+;; for a better implementation.
+;;
+;; author: David St-Hilaire
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (c-declare "#include <GL/gl.h>\n")
 
 (define-macro (define-sprite filename)

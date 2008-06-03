@@ -10,7 +10,8 @@ GAMBIT_INCLUDE=$(PATH_TO_GAMBIT)/include
 GSC=gsc -:=$(PATH_TO_GAMBIT) -debug
 CC=gcc
 INCLUDE_OPTIONS=-I$(GAMBIT_INCLUDE)
-LD_OPTIONS =-lglut -lgambc -lutil -L$(GAMBIT_LIB)
+LD_OPTIONS =-lglut  -lgambc -lutil -L$(GAMBIT_LIB)
+#LD_OPTIONS =-lglut -lglu32 -lopengl32  -lgambc -lutil -L$(GAMBIT_LIB)
 
 .SUFFIXES:
 .SUFFIXES: .c .scm .o .o1

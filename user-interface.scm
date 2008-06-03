@@ -1,71 +1,51 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; filename: user-interface.scm
+;;
+;; description: Glut user interface for space invaders, based on the
+;; engine.scm space invader model. This file contains the
+;; application's "main" function. During the initialization, 1 other
+;; thread will be started and will contain the engine's game-loop. The
+;; other thread will be controlled by glut. The user input will be
+;; forwarded as needed to the engine, and in return, the engine will
+;; tell to the glut thread when to execute redraw on the screen. This
+;; communication is made through the gambit thread mailbox system.
+;;
+;; author: David St-Hilaire
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
 (include "scm-lib-macro.scm")
-;; (include "texture-macro.scm")
-;; (include "sprite-macro.scm")
-;; (include "font-macro.scm")
 (include "opengl-header.scm")
-;;(include "ppm-reader.scm")
 
 
 ;;;;;;;;;;;;;;;;;;;;;;; Global state variables  ;;;;;;;;;;;;;;;;;;;;;;;
 
 (define game-loop-thunk #f)
 (define simulation-thread #f)
-
-;;;;;;;;;;;;;;;;;;;;;;; State modification functions ;;;;;;;;;;;;;;;;;;;;;;;
-
-
-
-;;;;;;;;;;;;;;;;;;;;;;; Menu functionnalities ;;;;;;;;;;;;;;;;;;;;;;;
+(define display-fps? #f)
+(define FPS (create-simple-moving-avg))
 
 
-;; (c-define (menu value) (int) void "menu" ""
-;;   (cond
-;;    ((eqv? value gray-scale-mode)   (set-display-mode! grayscalify))
-;;    ((eqv? value cloud-mode)        (set-display-mode! cloudify))
-;;    ((eqv? value terrain-mode)      (set-display-mode! terrainify))
-;;    ((eqv? value interpolation-mode)(switch-interpolation-fun!))
-;;    ((eqv? value animation-mode)    (switch-animation-mode!))
-;;    ((eqv? value octaves-mode)      (switch-octave!))))
-
-;; (define (create-menu)
-;;   (glutCreateMenu menu)
-;;   (glutAddMenuEntry "Gray Scale Mode" gray-scale-mode)
-;;   (glutAddMenuEntry "Cloud Mode" cloud-mode)
-;;   (glutAddMenuEntry "Terrain Mode" terrain-mode)
-;;   (glutAddMenuEntry "Toggle Animation" animation-mode)
-;;   (glutAddMenuEntry "Toggle Interpolation" interpolation-mode)
-;;   (glutAddMenuEntry "Toggle Octaves Number" octaves-mode)
-;;   (glutAttachMenu GLUT_RIGHT_BUTTON))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;; Render-Sceneing function ;;;;;;;;;;;;;;;;;;;;;;;
 
-
-(define display-fps? #f)
-
-(define current-font "bb_fonts")
-;; (define cycle-font!
-;;   (let* ((fonts (map car (table->list global-fonts-table)))
-;;          (index 0)
-;;          (fonts-nb (length fonts)))
-;;     (lambda ()
-;;       (set! index (modulo (+ index 1) fonts-nb))
-;;       (set! current-font (list-ref fonts index))
-;;       (pp `(current-font is now ,current-font)))))
-
-(define (render-sprite sprite-name x y state)
-  (if (not (number? state)) (error "sprite state must be a number."))
-  (let ((sprite-name
-         (string-append (symbol->string sprite-name)
-                        (number->string state))))
-    (draw-sprite sprite-name x y)))
+;; Deprecated
+;; (define (render-sprite sprite-name x y state)
+;;   (if (not (number? state)) (error "sprite state must be a number."))
+;;   (let ((sprite-name
+;;          (string-append (symbol->string sprite-name)
+;;                         (number->string state))))
+;;     (draw-sprite sprite-name x y)))
 
 (define (render-string x y str color)
   (if (not (eq? color 'black))
       (let loop ((i 0) (chars (string->list str)))
         (if (pair? chars)
             (begin
-              (draw-char current-font color (car chars) x y i)
+              (draw-char "bb_fonts" color (car chars) x y i)
               (loop (+ i 1) (cdr chars)))))))
 
 (define (render-fontified-sprite sprite-name x y state color)
@@ -128,6 +108,7 @@
     (else (error (string-append "Cannot render unknown object type:"
                                 (symbol->string type))))))
 
+;; Simple abstraction over open-gl to set up the desired color.
 (define (set-openGL-color color)
   (case color
     ;; equivalent to rgb color: 1ffe1f
@@ -141,6 +122,8 @@
      (glColor3f 0. 0. 0.))
     (else (error "unknown color"))))
 
+
+;; Will render a full game level
 (define (render-game-level level)
   (glBlendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA)
 
@@ -168,6 +151,8 @@
                   (game-level-wall-damage level))
 
         (for-each render-shield (game-level-shields level)))
+      ;; if we don't the draw the field, a black square is drawn to
+      ;; cover unwanted already drawn objects.
       (begin
         (set-openGL-color 'black)
         (glBegin GL_QUADS)
@@ -194,17 +179,7 @@
   (if (game-level? level)
       (render-game-level level)))
 
-
-;; (define (display-message x y msg color)
-;;   (let ((chars (map char->integer (string->list msg)))
-;;         (font GLUT_BITMAP_HELVETICA_12))
-;;     (set-openGL-color color)
-;;     (glRasterPos2i x y)
-;;     (for-each (lambda (char) (glutBitmapCharacter font char))
-;;               chars)))
-
-(define FPS (create-simple-moving-avg))
-
+;; Main rendering function, also calculates the redraw frame-rate
 (define render-scene
   (let ((last-render-time 0))
     (lambda (level)
@@ -239,8 +214,6 @@
            (with-output-to-string "" (lambda () (show "FPS: " (FPS))))
            'white))
 
-      ;;(render-string 20 20 "TESTING 1 - 2")
-      
       (glFlush)
       (glutSwapBuffers))))
 
@@ -250,25 +223,11 @@
 ;;;;;;;;;;;;;;;;;;;;;;; Viewport and projection ;;;;;;;;;;;;;;;;;;;;;;;
 
 (c-define (reshape w h) (int int) void "reshape" ""
-;;   (glViewport 0 0 w h)
-;;   (glMatrixMode GL_PROJECTION)
-;;   (glLoadIdentity);
-;;   (gluPerspective 60.0 (exact->inexact (/ w h)) 1.0 30.0)
-;;   (glMatrixMode GL_MODELVIEW);
-;;   (glLoadIdentity);
-;;   (glTranslatef 0.0 0.0 -3.6))
-
-;;    (glViewport 0 0 w h)
-;;    (glMatrixMode GL_PROJECTION)
-;;    (glLoadIdentity)
-;;    (glOrtho 0. (exact->inexact w) 0. (exact->inexact h) -1.0 1.0)
-;;    (glMatrixMode GL_MODELVIEW))
-
   (let* ((zoom-x (/ w screen-max-x))
          (zoom-y (/ h screen-max-y))
          (factor (exact->inexact (ceiling (max zoom-x zoom-y)))))
-    (glPointSize factor)
-    (glPixelZoom factor factor)
+;;     (glPointSize factor)
+;;     (glPixelZoom factor factor)
     (glViewport 0 0 w h)
     (glMatrixMode GL_PROJECTION)
     (glLoadIdentity)
@@ -297,21 +256,22 @@
 ;;    ((#\e) (pp 'up))
 ;;    ((#\g) (pp 'down))
    ((#\f) (register-user-action 'right-arrow))
-   ((#\d) (register-user-action 'left-arrow))
+   ((#\d) (register-user-action 'left-arrow))))
    
-   (else (show "received special keyboard input: " key
-               ". Mouse is @ ("x","y")\n"))))
+;;    (else (show "received special keyboard input: " key
+;;                ". Mouse is @ ("x","y")\n"))))
 
 ;;;;;;;;;;;;;;;;;;;;;;; Idle function (animation) ;;;;;;;;;;;;;;;;;;;;;;;
 
 (c-define (idle-callback) () void "idle_callback" ""
+  ;; receive from the game engine thread the next redraw command
   (let ((level (thread-receive)))
     (render-scene level)))
 
 ;;;;;;;;;;;;;;;;;;;;;;; Gui Initialization ;;;;;;;;;;;;;;;;;;;;;;;
 
 (c-declare "int argc = 0;")
-(define (glut-init height width)
+(define (glut-init)
   (let ((argc ((c-lambda () (pointer int) "___result_voidstar = &argc;"))))
 
     (set! simulation-thread
@@ -342,25 +302,22 @@
     (glutIdleFunc idle-callback)))
 ;    (glutDisplayFunc render-scene)))
 
-(define (usage-message) "TODO: Usage msg...\n\n")
+(define usage-message "USAGE: ./space-invaders\n")
 
 (define return #f)
 (define (quit) (return 0))
+
+;; Main function which only sets up and starts the game threads
 (define (main)
-  (define (start heigth width)
-    (glut-init heigth width)
-      ;(display-instructions)
+  (define (start)
+    (glut-init)
     (call/cc (lambda (k) (set! return k) (glutMainLoop))))
 
   ;; Start a debug/developpement repl in a seperate thread
   ;;   (thread-start! (make-thread (lambda () (##repl))))
   (cond
-   ((eqv? (length (command-line)) 1) (start 200 200))
-   ((eqv? (length (command-line)) 3)
-    (start (string->number (list-ref (command-line) 1))
-           (string->number (list-ref (command-line) 2))))
+   ((eqv? (length (command-line)) 1) (start))
    (else
     (display usage-message))))
-
 
 (time (main))

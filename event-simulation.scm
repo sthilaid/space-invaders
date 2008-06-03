@@ -1,3 +1,29 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; filename: event-simulation.scm
+;;
+;; description: A simple discrete event simulator implementation. The
+;; behaviour of the simulator is straightforward: First some events
+;; must be registered into a simulation object (generated with a call
+;; to create-simulation) with the schedule-event! function. Once all
+;; the initial events are scheduled, the simulation can be started
+;; with start-simulation! function. All the time values units are
+;; seconds. To create an infinite simulation, +inf.0 can be used as
+;; the simulation horizon.
+;;
+;; In a running simulation, the next event to be ran will be either
+;; the most late event, or the event that should be ran the closer to
+;; the current simulation time.
+;;
+;; Some utilitary functions that should be used inside events are also
+;; provided and macro are present in the event-simulation-macro.scm
+;; file. Some exemples are also shown below.
+;;
+;; author: David St-Hilaire
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
 (include "event-simulation-macro.scm")
 
 ;; (define-type event-simulation event-queue)
@@ -19,23 +45,31 @@
 (define !!-event-continuation-!! (make-parameter #f))
 (define !!-exit-simulation-!! (make-parameter #f))
 
-;; Here the event ev, is a thunk to be executed when the simulation is
-;; performed.
-(define (schedule-event! sim time ev)
-  (event-heap-insert! sim (event-heap-node-create time ev)))
+;; Here the event ev, is a thunk to be executed in dt seconds once the
+;; simulation is started.
+(define (schedule-event! sim dt ev)
+  (event-heap-insert! sim (event-heap-node-create dt ev)))
 
+;; This will start the simulator on the given simulation and will stop
+;; the simulation after horizon seconds.
 (define (start-simulation! sim horizon)
+  ;; Record the initial time
   (define simulation-start-time (time->seconds (current-time)))
   (define stop-simulation #f)
+  ;; Event that will occur at horizon seconds
   (define end-of-simulation-event
     (lambda ()
       (stop-simulation
        (string-append "Simulation finished normally at time: "
                       (number->string (!!-current-time-!!))))))
-  
+
+  ;; Simulator main loop
   (define (run-simulation)
+    ;; Preschedule the end of simulation event
     (schedule-event! sim horizon end-of-simulation-event)
     (let iterate ()
+      ;; the heap should never be empty, as it should at least contain
+      ;; the end-of-simulation event
       (if (event-heap-empty? sim)
           (error "No more events available...")
           (let* ((top-node (event-heap-retrieve-top! sim))
@@ -43,12 +77,15 @@
                  (current-actions (event-heap-actions top-node))
                  (wake-time (- (time->seconds (current-time))
                                simulation-start-time)))
+            ;; Sleep while waiting for the next event to pass by
             (let ((sleep-time (- current-event-time wake-time)))
 ;;               (if (< sleep-time 0)
 ;;                   (show "Warning: Simulation is getting late by "
 ;;                         sleep-time " secs.\n"))
               (thread-sleep! sleep-time))
 
+            ;; perform the event's actions inside a dynamic scoping of
+            ;; several control variables used by the utilistaries.
             (call/cc
              (lambda (k)
                (parameterize ((!!-event-queue-!! sim)
@@ -60,6 +97,7 @@
               (current-actions))))
             (iterate)))))
 
+  ;; Start the simulation
   (call/cc (lambda (k)
              (set! stop-simulation
                    (lambda (msg) (k msg)))
@@ -67,33 +105,26 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Utilitaries
+;;
+;; Note: All the given utilitaries should be used *inside* a
+;; simulation event.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; Some Time definitions that should "short-circuit" the simulator to
+;; execute an event very soon.
 (define NOW! -10)
 (define RIGHT-NOW! -inf.0)
 
-;; (define-macro (in delta thunk)
-;;   ;; or (+ !!-current-time-!! ,delta). Not sure if its better to not
-;;   ;; be accurate in times (as with using !!-current-time-!! or be
-;;   ;; slower by rechecking the current-time and be more accurate...
-;;   `(schedule-event! (!!-event-queue-!!)
-;;                     (+ (- (time->seconds (current-time))
-;;                           (!!-simulation-start-time-!!))
-;;                        ,delta)
-;;                     ,thunk))
+;;;;;;;;;;;; Semaphores and critical sections ;;;;;;;;;;
 
-
-;;;; Semaphores and critical sections ;;;;
-
+;; Internal data type def
 (define-type sem value wait-queue)
-(define (new-semaphore init-value) (make-sem init-value '()))
-(define (new-mutex) (new-semaphore 1))
 
-(define (sem-locked? sem) (< (sem-value sem) 0))
+;;;;; Internal control functions ;;;;
 (define (sem-increase! sem) (sem-value-set! sem (+ (sem-value sem) 1)))
 (define (sem-decrease! sem) (sem-value-set! sem (- (sem-value sem) 1)))
 
-;;*VERY* innefficient queue implementation...
+;; innefficient queue implementation...
 (define (sem-enqueue-k! sem k)
   (sem-wait-queue-set! sem (cons k (sem-wait-queue sem))))
 (define (sem-dequeue-k! sem)
@@ -101,6 +132,18 @@
     (sem-wait-queue-set! sem (drop-right (sem-wait-queue sem) 1))
     k))
 
+;;;; External Semaphores functions ;;;;
+
+;; Constructors
+(define (new-semaphore init-value) (make-sem init-value '()))
+(define (new-mutex) (new-semaphore 1))
+
+(define (sem-locked? sem) (< (sem-value sem) 1))
+
+;; Usual lock and unlock (P/V, take/release, etc...) implementation
+;; where the executed event will be put into a sleep queue if it tries
+;; to take an unavailable semaphore, and the first enqueued (fifo)
+;; event will be resumed when an unlock is performed.
 (define (sem-lock! sem)
   (call/cc (lambda (k)
              (sem-decrease! sem)
@@ -111,24 +154,17 @@
 
 (define (sem-unlock! sem)
   (sem-increase! sem)
-  (if (< (sem-value sem) 1)
+  (if (sem-locked? sem)
       (let ((k (sem-dequeue-k! sem)))
         (in 0 (lambda () (k 'dummy))))))
 
-;; (define-macro (critical-section! sem action . actions)
-;;   (let ((result (gensym 'crit-section-result)))
-;;     `(begin
-;;        (sem-lock! ,sem)
-;;        (let ((,result (begin ,action ,@actions)))
-;;          (sem-unlock! ,sem)
-;;          ,result))))
-
-;;;; Simulation abrupt stop ;;;;
+;;;; Simulation abrupt stop. Will result in having the
+;;;; start-simulation! function to return return-val.
 (define (exit-simulation return-val) ((!!-exit-simulation-!!) return-val))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Test
+;; Tests
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define (event-sim-test)

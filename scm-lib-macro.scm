@@ -1,4 +1,13 @@
-;;;;;;;;;;;;;;;;;;;;;;;; Simple macros ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; filename: scm-lib-macro.scm
+;;
+;; description: Small utils macro library
+;;
+;; author: David St-Hilaire
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 
 (define-macro (for var init-val condition true . false)
   (let ((loop (gensym 'loop)))

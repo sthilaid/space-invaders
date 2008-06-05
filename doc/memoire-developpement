@@ -1,0 +1,287 @@
+
+----------------------------------------------
+Mémoire sur le développement de space-invaders
+----------------------------------------------
+
+
+
+
+Structures de données:
+---------------------
+
+Les prototypes de départ du jeux etaient fort simples et ne
+requieraient pas des structures de données très complexes. Ainsi, les
+objets du jeux sont basés sur le systeme de "types" ou de "struct" de
+gambit (define-type ...).
+
+Plus tard dans le développement, les objets sont devenus de plus en
+plus complexes en tentant de rapprocher le comportement du jeu à celui
+du jeu original. Graduellement, une hierarchie d'objets s'est
+installee parmi certains objets (ex: game-object ->
+player-ship). L'utilisation courante des define-type n'est pas bien
+adaptée au système et il en résulte un mélange de programmation
+procedurale pure et orientée objet. Malgre le fait qu'une certaine
+hierarchie existe, les procedure manipulant les objets se retrouvent
+souvant à tester les types des objets et ainsi modifier le
+comportement à effectuer. Il semble que des structures de données
+purement orientées objets seraient mieux adaptées pour la structures
+de space-invaders. Entre autre, l'héritage et le polymorphisme
+permettraient d'isoler ces comportements uniques propres à chaque
+types et d'abstraire les comportement généraux dans les super classes.
+
+
+
+
+Flot de control:
+----------------
+
+L'idée d'utiliser une simulation à évenements discrets pour controler
+le flot d'execution du jeu a été retenue. Cette idée semble assez
+naturelle puisque lorsqu'on pense comment un jeu doit se comporter, il
+est géneralement facile d'imaginer l'éxecution de celui-ci comme une
+suite d'évenements (animation d'un texte, apparition d'un objet,
+déplacement d'un autre, etc...).
+
+L'implantation d'un tel système de simulation s'est fait d'une manière
+tres directe, grace a l'expressivite du langage scheme et de sa forme
+spéciale call/cc (environ 150 lignes de codes).
+
+On obtient ainsi un outil qui permet de définir le flot d'évenements
+d'une facon très abastraite et d'une facon raprochée de notre facon de
+penser. Par exemple:
+
+ (define (create-mothership-event level)
+  (define mothership-event
+    (synchronized-event-thunk level
+      (let ((mothership (level-mothership level)))
+        (if mothership
+            (let ((collision-occured? (move-object! level mothership)))
+              (if (or (not collision-occured?)
+                      (is-explosion? collision-occured?))
+                  (in mothership-update-interval mothership-event)))))))
+  mothership-event)
+
+On cree un evenement de deplacement d'un "mothership" et tout
+dépendant du résultat d'un déplacement, on ira re-scheduler un
+mouvement futur dans un délais (en secondes) donné.
+
+Un désavantage d'une telle approche est lié aux effets de bords qui
+peuvent survenir entre deux instances ou apparition d'un évenement
+déjà scheduler. En effet, on peut lancer un évenement de déplacement
+sur un objet quelconque, mais il est possible qu'entre temps, cet
+objet est été detruit et donc, il est necessaire de faire des
+vérifications sur l'existence de cet objet avant de pouvoir vraiment
+appliquer l'action liée a l'évenement.
+
+
+
+
+Interactions et découplage entre l'engin et l'interface usager:
+---------------------------------------------------------------
+
+Un soin particulier a été apporté afin de faire en sorte que l'engin
+du jeu soit découplé le plus possible de l'affichage du jeu, de
+manière à avoir de modules bien indépendants et facilement
+modifiables. On veut par contre que l'engin soit en contrôle du jeux
+et puisse lui même traiter les entrées et sorties de l'usager.
+
+L'architecture choisie est donc la suivante: l'interface usager
+s'exécute dans un thread (de gambit), tandis que l'engin dans un
+autre. Les deux communiquent entre eux via le système de messagerie
+inter-thread disponible. Ainsi, on doit démarrer l'engin de la manière
+suivante, à partir de l'interface usager:
+
+          (make-thread (game-loop (current-thread))))
+
+Ensuite, l'interface doit envoyer les entrées usager au thread de
+l'engin et l'engin enverra à l'interface usager des commandes de
+"redraw" avec la structure de données du niveau en cours qui sera
+affiché par l'interface. Ainsi, l'interface sera endormie jusqu'à ce
+qu'elle recoive un nouveau message de l'engin et pourra s'occuper
+d'afficher tous les objets contenus dans le niveau aux coordonnées
+specifiées dans le modèle.
+
+On peut ainsi bien contrôler non seulement les réponses aux entrees de
+l'usager directement à partir de l'engin, mais aussi controller la
+fréquences de rafraichissement de l'écran, etc...
+
+
+
+
+Pause:
+------
+
+Une particularité interessante d'un jeu est de pouvoir le mettre en
+pause lors d'une partie. Puisque le flot de control est geré par une
+simulation à évenements discrets, il n'hexistait pas de manière simple
+de pouvoir complètement bloquer l'exécution de la simulation.
+
+Par conséquent, un système de sémaphores a été ajouté à la simulation
+pour résoudre ce problème. L'implantation de ce systeme fait en sorte
+qu'un évenement sera place dans une file d'attente lorsqu'il tente de
+prendre un mutex déjà pris. Les évenements en attente se feront
+libérer un à la fois (fifo) lorsque le mutex est enfin relaché. Avec
+l'utilisation de semaphores binaires, il devient possible de mettre en
+attente sélectivement certains évenements qui tenteront d'acceder à la
+section critique d'un meme mutex bloqué, et de les relâcher en liberant
+ce mutex.
+
+Par contre, ce ne sont pas tous les evenements qui doivent être mis en
+attente lors d'une pause du jeu. Entre autre, il est très important
+que les évenements de contrôles du jeux ne soient pas bloqués afin de
+pouvoir reprendre le jeu. On veut donc pouvoir contrôler quels
+évenements sont "arretables" et lesquels ne le sont pas. Une macro
+nommée (synchronized-event-thunk level actions) a été écrite à cet
+effet. Ainsi tous les evenements de ce type s'executeront à
+l'interieur d'une section critique du mutex compris dans "level". Donc
+il ne suffit plus que de prendre explicitement ce mutex lors d'une
+pause et de le relâcher lorsqu'on veut recommencer le jeu.
+
+Cette technique est aussi utilisée lorsqu'un joueur perd une vie. À ce
+moment, une animation d'explosion est affichée et le jeu est supposé
+être gelé pendant la durée de l'animation et de repenre
+ensuite. Ainsi, l'animation d'explosion n'est pas écrite comme un
+synchronized-event-thunk et donc, en faisant une pause, l'animation
+peut s'exécuter pendant que tout le reste du jeu attend (les evenement
+de redraw ne sont évidemment pas non plus mis en pauses).
+
+
+
+
+Animations:
+-----------
+
+Un besoin qui s'est fait rapidement sentir durant le développement fut
+de pouvoir faire des évenements d'animations. En general, une
+animation peut facilement être représentée sous forme d'évenements
+recursifs. Par contre, à la fin d'une animation, on ne peut plus avoir
+de contrôle sur ce qui devrait suivre l'animation qui se termine.
+
+Afin d'éviter de dupliquer plusieurs animations utilisées dans des
+contextes différents, un nouveau paramètre a été ajouté à ces
+évenements particuliers, un paramètre de continuation. Ainsi, lorsque
+l'animation en cours se termine, elle peut scheduler dans la
+simulation l'évenement de continuation qui pourra produire la suite de
+l'animation. Avec ce style fortement inspiré du style de programmation
+CPS, on peut facilement abstraire certaines animations, ou parties
+d'animations et les ré-utilser au besoin dans plusieurs contexts
+différents.
+
+
+
+
+Multi-joueurs:
+--------------
+
+Le jeu original de space-invaders possède un mode à 2 joueurs où
+chaque joueur joue chacun son tour lorsque l'autre a perdu une
+vie. Puisque le flot d'exécution d'une partie se déroule dans une
+simulation, il est difficile de suspendre tous les évenement dans
+cette simulation et de les remplacer par des nouveaux qui
+correspondraient à la partie de l'autre joueur, et ansi de suite...
+
+Afin de permettre de changer de contexte facilement entre plusieurs
+joueurs, un système de coroutines a été conçu. Ce systeme de
+coroutines permet donc de pouvoir faire tourner plusieurs coroutines
+en "parallèle" et de choisir explicetement lorsqu'un changement de
+contexte doit être effectué (yield). Ainsi, chaque partie de jeux
+s'exécute dans une coroutine et il devient alors trivial de changer de
+contexte entre elles.
+
+Par contre, puisque chaque messages textes affichés sont propre a leur
+coroutine, il doit exister un moyen de communication entre les
+coroutines permettant de transmettre le score courant d'un joueur à la
+prochaine coroutine afin qu'elle puisse mettre-à-jour son message de
+score pour l'autre joueur. Ainsi, un mécanisme de communication entre
+les coroutines a été fait de maniere à permettre l'envoie de
+S-expressions entre les differentes coroutines, et donc les coroutines
+de chaque joueurs peuvent se communiquer entre elles leur score
+respectifs afin d'avoir un affichage cohérents et mis-à-jour.
+
+
+
+
+Affichage et rendu graphique:
+-----------------------------
+
+Un jeu est généralement constitué d'affichages graphiques répresentant
+les objets modélisés dans le jeux. Cette affichage ne peut pas être
+inclu de manière programmative dans le code du jeux, mais un systeme
+de chargement d'images ou de modeles graphiques externe doit être
+disponible de manière à pouvoir faciliter le parallélisme entre les
+développement programmatifs et artistiques.
+
+Malgre le fait que le graphisme de space-invaders soit extrêmement
+simple, un système d'abstraction d'images, ou de sprites, a été conçu
+afin de pouvoir facilement charger une image correspondant par exemple
+à un vaisseau ou un laser dans le jeu. Dans un premier temps, un
+"parser" d'images sous format ppm-ascii a été écrit afin de pouvoir
+obtenir en scheme toutes les pixels d'une image donnée. Ensuite, un
+system de macro permettant le chargement de ces images dans des
+tableaux C et par la suite dans des textures de opengl a été
+écrit. Par contre, ce système est rapidement devenu désuet car il
+nécessitait la gestion de trop d'images (imageA-couleur1,
+imageA-couleur2, imageA'-couleur1, etc...) et le besoin de pouvoir
+regrouper les images similaires ensemble est ainsi apparu.
+
+Par conséquent, le système de sprites a été étendu pour devenir la
+base d'un system de fontes. Puisqu'une image contenant une fonte
+bitmap possède plusieurs sous images, un fichier scheme de même nom
+doivent être créés avec celles-ci afin de fournir de l'information sur
+le contenu de l'image de la fonte (couleurs, charactères, etc...).
+
+Le chargement des fontes se fait donc sur la même base que pour les
+sprites, mais toutes les sous-images d'une fonte se retrouvent dans le
+même tableau C, soit un tableau d'images, ou les index sont
+pré-déterminés à partir de l'ordre dans lequel les images apparaissent
+dans le fichier de fonte. Lorsque vient le moment d'afficher un
+charactère (ou sous-image particulière d'une fonte) cette sous-image
+est chargée dans la texture associée a cette fonte en mémoire vidéo et
+peut être ensuite utilisée pour être rendue comme une texture sur un
+polygone quelconque.
+
+Ainsi, grace aux macro de scheme et au ffi ("foreign fonction
+interface") de gambit, il devient possible de charger des images (à la
+compilation ou à l'execution) et de les utiliser comme textures
+opengl. Ainsi, on peut facilement utiliser une fontes en format bitmap
+et se créé ses propres "sprites fonts" qui contiennent les images d'un
+même sprite dans plusieurs couleurs et/ou plusieurs animations qui
+seront traîtées comme des characters d'une fonte alphanumerique
+normale.
+
+
+
+
+Conclusion
+----------
+
+La création de ce "remake" de space-invaders aura permi de mettre en
+lumière plusieurs points importants reliés au developpement de jeux
+vidéo en général. En effet, ce jeu très simple possède tout de même
+les caractéristiques de bases que l'on peut retrouver dans les jeux
+les plus récent. Entre autre, on retrouve un besoin d'interaction
+quasi temps-réél avec l'usager, des parties multi-joueurs, un
+rafraîchissement de l'affichage constant (> 25 FPS), etc...
+
+Ainsi, ces besoins ont pu être bien satisfaits grâce à l'utilisation
+de scheme, un langage de programmation de très haut niveau. Plusieurs
+outils non-triviaux ont pu être écrits avec un minimum d'efforts
+(simulation à événements discrets, coroutines, chargement d'images,
+etc...). De plus, l'utilisation de ces outils ont permis de pouvoir
+exprimmer le comportement du jeu d'une façon peu commune et pourtant
+bien naturelle en utilisant des événements discrets et répartis dans
+le temps.
+
+Après environ 8 semaines de développement, le comportement de
+space-invaders est maintenant très près de la version originale. Il
+faudra maintenant se pencher sur le code produit pour y arriver afin
+de déterminer les choix qui semblent avoir été bons pour le
+développement du jeux, mais surtout ceux qui semblent moins bon afin
+de pouvoir les améliorer. Entre autre, il semble y avoir beaucoup de
+travail à faire au niveau des structures de données du jeux. Il faudra
+trouver un moyen harmonieux de lié la hierarchie existant entre les
+objets et leurs comportements, tout en évitant de trop entrer dans le
+piège d'un système qui serait trop orienté objets. Aussi, quoi que les
+événements discrets semblent bien adaptés à faire des animations, une
+méthodologie implantée dans un système de macro pourrait certainement
+rendre cette tâche encore plus simple.

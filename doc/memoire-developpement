@@ -32,21 +32,21 @@ types et d'abstraire les comportement généraux dans les super classes.
 
 
 
-Flot de control:
+Flot de contrôle:
 ----------------
 
-L'idée d'utiliser une simulation à évenements discrets pour controler
+L'idée d'utiliser une simulation à événements discrets pour controler
 le flot d'execution du jeu a été retenue. Cette idée semble assez
 naturelle puisque lorsqu'on pense comment un jeu doit se comporter, il
 est géneralement facile d'imaginer l'éxecution de celui-ci comme une
-suite d'évenements (animation d'un texte, apparition d'un objet,
+suite d'événements (animation d'un texte, apparition d'un objet,
 déplacement d'un autre, etc...).
 
 L'implantation d'un tel système de simulation s'est fait d'une manière
-tres directe, grace a l'expressivite du langage scheme et de sa forme
+tres directe, grâce a l'expressivite du langage scheme et de sa forme
 spéciale call/cc (environ 150 lignes de codes).
 
-On obtient ainsi un outil qui permet de définir le flot d'évenements
+On obtient ainsi un outil qui permet de définir le flot d'événements
 d'une facon très abastraite et d'une facon raprochée de notre facon de
 penser. Par exemple:
 
@@ -66,12 +66,12 @@ dépendant du résultat d'un déplacement, on ira re-scheduler un
 mouvement futur dans un délais (en secondes) donné.
 
 Un désavantage d'une telle approche est lié aux effets de bords qui
-peuvent survenir entre deux instances ou apparition d'un évenement
-déjà scheduler. En effet, on peut lancer un évenement de déplacement
+peuvent survenir entre deux instances ou apparition d'un événement
+déjà scheduler. En effet, on peut lancer un événement de déplacement
 sur un objet quelconque, mais il est possible qu'entre temps, cet
 objet est été detruit et donc, il est necessaire de faire des
 vérifications sur l'existence de cet objet avant de pouvoir vraiment
-appliquer l'action liée a l'évenement.
+appliquer l'action liée a l'événement.
 
 
 
@@ -113,24 +113,24 @@ Pause:
 
 Une particularité interessante d'un jeu est de pouvoir le mettre en
 pause lors d'une partie. Puisque le flot de control est geré par une
-simulation à évenements discrets, il n'hexistait pas de manière simple
+simulation à événements discrets, il n'hexistait pas de manière simple
 de pouvoir complètement bloquer l'exécution de la simulation.
 
 Par conséquent, un système de sémaphores a été ajouté à la simulation
 pour résoudre ce problème. L'implantation de ce systeme fait en sorte
-qu'un évenement sera place dans une file d'attente lorsqu'il tente de
-prendre un mutex déjà pris. Les évenements en attente se feront
+qu'un événement sera place dans une file d'attente lorsqu'il tente de
+prendre un mutex déjà pris. Les événements en attente se feront
 libérer un à la fois (fifo) lorsque le mutex est enfin relaché. Avec
 l'utilisation de semaphores binaires, il devient possible de mettre en
-attente sélectivement certains évenements qui tenteront d'acceder à la
+attente sélectivement certains événements qui tenteront d'acceder à la
 section critique d'un meme mutex bloqué, et de les relâcher en liberant
 ce mutex.
 
 Par contre, ce ne sont pas tous les evenements qui doivent être mis en
 attente lors d'une pause du jeu. Entre autre, il est très important
-que les évenements de contrôles du jeux ne soient pas bloqués afin de
+que les événements de contrôles du jeux ne soient pas bloqués afin de
 pouvoir reprendre le jeu. On veut donc pouvoir contrôler quels
-évenements sont "arretables" et lesquels ne le sont pas. Une macro
+événements sont "arretables" et lesquels ne le sont pas. Une macro
 nommée (synchronized-event-thunk level actions) a été écrite à cet
 effet. Ainsi tous les evenements de ce type s'executeront à
 l'interieur d'une section critique du mutex compris dans "level". Donc
@@ -152,16 +152,16 @@ Animations:
 -----------
 
 Un besoin qui s'est fait rapidement sentir durant le développement fut
-de pouvoir faire des évenements d'animations. En general, une
-animation peut facilement être représentée sous forme d'évenements
+de pouvoir faire des événements d'animations. En general, une
+animation peut facilement être représentée sous forme d'événements
 recursifs. Par contre, à la fin d'une animation, on ne peut plus avoir
 de contrôle sur ce qui devrait suivre l'animation qui se termine.
 
 Afin d'éviter de dupliquer plusieurs animations utilisées dans des
 contextes différents, un nouveau paramètre a été ajouté à ces
-évenements particuliers, un paramètre de continuation. Ainsi, lorsque
+événements particuliers, un paramètre de continuation. Ainsi, lorsque
 l'animation en cours se termine, elle peut scheduler dans la
-simulation l'évenement de continuation qui pourra produire la suite de
+simulation l'événement de continuation qui pourra produire la suite de
 l'animation. Avec ce style fortement inspiré du style de programmation
 CPS, on peut facilement abstraire certaines animations, ou parties
 d'animations et les ré-utilser au besoin dans plusieurs contexts
@@ -176,12 +176,12 @@ Multi-joueurs:
 Le jeu original de space-invaders possède un mode à 2 joueurs où
 chaque joueur joue chacun son tour lorsque l'autre a perdu une
 vie. Puisque le flot d'exécution d'une partie se déroule dans une
-simulation, il est difficile de suspendre tous les évenement dans
+simulation, il est difficile de suspendre tous les événement dans
 cette simulation et de les remplacer par des nouveaux qui
 correspondraient à la partie de l'autre joueur, et ansi de suite...
 
 Afin de permettre de changer de contexte facilement entre plusieurs
-joueurs, un système de coroutines a été conçu. Ce systeme de
+joueurs, un système de coroutines a été conçu. Ce système de
 coroutines permet donc de pouvoir faire tourner plusieurs coroutines
 en "parallèle" et de choisir explicetement lorsqu'un changement de
 contexte doit être effectué (yield). Ainsi, chaque partie de jeux

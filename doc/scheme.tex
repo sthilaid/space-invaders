@@ -1,0 +1,82 @@
+%ref: http://tex.dante.jp/typo/index.php?Listings#l8795a28
+
+\usepackage{color,graphicx}
+%\usepackage[margin=2.5cm]{geometry}
+%\usepackage{type1cm}
+\usepackage{listings}
+
+\lstdefinelanguage{Scheme}{%
+   keywords={begin,call-with-current-continuation,call/cc,%
+      call-with-input-file,call-with-output-file,case,cond,do,%
+      delay,else,force,for-each,if,lambda,let,let-syntax,let*,%
+      letrec,letrec-syntax,and,or,not,map,syntax,syntax-rules,%
+      with-mode,with-input-from-file,with-input-fromport,%
+      with-output-to-file,with-output-to-port,define,%
+			set!, eq?, equal?, eqv?, symbol?, string?, string=?,
+			append, string-append, vector-append, string, vector,
+			symbol, symbol->string, string->symbol, list, list-ref,
+			list-set!, list-tail, set-car!, set-cdr!, car, cdr,
+			vector-ref, vector-set!
+   },%
+   sensitive,%
+   alsodigit=-,%
+   morecomment=[l]{;},% 
+   morecomment=[s]{\#|}{|\#},% 
+   morestring=[b]{"}% 
+  }[keywords,comments,strings]%"
+
+\lstdefinelanguage[MIT]{Scheme}{%
+   morekeywords=[1]{begin,call-with-current-continuation,call/cc,%
+      call-with-input-file,call-with-output-file,case,cond,do,%
+      delay,else,force,for-each,if,lambda,let,let-syntax,let*,%
+      letrec,letrec-syntax,and,or,not,map,syntax,syntax-rules,%
+      with-mode,with-input-from-file,with-input-fromport,%
+      with-output-to-file,with-output-to-port,define%
+   },%
+   morekeywords=[2]{fluid-let,%
+     in-package,local-declare,macro,make-environment,named-lambda,%
+     using-syntax,with-input-from-string,with-output-to-string,%
+     with-values,syntax-table-define,list-transform-positive,%
+     list-transform-negative,list-search-positive,list-search-negative,%
+     access-components,assignment-components,combination-components,%
+     comment-components,conditional-components,disjunction-components,%
+     declaration-components,definition-components,delay-components,%
+     in-package-components,lambda-components,lambda-components*,%
+     lambda-components**,open-block-components,pathname-components,%
+     procedure-components,sequence-components,unassigned?-components,%
+     unbound?-components,variable-components,%
+     \#t,\#f,\#e,\#i,\#b,\#o,\#d,\#l,\#s,\#x,\#!\#*,\#@,\#=,\#\#,%
+     access,cons-stream,declare,default-object?,define-integrable,%
+     define-structure,define-syntax,er-macro-transformer,%
+     non-hygienic-macro-transformer,quasiquote,quote,%
+     rsc-macro-transformer,sc-macro-transformer,set!,%
+     eq?,eqv?,equal?,%
+     gcd,modulo,imag-part,numerator,inexact->exact,quotient,abs,%
+     lcm,rationalize,angle,magnitude,real-part,ceiling,make-polar,%
+     remainder,denominator,make-rectangular,round,expt,max,truncate,%
+     floor,min%
+  }%
+   sensitive=true,%
+   alsodigit=-,%
+   morecomment=[l]{;},% 
+   morecomment=[s]{\#|}{|\#},% 
+   morestring=[b]{"}% "
+}
+
+\lstset{%
+ frame=single,%
+ keywordstyle={\ttfamily \color[rgb]{.1, .7, .7}},%
+ stringstyle={\ttfamily \color[rgb]{0,.9,0}},%
+ commentstyle={\ttfamily \color[rgb]{.9,0,0}},%
+ identifierstyle={\color[rgb]{0,0,0}},%
+ basicstyle={\ttfamily \color[rgb]{0,0,0}},%
+ breaklines=true,%
+ columns=[l]{fullflexible},%
+ numbers=left,%
+ %stepnumber=5,%
+ numberstyle={\scriptsize},%
+ numbersep=1em,%
+ language={Scheme},%
+}
+\newcommand*\schemesrc[1]{\lstinputlisting[caption={question~#1}]{#1.scm}}
+

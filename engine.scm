@@ -1613,7 +1613,10 @@
                            create-ai-laser-event
                            create-ai-laser-event
                            create-ai-laser-event)))
-        ((list-ref actions (random-integer (length actions)))))))
+        (lambda ()
+          (if (not (level-player level))
+              (in NOW! end-of-demo-event)
+              (((list-ref actions (random-integer (length actions))))))))))
 
 ;; Will display in the top screen the final game over message.
 (define (game-over-animation-event level continuation)

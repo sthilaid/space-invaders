@@ -30,6 +30,7 @@
 % these will be used later in the title page
 \title{Développement de Space Invaders}
 \author{David St-Hilaire}
+\titlegraphic{\includegraphics[scale=0.7]{medium-intro}}
 
 \date{Juin 2008}
 
@@ -65,7 +66,7 @@
   \item Temps de développement plus court
   \item Code plus facile à lire et comprendre
   \item Moins de bugs
-  \item Possibilité d'être fait avec un langage GC
+  \item Possibilité d'être fait avec un langage avec GC
   \end{itemize}
 \end{frame}
 
@@ -77,13 +78,39 @@
       Jeux très simple mais,
       \begin{itemize}
       \item Interaction usager ~temp réel
-      \item Rafraichissement constant ($\ge 25$ FPS)
+      \item Rafraîchissement constant ($\ge 25$ FPS)
       \item Principes de niveaux
       \item Parties multi-joueurs
       \end{itemize}
     \end{column}
     \begin{column}{5cm} \includegraphics[scale=0.5]{medium} \end{column}
   \end{columns}
+\end{frame}
+
+\begin{frame}
+  \frametitle{Métriques}
+
+  \begin{block}{Temps de développement}
+    8 semaines
+  \end{block}
+
+  \begin{block}{Taille du code (\# lignes)}
+    \begin{itemize}
+    \item lecteur d'images (ppm): 80
+    \item coroutines: 200
+    \item simulation à événements discrets: 280
+    \item interface utilisateur: 380
+    \item textures et fontes: 500 + images
+    \item librairies autres: 870
+    \item interface opengl, glu, glut: 1700
+    \item \alert{engin: 1800}
+    \end{itemize}
+  \end{block}
+\end{frame}
+
+\begin{frame}
+  \frametitle{Architecture}
+  \includegraphics[scale=0.7]{arch}
 \end{frame}
 
 
@@ -96,7 +123,7 @@
 
   \begin{itemize}
     \item Utilisation de (define-type ...)
-    \item Besoin d'un certain typage
+    \item Besoin d'un certain \alert{typage}
     \item Présence de hierarchie naturelles entre les objets
     \item Comportements généraux et spécifiques à certains objets
   \end{itemize}
@@ -152,7 +179,7 @@
     \begin{itemize}
     \item Effectue un \textit{polling} d'entrées usagers
     \item Envoi périodique de commande \texttt{redraw}
-    \item Completement indépendant du rendu
+    \item Complètement indépendant du rendu
     \end{itemize}
   \end{block}
 \end{frame}
@@ -162,19 +189,19 @@
 
   \begin{block}{Sémaphores pour la simulation}
     \begin{itemize}
-      \item mise en attente dans fifo
+      \item mise en attente dans une fifo
     \end{itemize}
   \end{block}
 
   \begin{block}{Macro \texttt{synchronized-event-thunk}}
     \begin{itemize}
-      \item Permet déterminer simplement les événements à bloquer
+      \item Permet de déterminer simplement les événements à bloquer
     \end{itemize}
   \end{block}
 
   \begin{block}{Autres utilisations}
     \begin{itemize}
-      \item Animation de fin de vie et de fin de partie
+      \item Animations de fin de vie et de fin de partie
     \end{itemize}
   \end{block}
 \end{frame}
@@ -184,7 +211,8 @@
   \frametitle{Animations}
   \begin{itemize}
   \item Facilement représentées sous forme d'événements récursifs
-  \item Utilisation d'un paramètre supplémentaire: événement de continuation!
+  \item Utilisation d'un paramètre supplémentaire: événement de
+    \alert{continuation}!
   \item Bonne modularité des animations
   \end{itemize}
 \end{frame}
@@ -206,6 +234,29 @@
     \end{lstlisting}
   \end{block}
 \end{frame}
+
+\begin{frame}
+  \frametitle{Détection et réponse de collision}
+
+  La détection et la réponse aux collisions sont intégrées au
+  mouvement des objets.
+
+  \begin{block}{Détection}
+    \begin{itemize}
+    \item Rectangle à Rectangle (\textit{bounding-box})
+    \item Point à Rectangle
+    \end{itemize}
+  \end{block}
+
+  \begin{block}{Réponse}
+    \begin{itemize}
+    \item Basée sur le \alert{type} des objets
+    \item Centralisation du comportement \alert{manuelle}
+    \item Gestion de plusieurs modèles (objets, nuage de points)
+    \end{itemize}
+  \end{block}
+\end{frame}
+
 
 \begin{frame}
   \frametitle{Parties Multijoueurs}
@@ -256,8 +307,8 @@
   \begin{block}{Idée}
     \begin{itemize}
     \item Chargement à la compilation des images dans tableaux C
-    \item Utilisation de glDrawPixels pour rendre les images, pixel par
-      pixel de manière efficace
+    \item Utilisation de \texttt{glDrawPixels} pour rendre les images
+      pixel par pixel de manière efficace
     \end{itemize}
   \end{block}
   
@@ -273,6 +324,8 @@
   \frametitle{Rendu Graphique: Fontes}
   \begin{block}{Idée}
     \begin{itemize}
+    \item Plusieurs sous-images reliées sémantiquement dans une seule
+      image
     \item Chargement de l'image à l'exécution
     \item Chargement optionnel des images à la compilation
     \item Utilisation des textures de opengl pour faire le rendu
@@ -286,6 +339,20 @@
   \end{block}
 \end{frame}
 
+\begin{frame}[fragile]
+  \frametitle{Rendu Graphique: Fontes}
+
+  \begin{block}{Exemple}
+    \begin{center}
+      \includegraphics[scale=0.2]{font-exemple}
+    \end{center}
+    \begin{lstlisting}[basicstyle=\footnotesize]
+((colors: (white green red))
+ (chars: (0 1 2 3)))
+    \end{lstlisting}
+  \end{block}
+\end{frame}
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -296,6 +363,7 @@
 
   \begin{block}{Structures de données}
     \begin{itemize}
+    \item Présentement très lourd d'ajouté un nouveau type d'objet
     \item Grand besoin d'une variante d'un système d'objets
     \item Doit supporter le polymorphisme
     \item Doit pouvoir supporter les membres de classe statique
@@ -321,6 +389,13 @@
     \end{itemize}
   \end{block}
 
+  \begin{block}{Détection et Réponse de collision}
+    \begin{itemize}
+    \item Besoin d'une abstraction des réponses aux collisions
+      (méthodes de classes?)
+    \end{itemize}
+  \end{block}
+
   \begin{block}{Interface Utilisateur}
     \begin{itemize}
     \item Passer de glut à SDL.
@@ -330,9 +405,10 @@
 
 \begin{frame}
   \frametitle{A vos claviers!}
-
+  \begin{center}
+    \includegraphics[scale=0.4]{intro-movie2}
+  \end{center}
   Merci Beaucoup pour votre attention et vos suggestions!
-
 \end{frame}
 
 

@@ -92,17 +92,26 @@
        width="163.34166"
        height="154.85638"
        x="118.51499"
-       y="230.29166" />
+       y="230.29166"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658" />
     <rect
        style="opacity:1;fill:#ffffd8;fill-opacity:1;fill-rule:nonzero;stroke:#000000;stroke-width:0.90514201;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
        id="rect3213"
        width="273.07361"
        height="237.55028"
        x="374.76941"
-       y="188.9447" />
+       y="188.9447"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658" />
     <g
        id="g7718"
-       transform="translate(-9.5,1.7500397)">
+       transform="translate(-9.5,1.7500397)"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658">
       <g
          id="g7714">
         <text
@@ -151,7 +160,10 @@
     </g>
     <g
        id="g7729"
-       transform="translate(6,1.7500397)">
+       transform="translate(6,1.7500397)"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658">
       <text
          id="text3233"
          y="217.66379"
@@ -200,7 +212,10 @@
        style="font-size:16px;font-style:normal;font-weight:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:Courier"
        x="511.76715"
        y="178.25256"
-       id="text3287"><tspan
+       id="text3287"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658"><tspan
          sodipodi:role="line"
          id="tspan3289"
          x="511.76715"
@@ -210,7 +225,10 @@
        style="font-size:16px;font-style:normal;font-weight:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:Courier"
        x="200.64676"
        y="178.25256"
-       id="text3291"><tspan
+       id="text3291"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658"><tspan
          sodipodi:role="line"
          id="tspan3293"
          x="200.64676"
@@ -221,20 +239,29 @@
        id="path3295"
        inkscape:connector-type="polyline"
        inkscape:connection-start="#rect3211"
-       inkscape:connection-end="#rect3213" />
+       inkscape:connection-end="#rect3213"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658" />
     <path
        style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-start:url(#Arrow2Lstart);marker-end:url(#Arrow2Lend)"
        d="M 492.93074,307.71984 L 531.27639,307.71984"
        id="path7739"
        inkscape:connector-type="polyline"
        inkscape:connection-start="#g7718"
-       inkscape:connection-end="#g7729" />
+       inkscape:connection-end="#g7729"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658" />
     <text
        xml:space="preserve"
        style="font-size:16px;font-style:normal;font-weight:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:Courier"
        x="585"
        y="321.40527"
-       id="text8783"><tspan
+       id="text8783"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658"><tspan
          sodipodi:role="line"
          id="tspan8785"
          x="585"
@@ -244,7 +271,10 @@
        style="font-size:16px;font-style:normal;font-weight:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:Courier"
        x="440.35043"
        y="321.40527"
-       id="text8793"><tspan
+       id="text8793"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658"><tspan
          sodipodi:role="line"
          id="tspan8795"
          x="440.35043"
@@ -254,7 +284,10 @@
        style="font-size:16px;font-style:normal;font-weight:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:Courier"
        x="200.81833"
        y="308.83939"
-       id="text8797"><tspan
+       id="text8797"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658"><tspan
          sodipodi:role="line"
          id="tspan8799"
          x="200.81833"

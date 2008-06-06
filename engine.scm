@@ -113,7 +113,7 @@
   ;; no invader left, it is 0.01. Thus the equation system:
   ;; 55x + xy = 1/10 and 0x + xy = 1/100 was solved.
   (let* ((min-delta 0.0001)
-         (max-delta 0.1)
+         (max-delta 0.15)
          (max-inv-nb 55)
          (slope (/ (- max-delta min-delta) max-inv-nb)))
     (lambda (level)
@@ -1100,7 +1100,8 @@
         (if mothership
             (let ((collision-occured? (move-object! level mothership)))
               (if (or (not collision-occured?)
-                      (is-explosion? collision-occured?))
+                      (is-explosion? collision-occured?)
+                      (eq? collision-occured? 'message))
                   (in mothership-update-interval mothership-event)))))))
   mothership-event)
     
@@ -1563,12 +1564,14 @@
     (define duration (* (random-real) ai-movement-duration-max))
     (define (move-left-event dt)
       (lambda ()
-        (let ((collision?
-               (move-player! (- player-movement-speed))))
-          (if (and (< dt duration) (not collision?))
-              (in ai-movement-delay
-                  (move-left-event (+ dt ai-movement-delay)))
-              (in ai-reaction-interval (create-ai-player-event level))))))
+        (if (level-player level)
+            (let ((collision?
+                   (move-player! (- player-movement-speed))))
+              (if (and (< dt duration) (not collision?))
+                  (in ai-movement-delay
+                      (move-left-event (+ dt ai-movement-delay)))
+                  (in ai-reaction-interval (create-ai-player-event level))))
+            (in NOW! end-of-demo-event))))
     (move-left-event 0))
 
   ;; will move right the ai player for a random amount of time
@@ -1576,21 +1579,26 @@
     (define duration (* (random-real) ai-movement-duration-max))
     (define (move-right-event dt)
       (lambda ()
-        (let ((collision?
-               (move-player! player-movement-speed)))
-          (if (and (< dt duration) (not collision?))
-              (in ai-movement-delay
-                  (move-right-event (+ dt ai-movement-delay)))
-              (in ai-reaction-interval (create-ai-player-event level))))))
+        (if (level-player level)
+            (let ((collision?
+                   (move-player! player-movement-speed)))
+              (if (and (< dt duration) (not collision?))
+                  (in ai-movement-delay
+                      (move-right-event (+ dt ai-movement-delay)))
+                  (in ai-reaction-interval (create-ai-player-event level))))
+            (in NOW! end-of-demo-event))))
     (move-right-event 0))
 
   ;; Will make the ai player shoot a laser
   (define (create-ai-laser-event)
     (lambda ()
-      (shoot-laser! level 'player_laser
-                    (level-player level)
-                    player-laser-speed)
-      (in ai-reaction-interval (create-ai-player-event level))))
+      (if (level-player level)
+          (begin
+            (shoot-laser! level 'player_laser
+                          (level-player level)
+                          player-laser-speed)
+            (in ai-reaction-interval (create-ai-player-event level)))
+          (in NOW! end-of-demo-event))))
 
   ;; This will end the demo. NOTE: here the synchronized-event-thunk
   ;; is very important, even if the demo cannot be paused. This is so
@@ -1605,18 +1613,15 @@
   ;; distribution.
   (if (not (level-player level))
        end-of-demo-event
-      (let ((actions (list create-move-left-animation-event
-                           create-move-right-animation-event
-                           create-ai-laser-event
-                           create-ai-laser-event
-                           create-ai-laser-event
-                           create-ai-laser-event
-                           create-ai-laser-event
-                           create-ai-laser-event)))
-        (lambda ()
-          (if (not (level-player level))
-              (in NOW! end-of-demo-event)
-              (((list-ref actions (random-integer (length actions))))))))))
+       (let ((actions (list create-move-left-animation-event
+                            create-move-right-animation-event
+                            create-ai-laser-event
+                            create-ai-laser-event
+                            create-ai-laser-event
+                            create-ai-laser-event
+                            create-ai-laser-event
+                            create-ai-laser-event)))
+         ((list-ref actions (random-integer (length actions)))))))
 
 ;; Will display in the top screen the final game over message.
 (define (game-over-animation-event level continuation)

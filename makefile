@@ -25,11 +25,13 @@ ifeq ($(OS), mac)
 GL_INCLUDE=
 GL_LIB=
 LD_OPTIONS = $(LD_OPTIONS_COMMON) $(LD_OPTIONS_MAC)
-else ifeq ($(OS), win)
+endif
+ifeq ($(OS), win)
 GL_INCLUDE=/usr/include/GL
 GL_LIB=/usr/lib
 LD_OPTIONS = $(LD_OPTIONS_COMMON) $(LD_OPTIONS_WIN)
-else
+endif
+ifeq ($(OS), linux)
 GL_INCLUDE=/usr/include/GL
 GL_LIB=/usr/lib
 LD_OPTIONS = $(LD_OPTIONS_COMMON) $(LD_OPTIONS_LIN)

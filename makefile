@@ -1,4 +1,4 @@
-GLUT_FILES = opengl.scm opengl-header.scm glu.scm glu-header.scm glut.scm glut-header.scm
+GLUT_FILES = opengl.scm glu.scm  glut.scm 
 
 GRAPHICS_FILES = $(wildcard sprites/*.ppm)
 
@@ -33,6 +33,18 @@ user-interface.c: user-interface.scm scm-lib-macro.scm opengl-header.scm
 
 engine.c: engine.scm event-simulation-macro.scm
 	$(GSC) -c engine.scm
+
+
+# Opengl interface interdependance
+opengl.c: opengl.scm opengl-header.scm
+	$(GSC) -c opengl.scm
+
+glu.c: glu.scm glu-header.scm
+	$(GSC) -c glu.scm
+
+glut.c: glut.scm glut-header.scm
+	$(GSC) -c glut.scm
+
 
 .c.o:
 	$(CC) $(INCLUDE_OPTIONS) -c $*.c

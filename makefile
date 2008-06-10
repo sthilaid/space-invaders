@@ -1,6 +1,8 @@
 GLUT_FILES = opengl.scm glu.scm  glut.scm 
 
-GRAPHICS_FILES = $(wildcard sprites/*.ppm)
+SPRITE_FILES = $(wildcard sprites/*.ppm)
+FONT_FILES = $(wildcard fonts/*.ppm)
+DOC_FILES = $(wildcard doc/*.ppm)
 
 SPACE_INVADERS_FILES =  scm-lib.scm rbtree.scm ppm-reader.scm event-simulation.scm texture.scm sprite.scm font.scm coroutine.scm engine.scm user-interface-images.scm user-interface.scm 
 
@@ -69,7 +71,7 @@ clean:
 	rm -f $(ALL_SCM:.scm=.c) *_.c *.o* space-invaders *.tar.gz *.~*~
 	$(MAKE) clean -C doc
 
-tarball: $(wildcard *.scm) $(GRAPHICS_FILES) makefile 
+tarball: makefile $(wildcard *.scm) $(SPRITE_FILES) $(FONT_FILES) $(DOC_FILES)
 	tar cvzf space-invaders.tar.gz $(foreach file, $^, ../space-invaders/$(file))
 
 

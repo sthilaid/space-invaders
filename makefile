@@ -22,15 +22,17 @@ LD_OPTIONS_WIN =-lglut -lglu32 -lopengl32  -lgambc -lutil -L$(GAMBIT_LIB)
 
 ifeq ($(OS), mac)
 # Paths not required for mac os if using the -framework options?
-GL_INCLUDE=
-GL_LIB=
+GL_INCLUDE=/System/Library/Frameworks/OpenGL.framework/Headers
+GL_LIB=/System/Library/Frameworks/OpenGL.framework/Librairies
 LD_OPTIONS = $(LD_OPTIONS_COMMON) $(LD_OPTIONS_MAC)
 endif
+
 ifeq ($(OS), win)
 GL_INCLUDE=/usr/include/GL
 GL_LIB=/usr/lib
 LD_OPTIONS = $(LD_OPTIONS_COMMON) $(LD_OPTIONS_WIN)
 endif
+
 ifeq ($(OS), linux)
 GL_INCLUDE=/usr/include/GL
 GL_LIB=/usr/lib

@@ -263,6 +263,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;; Idle function (animation) ;;;;;;;;;;;;;;;;;;;;;;;
 
+(c-define (dummy-render) () void "dummy_render" ""
+  'dummy-renderer)
+
 (c-define (idle-callback) () void "idle_callback" ""
   ;; receive from the game engine thread the next redraw command
   (let ((level (thread-receive)))
@@ -299,8 +302,8 @@
     (glutReshapeFunc reshape)
     (glutKeyboardFunc keyboard)
     (glutSpecialFunc special-keyboard)
-    (glutIdleFunc idle-callback)))
-;    (glutDisplayFunc render-scene)))
+    (glutIdleFunc idle-callback)
+    (glutDisplayFunc dummy-render)))
 
 (define usage-message "USAGE: ./space-invaders\n")
 

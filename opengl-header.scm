@@ -635,5 +635,3 @@
 (define GL_RGBA16 ((c-lambda () int "___result = GL_RGBA16;")))
 (define GL_CLIENT_PIXEL_STORE_BIT ((c-lambda () int "___result = GL_CLIENT_PIXEL_STORE_BIT;")))
 (define GL_CLIENT_VERTEX_ARRAY_BIT ((c-lambda () int "___result = GL_CLIENT_VERTEX_ARRAY_BIT;")))
-(define GL_ALL_CLIENT_ATTRIB_BITS ((c-lambda () int "___result = GL_ALL_CLIENT_ATTRIB_BITS;")))
-(define GL_CLIENT_ALL_ATTRIB_BITS ((c-lambda () int "___result = GL_CLIENT_ALL_ATTRIB_BITS;")))

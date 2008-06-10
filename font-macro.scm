@@ -10,7 +10,7 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(c-declare "#include <GL/gl.h>\n")
+(c-declare "#include <gl.h>\n")
 
 ;; Generates code that will load an bitmap font called font-name at
 ;; runtime into a C array of the same name. The array must have been

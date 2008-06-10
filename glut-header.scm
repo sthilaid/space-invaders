@@ -126,7 +126,7 @@
 (define GLUT_INIT_DISPLAY_MODE ((c-lambda () int "___result = GLUT_INIT_DISPLAY_MODE;")))
 (define GLUT_ELAPSED_TIME ((c-lambda () int "___result = GLUT_ELAPSED_TIME;")))
 (define GLUT_WINDOW_FORMAT_ID ((c-lambda () int "___result = GLUT_WINDOW_FORMAT_ID;")))
-(define GLUT_INIT_STATE ((c-lambda () int "___result = GLUT_INIT_STATE;")))
+;; (define GLUT_INIT_STATE ((c-lambda () int "___result = GLUT_INIT_STATE;")))
 
 ;; /*
 ;;  * GLUT API macro definitions -- the glutDeviceGet parameters

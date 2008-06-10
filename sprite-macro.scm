@@ -17,7 +17,7 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(c-declare "#include <GL/gl.h>\n")
+(c-declare "#include <gl.h>\n")
 
 (define-macro (define-sprite filename)
   (include "ppm-reader.scm")

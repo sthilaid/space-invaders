@@ -12,13 +12,6 @@
 (include "glu-header.scm")
 (include "glut-header.scm")
 
-(c-declare #<<declare-end
-#include <GL/gl.h>
-#include <GL/glu.h>
-#include <GL/glut.h>
-declare-end
-)
-
 
 
 ; os dependent macros:

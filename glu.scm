@@ -12,13 +12,6 @@
 (include "opengl-header.scm")
 (include "glu-header.scm")
 
-(c-declare #<<declare-end
-#include <GL/gl.h>           
-#include <GL/glu.h>
-declare-end
-)
-
-
 (define gluBeginCurve (c-lambda (GLUnurbs* ) void "gluBeginCurve"))
 (define gluBeginPolygon (c-lambda (GLUtesselator* ) void "gluBeginPolygon"))
 (define gluBeginSurface (c-lambda (GLUnurbs* ) void "gluBeginSurface"))
@@ -49,7 +42,7 @@ declare-end
 (define gluNewQuadric (c-lambda () GLUquadric* "gluNewQuadric"))
 (define gluNewTess (c-lambda () GLUtesselator* "gluNewTess"))
 (define gluNextContour (c-lambda (GLUtesselator*   GLenum ) void "gluNextContour"))
-(define gluNurbsCallback (c-lambda (GLUnurbs*   GLenum   _GLUfuncptr ) void "gluNurbsCallback"))
+;; (define gluNurbsCallback (c-lambda (GLUnurbs*   GLenum   _GLUfuncptr ) void "gluNurbsCallback"))
 (define gluNurbsCallbackData (c-lambda (GLUnurbs*   GLvoid* ) void "gluNurbsCallbackData"))
 (define gluNurbsCallbackDataEXT (c-lambda (GLUnurbs*   GLvoid* ) void "gluNurbsCallbackDataEXT"))
 (define gluNurbsCurve (c-lambda (GLUnurbs*   GLint   GLfloat*   GLint   GLfloat*   GLint   GLenum ) void "gluNurbsCurve"))
@@ -61,7 +54,7 @@ declare-end
 (define gluPickMatrix (c-lambda (GLdouble   GLdouble   GLdouble   GLdouble   GLint* ) void "gluPickMatrix"))
 (define gluProject (c-lambda (GLdouble   GLdouble   GLdouble   GLdouble*   GLdouble*   GLint*   GLdouble*   GLdouble*   GLdouble* ) GLint "gluProject"))
 (define gluPwlCurve (c-lambda (GLUnurbs*   GLint   GLfloat*   GLint   GLenum ) void "gluPwlCurve"))
-(define gluQuadricCallback (c-lambda (GLUquadric*   GLenum   _GLUfuncptr ) void "gluQuadricCallback"))
+;; (define gluQuadricCallback (c-lambda (GLUquadric*   GLenum   _GLUfuncptr ) void "gluQuadricCallback"))
 (define gluQuadricDrawStyle (c-lambda (GLUquadric*   GLenum ) void "gluQuadricDrawStyle"))
 (define gluQuadricNormals (c-lambda (GLUquadric*   GLenum ) void "gluQuadricNormals"))
 (define gluQuadricOrientation (c-lambda (GLUquadric*   GLenum ) void "gluQuadricOrientation"))
@@ -70,7 +63,7 @@ declare-end
 (define gluSphere (c-lambda (GLUquadric*   GLdouble   GLint   GLint ) void "gluSphere"))
 (define gluTessBeginContour (c-lambda (GLUtesselator* ) void "gluTessBeginContour"))
 (define gluTessBeginPolygon (c-lambda (GLUtesselator*   GLvoid* ) void "gluTessBeginPolygon"))
-(define gluTessCallback (c-lambda (GLUtesselator*   GLenum   _GLUfuncptr ) void "gluTessCallback"))
+;; (define gluTessCallback (c-lambda (GLUtesselator*   GLenum   _GLUfuncptr ) void "gluTessCallback"))
 (define gluTessEndContour (c-lambda (GLUtesselator* ) void "gluTessEndContour"))
 (define gluTessEndPolygon (c-lambda (GLUtesselator* ) void "gluTessEndPolygon"))
 (define gluTessNormal (c-lambda (GLUtesselator*   GLdouble   GLdouble   GLdouble ) void "gluTessNormal"))

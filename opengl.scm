@@ -10,12 +10,6 @@
 
 (include "opengl-header.scm")
 
-(c-declare #<<end
-#include <GL/gl.h>
-end
-)
-
-
 ;; /*
 ;;  * Miscellaneous
 ;;  */

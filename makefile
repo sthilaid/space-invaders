@@ -9,17 +9,39 @@ SPACE_INVADERS_FILES =  scm-lib.scm rbtree.scm ppm-reader.scm event-simulation.s
 PATH_TO_GAMBIT=/opt/gambit-c/current
 GAMBIT_LIB=$(PATH_TO_GAMBIT)/lib
 GAMBIT_INCLUDE=$(PATH_TO_GAMBIT)/include
-GSC=gsc -:=$(PATH_TO_GAMBIT) -debug
+
+GSC=$(PATH_TO_GAMBIT)/bin/gsc -:=$(PATH_TO_GAMBIT) -debug
 CC=gcc
-INCLUDE_OPTIONS=-I$(GAMBIT_INCLUDE)
-LD_OPTIONS =-lglut  -lgambc -lutil -L$(GAMBIT_LIB)
-#LD_OPTIONS =-lglut -lglu32 -lopengl32  -lgambc -lutil -L$(GAMBIT_LIB)
+
+OS=linux
+
+LD_OPTIONS_COMMON =-L$(GAMBIT_LIB) -L$(GL_LIB) -lgambc 
+LD_OPTIONS_LIN = -lutil -lglut
+LD_OPTIONS_MAC = -framework GLUT -lobjc -framework OpenGL
+LD_OPTIONS_WIN =-lglut -lglu32 -lopengl32  -lgambc -lutil -L$(GAMBIT_LIB)
+
+ifeq ($(OS), mac)
+# Paths not required for mac os if using the -framework options?
+GL_INCLUDE=
+GL_LIB=
+LD_OPTIONS = $(LD_OPTIONS_COMMON) $(LD_OPTIONS_MAC)
+else ifeq ($(OS), win)
+GL_INCLUDE=/usr/include/GL
+GL_LIB=/usr/lib
+LD_OPTIONS = $(LD_OPTIONS_COMMON) $(LD_OPTIONS_WIN)
+else
+GL_INCLUDE=/usr/include/GL
+GL_LIB=/usr/lib
+LD_OPTIONS = $(LD_OPTIONS_COMMON) $(LD_OPTIONS_LIN)
+endif
+
+INCLUDE_OPTIONS=-I$(GAMBIT_INCLUDE) -I$(GL_INCLUDE)
 
 .SUFFIXES:
 .SUFFIXES: .c .scm .o .o1
 .PHONY: all clean shared-objects tarball welcome
 
-all: welcome space-invaders 
+all: welcome space-invaders
 
 space-invaders: $(GLUT_FILES:.scm=.o) $(SPACE_INVADERS_FILES:.scm=.o) space-invaders_.o 
 	$(CC) $(INCLUDE_OPTIONS) -o $@ $^ $(LD_OPTIONS)

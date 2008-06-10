@@ -8,14 +8,9 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(c-declare
-#<<end
-#include <GL/gl.h>
-#include <GL/glu.h>
-end
-)
+(c-declare "#include <glu.h>")
 
-(c-define-type _GLUfuncptr "_GLUfuncptr")
+;; (c-define-type _GLUfuncptr "_GLUfuncptr")
 (c-define-type GLUnurbs (struct "GLUnurbs"))
 (c-define-type GLUquadric (struct "GLUquadric"))
 (c-define-type GLUtesselator (struct "GLUtesselator"))

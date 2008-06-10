@@ -8,7 +8,7 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(c-declare "#include <GL/gl.h>")
+(c-declare "#include <gl.h>")
 
 (c-define-type GLenum unsigned-int)
 (c-define-type GLboolean unsigned-char)

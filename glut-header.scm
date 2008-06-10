@@ -8,13 +8,7 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(c-declare
-#<<end
-#include <GL/gl.h>
-#include <GL/glu.h>
-#include <GL/glut.h>
-end
-)
+(c-declare "#include <glut.h>")
 
 (c-define-type int* (pointer int))
 

@@ -8,7 +8,9 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(c-declare "#include <glut.h>")
+; (c-declare "#define _STDCALL_SUPPORTED")
+; (c-declare "#define _M_IX86")
+(c-declare "#include \"glut.h\"")
 
 (c-define-type int* (pointer int))
 

@@ -18,7 +18,7 @@ OS=linux
 LD_OPTIONS_COMMON =-L$(GAMBIT_LIB) -L$(GL_LIB) -lgambc 
 LD_OPTIONS_LIN = -lutil -lglut
 LD_OPTIONS_MAC = -framework GLUT -lobjc -framework OpenGL
-LD_OPTIONS_WIN =-lglut -lglu32 -lopengl32  -lgambc -lutil -L$(GAMBIT_LIB)
+LD_OPTIONS_WIN = -lglut32 -lglu32 -lopengl32 -lws2_32 -mwindows
 
 ifeq ($(OS), mac)
 # Paths not required for mac os if using the -framework options?
@@ -29,9 +29,9 @@ LD_OPTIONS = $(LD_OPTIONS_COMMON) $(LD_OPTIONS_MAC)
 endif
 
 ifeq ($(OS), win)
-GL_INCLUDE=/usr/include/GL
-GL_LIB=/usr/lib
-GLUT_INCLUDE=/usr/include/GL
+GL_INCLUDE=/mingw/include/GL
+GL_LIB=/mingw/lib
+GLUT_INCLUDE=/mingw/include/GL
 LD_OPTIONS = $(LD_OPTIONS_COMMON) $(LD_OPTIONS_WIN)
 endif
 
@@ -50,8 +50,12 @@ INCLUDE_OPTIONS=-I$(GAMBIT_INCLUDE) -I$(GL_INCLUDE) -I$(GLUT_INCLUDE)
 
 all: welcome space-invaders
 
-space-invaders: $(GLUT_FILES:.scm=.o) $(SPACE_INVADERS_FILES:.scm=.o) space-invaders_.o 
+space-invaders: $(GLUT_FILES:.scm=.o) $(SPACE_INVADERS_FILES:.scm=.o) space-invaders_.o
+ifeq ($(OS), win)
 	$(CC) $(INCLUDE_OPTIONS) -o $@ $^ $(LD_OPTIONS)
+else
+	$(CC) $(INCLUDE_OPTIONS) -o $@ $^ $(LD_OPTIONS)
+endif
 
 space-invaders_.c: $(GLUT_FILES:.scm=.c) $(SPACE_INVADERS_FILES:.scm=.c)
 	$(GSC) -o $@ -link $^ 
@@ -64,7 +68,6 @@ user-interface.c: user-interface.scm scm-lib-macro.scm opengl-header.scm
 
 engine.c: engine.scm event-simulation-macro.scm
 	$(GSC) -c engine.scm
-
 
 # Opengl interface interdependance
 opengl.c: opengl.scm opengl-header.scm

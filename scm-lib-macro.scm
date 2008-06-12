@@ -22,9 +22,17 @@
      ""
      (lambda () ,e1 ,@es)))
 
+(define-macro (when test . body)
+  `(if ,test (begin ,@body)))
+
+(define-macro (unless test . body)
+  `(if ,test #!void (begin ,@body)))
+
+
 (define-macro (cast-pointer in-type out-type value)
   `((c-lambda (,in-type) ,out-type
-              (string-append "___result_voidstar = " value ";\n"))))
+              "___result_voidstar = ___arg1;\n")
+    ,value))
 
 ;; (define-macro (make-vector2d height width . init-val)
 ;;   (let ((vector-sym (gensym 'vector-sym))

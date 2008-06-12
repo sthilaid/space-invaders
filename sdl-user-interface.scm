@@ -24,6 +24,7 @@
 
 (define game-loop-thunk #f)
 (define simulation-thread #f)
+(define event-thread #f)
 (define display-fps? #f)
 (define FPS (create-simple-moving-avg))
 
@@ -182,40 +183,42 @@
 ;; Main rendering function, also calculates the redraw frame-rate
 (define render-scene
   (let ((last-render-time 0))
-    (lambda (level)
+    (lambda (sdl-screen level)
+      (SDL::with-locked-surface
+       sdl-screen
+       (lambda ()
+         (glClearColor 0. 0. 0. 0.)
+         (glClear GL_COLOR_BUFFER_BIT)
 
-      (glClearColor 0. 0. 0. 0.)
-      (glClear GL_COLOR_BUFFER_BIT)
+         (glBlendFunc GL_SRC_ALPHA GL_ONE)
+         (glColor4f .1215 .9960 .1215 0.05)
+         (let ((y 65))
+           (glBegin GL_QUADS)
+           (glVertex2i 0 0)
+           (glVertex2i screen-max-x 0)
+           (glVertex2i screen-max-x y)
+           (glVertex2i 0 y)
+           (glEnd))
 
-      (glBlendFunc GL_SRC_ALPHA GL_ONE)
-      (glColor4f .1215 .9960 .1215 0.05)
-      (let ((y 65))
-        (glBegin GL_QUADS)
-        (glVertex2i 0 0)
-        (glVertex2i screen-max-x 0)
-        (glVertex2i screen-max-x y)
-        (glVertex2i 0 y)
-        (glEnd))
+         (glBlendFunc GL_ONE GL_ZERO)
+         
+         ;; Draw background stuff
+         (render-level level)
 
-      (glBlendFunc GL_ONE GL_ZERO)
-      
-      ;; Draw background stuff
-      (render-level level)
+         (let ((now (time->seconds (current-time))))
+           (if (not (= last-render-time 0))
+               (FPS (/ 1 (- now last-render-time))))
+           (set! last-render-time now))
 
-      (let ((now (time->seconds (current-time))))
-        (if (not (= last-render-time 0))
-            (FPS (/ 1 (- now last-render-time))))
-        (set! last-render-time now))
+         ;;draw frame-rate just over the green line
+         (if display-fps?
+             (render-string
+              0 11 
+              (with-output-to-string "" (lambda () (show "FPS: " (FPS))))
+              'white))
 
-      ;;draw frame-rate just over the green line
-      (if display-fps?
-          (render-string
-           0 11 
-           (with-output-to-string "" (lambda () (show "FPS: " (FPS))))
-           'white))
-
-      (glFlush)
-      (glutSwapBuffers))))
+         (glFlush)
+         (SDL::GL::SwapBuffers))))))
 
 
 
@@ -226,8 +229,6 @@
   (let* ((zoom-x (/ w screen-max-x))
          (zoom-y (/ h screen-max-y))
          (factor (exact->inexact (ceiling (max zoom-x zoom-y)))))
-;;     (glPointSize factor)
-;;     (glPixelZoom factor factor)
     (glViewport 0 0 w h)
     (glMatrixMode GL_PROJECTION)
     (glLoadIdentity)
@@ -243,84 +244,192 @@
 (define (register-user-action action)
   (thread-send simulation-thread action))
 
-(c-define (keyboard key x y) (unsigned-char int int) void "keyboard" ""
- (case key
-   ((#\f #\F) (set! display-fps? (not display-fps?)))
-   ;; On Escape, Ctl-q, Ctl-c, Ctl-w, q -> terminate the program
-   ((#\x1b #\x11 #\x03 #\x17 #\q) (quit))
-   ((#\space) (register-user-action 'space))
-   ((#\r #\R) (register-user-action 'r))
-   ((#\p #\P) (register-user-action 'p))
-   ((#\d #\D) (register-user-action 'd))
-   ((#\1) (register-user-action '1))
-   ((#\2) (register-user-action '2))
-   ))
+;; (c-define (keyboard key x y) (unsigned-char int int) void "keyboard" ""
+;;  (case key
+;;    ((#\f #\F) (set! display-fps? (not display-fps?)))
+;;    ;; On Escape, Ctl-q, Ctl-c, Ctl-w, q -> terminate the program
+;;    ((#\x1b #\x11 #\x03 #\x17 #\q) (quit))
+;;    (else (register-user-action key))))
 
-(c-define (special-keyboard key x y)
-          (unsigned-char int int) void "special_keyboard" ""
- (case key
-;;    ((#\e) (pp 'up))
-;;    ((#\g) (pp 'down))
-   ((#\f) (register-user-action 'right))
-   ((#\d) (register-user-action 'left))))
+;; (c-define (special-keyboard key x y)
+;;           (unsigned-char int int) void "special_keyboard" ""
+;;  (case key
+;; ;;    ((#\e) (pp 'up))
+;; ;;    ((#\g) (pp 'down))
+;;    ((#\f) (register-user-action 'right-arrow))
+;;    ((#\d) (register-user-action 'left-arrow))))
    
-;;    (else (show "received special keyboard input: " key
-;;                ". Mouse is @ ("x","y")\n"))))
+;; ;;    (else (show "received special keyboard input: " key
+;; ;;                ". Mouse is @ ("x","y")\n"))))
 
-;;;;;;;;;;;;;;;;;;;;;;; Idle function (animation) ;;;;;;;;;;;;;;;;;;;;;;;
+(define (->unhandled  evt-struct)
+  'todo)
+;; (define (->activate   evt-struct)
+;;   (make-event 'focus-change
+;;               (cons (if (SDL::active-gain? evt-struct) 'gained 'lost)
+;;                     (let ( [state (SDL::active-state  evt-struct)] )
+;;                       (cond
+;;                        ((= state SDL::app-mouse-focus) 'mouse-focus)
+;;                        ((= state SDL::app-input-focus) 'keyboard-focus)
+;;                        ((= state SDL::app-active)      'application-focus)
+;;                        (else ;; multiple states
+;;                         (let ( [states '()] )
+;;                           (when (bitwise-and state SDL::app-mouse-focus)
+;;                             (set! states (cons 'mouse-focus states)))
+;;                           (when (bitwise-and state SDL::app-input-focus)
+;;                             (set! states (cons 'keyboard-focus states)))
+;;                           (when (bitwise-and state SDL::app-active)
+;;                             (set! states (cons 'application-focus states)))
+;;                           states))))
+;;               )
+;; ) )
+(define (->key-down evt-struct)
+  (let ((key-enum  (SDL::key-enum      evt-struct))
+        (modifiers (SDL::key-modifiers evt-struct))
+        (unicode   (SDL::key-unicode   evt-struct)))
+    (case key-enum
+      [(key-left-arrow)   (key-down-table-add!
+                           'left
+                           (lambda () (register-user-action 'left)))]
+      [(key-right-arrow)  (key-down-table-add!
+                           'right
+                           (lambda () (register-user-action 'right)))]
+      [(key-space)        (register-user-action 'space)]
+      [(key-r)            (register-user-action 'r)]
+      [(key-p)            (register-user-action 'p)]
+      [(key-1)            (register-user-action '1)]
+      [(key-2)            (register-user-action '2)]
+      [(key-d)            (register-user-action 'd)]
+      [(key-f)            (set! display-fps? (not display-fps?))]
+      [(key-q)            (request-exit)])
+    ))
+(define (->key-up   evt-struct)
+  (let ((key-enum  (SDL::key-enum      evt-struct))
+        (modifiers (SDL::key-modifiers evt-struct)))
+    (case key-enum
+      [(key-left-arrow)   (key-down-table-reset-key 'left)]
+      [(key-right-arrow)  (key-down-table-reset-key 'right)])
+    ))
+;; (define (->mouse-motion evt-struct)
+;;   (make-event 'mouse-motion
+;;               (cons 'x     (SDL::move-x     evt-struct))
+;;               (cons 'y     (SDL::move-y     evt-struct))
+;;               (cons 'rel-x (SDL::move-rel-x evt-struct))
+;;               (cons 'rel-y (SDL::move-rel-y evt-struct))
+;; ) )
+;; (define (->mouse-button-down evt-struct)
+;;   (make-event 'mouse-button-down
+;;               (cons 'button (SDL::mouse-button evt-struct))
+;;               (cons 'x      (SDL::mouse-x      evt-struct))
+;;               (cons 'y      (SDL::mouse-y      evt-struct))
+;; ) )
+;; (define (->mouse-button-up   evt-struct)
+;;   (make-event 'mouse-button-up
+;;               (cons 'button (SDL::mouse-button evt-struct))
+;;               (cons 'x      (SDL::mouse-x      evt-struct))
+;;               (cons 'y      (SDL::mouse-y      evt-struct))
+;; ) )
+(define (->quit evt-struct)
+  (request-exit))
 
-(c-define (dummy-render) () void "dummy_render" ""
-  'dummy-renderer)
+(define managage-sdl-event
+  ;; SDL event structure bits -> Scheme object
+  (let ( [xforms (make-vector (+ 1 SDL::num-events) ->unhandled)] )
+;;     (vector-set! xforms SDL::active-event         ->activate)
+    (vector-set! xforms SDL::key-down             ->key-down)
+    (vector-set! xforms SDL::key-up               ->key-up)
+;;     (vector-set! xforms SDL::mouse-motion         ->mouse-motion)
+;;     (vector-set! xforms SDL::mouse-button-down    ->mouse-button-down)
+;;     (vector-set! xforms SDL::mouse-button-up      ->mouse-button-up)
+    (vector-set! xforms SDL::quit                 ->quit)
+    
+    (lambda (sdl-event-struct)
+      (let ( (event-type (SDL::raw-event-type sdl-event-struct)) )
+        (if (<= 0 event-type SDL::num-events)
+            ((vector-ref xforms event-type) sdl-event-struct)
+            (->unhandled sdl-event-struct))))
+) )
 
-(c-define (idle-callback) () void "idle_callback" ""
-  ;; receive from the game engine thread the next redraw command
-  (let ((level (thread-receive)))
-    (render-scene level)))
+(define key-down-table (make-table))
+(define (key-down-table-add! key action)
+  (table-set! key-down-table key action))
+(define (key-down-table-reset-key key)
+  (table-set! key-down-table key))
+(define (key-down-table-actions)
+  (map cdr (table->list key-down-table)))
+
+(define (event-thread-thunk)
+  (let ((evt-struct (SDL::malloc-event-struct)))
+    (let poll-loop ((event-or-false (SDL::poll-event evt-struct)))
+      (if event-or-false
+          (begin
+            (managage-sdl-event evt-struct)
+            (poll-loop (SDL::poll-event evt-struct)))
+          (begin
+            (for-each (lambda (x) (x)) (key-down-table-actions))
+            (thread-sleep! 0.01)
+            (poll-loop (SDL::poll-event evt-struct)))))))
+
+
 
 ;;;;;;;;;;;;;;;;;;;;;;; Gui Initialization ;;;;;;;;;;;;;;;;;;;;;;;
 
 (c-declare "int argc = 0;")
-(define (glut-init)
-  (let ((argc ((c-lambda () (pointer int) "___result_voidstar = &argc;"))))
+(define (init-GL)
+  (glPointSize 1.)
+  (glDisable GL_POINT_SMOOTH)
 
-    (set! simulation-thread
-          (make-thread (game-loop (current-thread))))
-    (thread-start! simulation-thread)
-    
-    (glutInit argc '())
-    (glutInitDisplayMode (bitwise-ior GLUT_DOUBLE GLUT_RGBA))
-    (glutInitWindowSize screen-max-x screen-max-y)
-    (glutCreateWindow "Space Invaders")
-    
-    (glPointSize 1.)
-    (glDisable GL_POINT_SMOOTH)
+  (glPixelStorei GL_UNPACK_ALIGNMENT 1)
+  (glShadeModel GL_FLAT)
 
-    (glPixelStorei GL_UNPACK_ALIGNMENT 1)
-    (glShadeModel GL_FLAT)
+  (glEnable GL_BLEND)
+  (glBlendFunc GL_SRC_ALPHA GL_ONE)
 
-    (glEnable GL_BLEND)
-    (glBlendFunc GL_SRC_ALPHA GL_ONE)
+  (initialize-textures!)
 
-    (initialize-textures!)
+  (reshape screen-max-x screen-max-y)
+  )
 
-    ;(create-menu)
-    
-    (glutReshapeFunc reshape)
-    (glutKeyboardFunc keyboard)
-    (glutSpecialFunc special-keyboard)
-    (glutIdleFunc idle-callback)
-    (glutDisplayFunc dummy-render)))
+(define (start-threads!)
+  (set! simulation-thread (make-thread (game-loop (current-thread))))
+  (set! event-thread      (make-thread event-thread-thunk))
+  (thread-start! simulation-thread)
+  (thread-start! event-thread))
+
+(define (redraw-loop)
+  (SDL::set-window-caption "Space Invaders" "Icon Name")
+  (let ( (screen (SDL::set-video-mode
+                    screen-max-x screen-max-y 32 SDL::opengl)) )
+      (if screen
+          (call/cc
+           (lambda (k)
+             (set! return
+                   (lambda (ret-val)
+                     (thread-terminate! event-thread)
+                     (thread-terminate! simulation-thread)
+                     (k ret-val)))
+             (init-GL)
+             (start-threads!)
+             (let loop ((level (thread-receive)))
+               (if exit-requested? (quit))
+               (render-scene screen level)
+               (loop (thread-receive)))))
+          (display "Could not set SDL screen")))
+  )
 
 (define usage-message "USAGE: ./space-invaders\n")
 
+(define (request-exit)
+  (set! exit-requested? #t))
+(define exit-requested? #f)
 (define return #f)
 (define (quit) (return 0))
 
 ;; Main function which only sets up and starts the game threads
 (define (main)
   (define (start)
-    (glut-init)
-    (call/cc (lambda (k) (set! return k) (glutMainLoop))))
+    (SDL::within-sdl-lifetime SDL::init-everything
+                              redraw-loop))
 
   ;; Start a debug/developpement repl in a seperate thread
   ;;   (thread-start! (make-thread (lambda () (##repl))))
@@ -328,5 +437,6 @@
    ((eqv? (length (command-line)) 1) (start))
    (else
     (display usage-message))))
+
 
 (time (main))

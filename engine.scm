@@ -1680,32 +1680,32 @@
             (msg (thread-receive 0 #f)))
         (if msg
             (case msg
-              ((#\space)
+              ((space)
                (if (player-can-move?)
                    (shoot-laser! level 'player_laser
                                  (level-player level)
                                  player-laser-speed)))
-              ((right-arrow)
+              ((right)
                (if (player-can-move?)
                    (let ((new-speed (make-pos2d player-movement-speed 0)))
                      (game-object-speed-set! player new-speed)
                      (move-object! level player))))
               
-              ((left-arrow)
+              ((left)
                (if (player-can-move?)
                    (let ((new-speed (make-pos2d (- player-movement-speed) 0)))
                      (game-object-speed-set! player new-speed)
                      (move-object! level player))))
               
-              ((#\p #\P)
+              ((p)
                (if game-paused?
                    (sem-unlock! (level-mutex level))
                    (sem-lock! (level-mutex level)))
                (set! game-paused? (not game-paused?)))
 
-              ((#\r #\R) (corout-kill-all!))
+              ((r) (corout-kill-all!))
 
-              ((#\d #\D) (error "DEBUG"))))
+              ((d) (error "DEBUG"))))
         (in manager-time-interfal manager-event))))
   manager-event)
 
@@ -1717,10 +1717,10 @@
       (let ((msg (thread-receive 0 #f)))
         (if msg
             (case msg
-              ((#\1) (exit-simulation 'start-1p-game))
-              ((#\2) (exit-simulation 'start-2p-game))
-              ((#\r #\R) (exit-simulation 'intro-A))
-              ((#\d #\D) (error "DEBUG"))))
+              ((1) (exit-simulation 'start-1p-game))
+              ((2) (exit-simulation 'start-2p-game))
+              ((r) (exit-simulation 'intro-A))
+              ((d) (error "DEBUG"))))
         (in manager-time-interfal manager-event))))
   manager-event)
 

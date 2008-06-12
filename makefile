@@ -49,8 +49,8 @@ ifeq ($(OS), win)
 GL_INCLUDE=/mingw/include/GL
 GL_LIB=/mingw/lib
 GLUT_INCLUDE=/mingw/include/GL
-SDL_INCLUDE=??
-SDL_LIB=??
+SDL_INCLUDE=/usr/local/include/SDL
+SDL_LIB=/usr/local/lib
 LD_OPTIONS = $(LD_OPTIONS_COMMON) $(LD_OPTIONS_WIN)
 endif
 

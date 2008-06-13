@@ -1205,5 +1205,12 @@ char *SDL_GetError(void);
   (SDL::make-field-ref ((pointer "SDL_Event")) int8  "active.state")
 )
 
+(define SDL::resize-w
+  (SDL::make-field-ref ((pointer "SDL_Event")) int "resize.w"))
+
+(define SDL::resize-h
+  (SDL::make-field-ref ((pointer "SDL_Event")) int "resize.h"))
+
+
 
 ;;;   ---   E O F   ---   ;;;

@@ -73,7 +73,9 @@ endif
 .SUFFIXES: .c .scm .o .o1
 .PHONY: all clean shared-objects tarball welcome
 
+
 all: welcome space-invaders
+
 
 space-invaders: $(GLUT_FILES:.scm=.o) $(SPACE_INVADERS_FILES:.scm=.o) $(UI_FILES:.scm=.o) space-invaders_.o
 ifeq ($(OS), win)

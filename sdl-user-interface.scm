@@ -225,7 +225,7 @@
   
 ;;;;;;;;;;;;;;;;;;;;;;; Viewport and projection ;;;;;;;;;;;;;;;;;;;;;;;
 
-(c-define (reshape w h) (int int) void "reshape" ""
+(define (reshape w h)
   (let* ((zoom-x (/ w screen-max-x))
          (zoom-y (/ h screen-max-y))
          (factor (exact->inexact (ceiling (max zoom-x zoom-y)))))
@@ -329,8 +329,17 @@
 ;;               (cons 'x      (SDL::mouse-x      evt-struct))
 ;;               (cons 'y      (SDL::mouse-y      evt-struct))
 ;; ) )
+
 (define (->quit evt-struct)
   (request-exit))
+
+(define (->video-resize evt-struct)
+  (let ((w (SDL::resize-w evt-struct))
+        (h (SDL::resize-h evt-struct)))
+    (show 'test-resize w: w h: h "\n")
+    (reshape w h)
+    (SDL::set-video-mode w h 32 (bitwise-ior SDL::opengl SDL::resizable))
+    ))
 
 (define managage-sdl-event
   ;; SDL event structure bits -> Scheme object
@@ -342,6 +351,7 @@
 ;;     (vector-set! xforms SDL::mouse-button-down    ->mouse-button-down)
 ;;     (vector-set! xforms SDL::mouse-button-up      ->mouse-button-up)
     (vector-set! xforms SDL::quit                 ->quit)
+    (vector-set! xforms SDL::video-resize         ->video-resize)
     
     (lambda (sdl-event-struct)
       (let ( (event-type (SDL::raw-event-type sdl-event-struct)) )
@@ -397,9 +407,10 @@
   (thread-start! event-thread))
 
 (define (redraw-loop)
-  (SDL::set-window-caption "Space Invaders" "Icon Name")
+  (SDL::set-window-caption "Space Invaders" "sprites/easy0.ppm")
   (let ( (screen (SDL::set-video-mode
-                    screen-max-x screen-max-y 32 SDL::opengl)) )
+                    screen-max-x screen-max-y 32
+                    (bitwise-ior  SDL::opengl SDL::resizable))) )
       (if screen
           (call/cc
            (lambda (k)

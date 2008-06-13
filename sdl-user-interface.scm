@@ -350,8 +350,8 @@
 (define (->video-resize evt-struct)
   (let ((w (SDL::resize-w evt-struct))
         (h (SDL::resize-h evt-struct)))
-    (reshape w h)
     (SDL::set-video-mode w h 32 (bitwise-ior SDL::opengl SDL::resizable))
+    (init-GL w h)
     ))
 
 (define managage-sdl-event
@@ -398,7 +398,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;; Gui Initialization ;;;;;;;;;;;;;;;;;;;;;;;
 
 (c-declare "int argc = 0;")
-(define (init-GL)
+(define (init-GL w h)
   (glPointSize 1.)
   (glDisable GL_POINT_SMOOTH)
 
@@ -410,7 +410,7 @@
 
   (initialize-textures!)
 
-  (reshape screen-max-x screen-max-y)
+  (reshape w h)
   )
 
 (define (start-threads!)
@@ -443,7 +443,7 @@
                      (thread-terminate! event-thread)
                      (thread-terminate! simulation-thread)
                      (k ret-val)))
-             (init-GL)
+             (init-GL screen-max-x screen-max-y)
              (start-threads!)
              (let loop ((msg (thread-receive)))
                (if exit-requested? (quit))

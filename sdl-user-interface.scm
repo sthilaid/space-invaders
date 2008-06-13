@@ -39,9 +39,8 @@
 
 (define (play-sfx sfx)
   (case sfx
-    [(mothership-sfx) (if test-chunk2
-                          (SDL::Mix::play-channel 0 test-chunk2 4)
-                          (pp 'Error-loading-sound))]))
+    [(mothership-sfx)
+     (when test-chunk2 (SDL::Mix::play-channel 0 test-chunk2 4))]))
 
 
 

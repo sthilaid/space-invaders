@@ -138,13 +138,13 @@ end-of-c-declare
     (if (not surface)
        (error "SDL::load-bmp-file: could not load BMP image from file"
               file-name-string)
-       (make-will surface (lambda ()
-                            (SDL::free-surface
-                             (cast-pointer (pointer "SDL_Event")
-                                           (pointer void)
-                                           surface)))))
+       (make-will surface (lambda (surface) (SDL::free-surface surface))))
      surface)
 )
+
+(define SDL::set-window-icon
+  (c-lambda ((pointer "SDL_Surface") (pointer unsigned-int8)) void
+            "SDL_WM_SetIcon"))
 
 ;; void SDL_FreeSurface(SDL_Surface *surface);
 (define SDL::free-surface

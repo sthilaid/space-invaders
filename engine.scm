@@ -95,7 +95,7 @@
 
 ;; Simulation delays
 (define mothership-update-interval 0.02)
-(define player-laser-update-interval 0.001)
+(define player-laser-update-interval 0.0001)
 (define invader-laser-update-interval 0.02)
 (define next-invader-laser-interval 0.2)
 (define manager-time-interfal 0.001)
@@ -484,7 +484,6 @@
   (game-level-wall-damage-set! level (union current-damage damage)))
 
 (define (game-over! level)
-  (show "Game over with " (game-level-score level) " points.\n")
   ;;(exit-simulation (game-level-score level)))
   (terminate-corout (game-level-score level)))
 

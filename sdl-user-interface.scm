@@ -336,7 +336,6 @@
 (define (->video-resize evt-struct)
   (let ((w (SDL::resize-w evt-struct))
         (h (SDL::resize-h evt-struct)))
-    (show 'test-resize w: w h: h "\n")
     (reshape w h)
     (SDL::set-video-mode w h 32 (bitwise-ior SDL::opengl SDL::resizable))
     ))
@@ -407,7 +406,8 @@
   (thread-start! event-thread))
 
 (define (redraw-loop)
-  (SDL::set-window-caption "Space Invaders" "sprites/easy0.ppm")
+  (SDL::set-window-caption "Space Invaders" "Space Invaders")
+  (SDL::set-window-icon (SDL::load-bmp-file "sprites/medium1.bmp") #f)
   (let ( (screen (SDL::set-video-mode
                     screen-max-x screen-max-y 32
                     (bitwise-ior  SDL::opengl SDL::resizable))) )
@@ -450,4 +450,4 @@
     (display usage-message))))
 
 
-(time (main))
+(main)

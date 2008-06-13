@@ -121,6 +121,16 @@
         (+  (* slope x) min-delta)))))
 
 
+;;*****************************************************************************
+;;
+;;                        Sound playback
+;;
+;;*****************************************************************************
+
+(define (play-sound sound-sym)
+  (thread-send user-interface-thread `(play-sfx ,sound-sym)))
+
+
 
 
 ;;*****************************************************************************
@@ -605,7 +615,7 @@
 
     ;; Also schedule manager events
     (schedule-event! sim 0 (create-main-manager-event level))
-    (schedule-event! sim 0 (create-redraw-event user-interface-thread level))
+    (schedule-event! sim 0 (create-redraw-event level))
     level))
 
 ;; Creation of the default initial intro movie
@@ -617,7 +627,7 @@
     
     (schedule-event! sim 0 (create-animation-A-event level))
     (schedule-event! sim 0 (create-intro-manager-event level))
-    (schedule-event! sim 0 (create-redraw-event user-interface-thread level))
+    (schedule-event! sim 0 (create-redraw-event level))
     level))
 
 ;; Creation of the instructions intro movie
@@ -629,7 +639,7 @@
     
     (schedule-event! sim 0 (create-animation-B-event level))
     (schedule-event! sim 0 (create-intro-manager-event level))
-    (schedule-event! sim 0 (create-redraw-event user-interface-thread level))
+    (schedule-event! sim 0 (create-redraw-event level))
     level))
 
 ;; Creation of a new demo movie. The demo movie is a tweaked normal
@@ -681,7 +691,7 @@
             (create-new-mothership-event level)))))
 
     (schedule-event! sim 0 (create-intro-manager-event level))
-    (schedule-event! sim 0 (create-redraw-event user-interface-thread level))
+    (schedule-event! sim 0 (create-redraw-event level))
     level))
 
 
@@ -1088,8 +1098,9 @@
                             'red
                             (make-pos2d (* dx-mult mothership-movement-speed)
                                         0))))
-    (level-add-object! level mothership)
-    (in 0 (create-mothership-event level)))))
+      (play-sound 'mothership-sfx)
+      (level-add-object! level mothership)
+      (in 0 (create-mothership-event level)))))
 
 ;; Event that moves a mothership and handles its collisions.
  (define (create-mothership-event level)
@@ -1724,7 +1735,7 @@
   manager-event)
 
 ;; Event that will send a message to the ui asking for a redraw.
-(define (create-redraw-event ui-thread level)
+(define (create-redraw-event level)
   ;; will update the 2 top score messages if required.
   (define (update-score-msg! level)
     (if (game-level? level) 
@@ -1746,7 +1757,7 @@
                (get-score-string (2p-game-level-other-score level)))))))
   (define (redraw-event)
     (update-score-msg! level)
-    (thread-send ui-thread level)
+    (thread-send user-interface-thread `(redraw ,level))
     (in redraw-interval redraw-event))
   
   redraw-event)

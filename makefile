@@ -27,9 +27,9 @@ LD_OPTIONS_COMMON =-L$(GAMBIT_LIB) -L$(GL_LIB) -lgambc
 # SDL used in general:
 else
 UI_FILES = sdl-interface.scm sdl-user-interface.scm
-LD_OPTIONS_LIN = -lutil -lSDL -lglut
-LD_OPTIONS_MAC = -framework SDL -lobjc -framework OpenGL
-LD_OPTIONS_WIN = -lSDL -lglu32 -lopengl32 -lws2_32 -mwindows
+LD_OPTIONS_LIN = -lutil -lSDL -lSDL_mixer -lglut
+LD_OPTIONS_MAC = -framework SDL -framework SDL_mixer -lobjc -framework OpenGL
+LD_OPTIONS_WIN = -lSDL -lSDL_mixer -lglu32 -lopengl32 -lws2_32 -mwindows
 LD_OPTIONS_COMMON =-L$(GAMBIT_LIB) -L$(GL_LIB) -L$(SDL_LIB) -lgambc 
 endif
 

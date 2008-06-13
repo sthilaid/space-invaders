@@ -28,6 +28,21 @@
 (define display-fps? #f)
 (define FPS (create-simple-moving-avg))
 
+;; SDL mixer sound chunks
+(define test-chunk #f)
+(define test-chunk2 #f)
+
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;; Sound rendering functions ;;;;;;;;;;;;;;;;;;;;;;;
+
+(define (play-sfx sfx)
+  (case sfx
+    [(mothership-sfx) (if test-chunk2
+                          (SDL::Mix::play-channel 0 test-chunk2 4)
+                          (pp 'Error-loading-sound))]))
+
 
 
 
@@ -408,6 +423,16 @@
 (define (redraw-loop)
   (SDL::set-window-caption "Space Invaders" "Space Invaders")
   (SDL::set-window-icon (SDL::load-bmp-file "sprites/medium1.bmp") #f)
+;;   (let ((audio-rate 22050)
+;;         (audio-format SDL::Mix::AUDIO_S16SYS)
+;;         (audio-channels 2)
+;;         (audio-buffers 4096))
+;;     (SDL::Mix::open-audio audio-rate audio-format
+;;                           audio-channels audio-buffers))
+;;   (set! test-chunk (SDL::Mix::load-wav "sounds/25753_FreqMan_raygun01.wav"))
+;;   (set! test-chunk2 (SDL::Mix::load-wav
+;;                      "sounds/32562_FreqMan_chronosphere_ish.wav"))
+  
   (let ( (screen (SDL::set-video-mode
                     screen-max-x screen-max-y 32
                     (bitwise-ior  SDL::opengl SDL::resizable))) )
@@ -421,9 +446,16 @@
                      (k ret-val)))
              (init-GL)
              (start-threads!)
-             (let loop ((level (thread-receive)))
+             (let loop ((msg (thread-receive)))
                (if exit-requested? (quit))
-               (render-scene screen level)
+               (case (car msg)
+                 [(redraw)
+                  (let ((level (cadr msg)))
+                    (render-scene screen level))]
+                 [(play-sfx)
+                  (let ((sfx (cadr msg)))
+                    (play-sfx sfx))]
+                 )
                (loop (thread-receive)))))
           (display "Could not set SDL screen")))
   )

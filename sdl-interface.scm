@@ -17,6 +17,7 @@
 #include "SDL.h"
 #include "SDL_keysym.h"
 #include "SDL_events.h"
+#include "SDL_mixer.h"
 
 int must_lock_surface_P(SDL_Surface *screen)
 {
@@ -1211,6 +1212,38 @@ char *SDL_GetError(void);
 (define SDL::resize-h
   (SDL::make-field-ref ((pointer "SDL_Event")) int "resize.h"))
 
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; SDL Mixer interface
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(define SDL::Mix::AUDIO_S16SYS
+  ((c-lambda () unsigned-int16 "___result = AUDIO_S16SYS;")))
+
+(define SDL::Mix::open-audio
+  (c-lambda (int unsigned-int16 int int) int "Mix_OpenAudio"))
+
+(define SDL::Mix::load-wav
+  (c-lambda (char-string) (pointer "Mix_Chunk") "Mix_LoadWAV"))
+
+(define SDL::Mix::free-chunk
+  (c-lambda ((pointer "Mix_Chunk")) void "Mix_FreeChunk"))
+
+(define SDL::Mix::play-channel
+  (c-lambda (int (pointer "Mix_Chunk") int) int "Mix_PlayChannel"))
+
+(define SDL::Mix::pause
+  (c-lambda (int) void "Mix_Pause"))
+
+(define SDL::Mix::resume
+  (c-lambda (int) void "Mix_Resume"))
+
+(define SDL::Mix::halt-channel
+  (c-lambda (int) int "Mix_HaltChannel"))
+
+;; (define SDL::MIX::load-mus
+;;   (c-lambda (char-string) (pointer "Mix_Chunk") "Mix_LoadMUS"))
 
 
 ;;;   ---   E O F   ---   ;;;

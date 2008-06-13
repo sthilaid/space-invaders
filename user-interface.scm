@@ -274,8 +274,10 @@
 
 (c-define (idle-callback) () void "idle_callback" ""
   ;; receive from the game engine thread the next redraw command
-  (let ((level (thread-receive)))
-    (render-scene level)))
+  (let ((msg (thread-receive)))
+    (case (car msg)
+      [(redraw) (render-scene (cadr msg))])
+    ))
 
 ;;;;;;;;;;;;;;;;;;;;;;; Gui Initialization ;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -329,4 +331,4 @@
    (else
     (display usage-message))))
 
-(time (main))
+ (main)

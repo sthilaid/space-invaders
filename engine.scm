@@ -130,6 +130,9 @@
 (define (play-sound sound-sym)
   (thread-send user-interface-thread `(play-sfx ,sound-sym)))
 
+(define (stop-sound sound-sym)
+  (thread-send user-interface-thread `(stop-sfx ,sound-sym)))
+
 
 
 
@@ -690,6 +693,18 @@
         (in (mothership-random-delay)
             (create-new-mothership-event level)))))
 
+    (schedule-event! sim 0 (create-intro-manager-event level))
+    (schedule-event! sim 0 (create-redraw-event level))
+    level))
+
+;; Creation of the instructions intro movie
+(define (new-credits-level hi-score)
+  (let* ((sim (create-simulation))
+         (level (make-level screen-max-y screen-max-x (make-table)
+                            hi-score sim (new-mutex))))
+    (add-global-score-messages! level)
+    
+    (schedule-event! sim 0 (create-animation-credit-event level))
     (schedule-event! sim 0 (create-intro-manager-event level))
     (schedule-event! sim 0 (create-redraw-event level))
     level))
@@ -1554,6 +1569,49 @@
                  (in animation-end-wait-delay
                      (lambda () (exit-simulation 'intro-A)))))))))))
 
+(define (create-animation-credit-event level)
+  (define msg-type (get-type 'message))
+  (define speed (make-pos2d 0 0))
+  (define state 'white)
+
+  (lambda ()
+    (let* ((producer
+            (let ((pos (make-pos2d 65 (- screen-max-y 80))))
+              (make-message-obj
+               'producer msg-type pos state 'white speed "")))
+           (dsth (let ((pos (make-pos2d 59 (- screen-max-y 107))))
+                    (make-message-obj
+                     'dsth msg-type pos state 'red speed "")))
+           (support (let ((pos (make-pos2d 65 (- screen-max-y 150))))
+                      (make-message-obj
+                       'support msg-type pos state 'white speed "")))
+           (support-chars (let ((pos (make-pos2d 20 (- screen-max-y 180))))
+                    (make-message-obj
+                     'support-chars msg-type pos state 'blue speed "")))
+           (you (let ((pos (make-pos2d 100 (- screen-max-y 220))))
+                  (make-message-obj
+                   'you msg-type pos state 'yellow speed "")))
+           (anim-messages
+            (list producer dsth support support-chars you)))
+      (for-each (lambda (m) (level-add-object! level m)) anim-messages )
+      (play-sfx 'star-wars-op)
+      (in 0 (animate-message
+             producer "Game Producer:"
+             (animate-message
+              dsth "David St-Hilaire"
+              (animate-message
+               support "Support Team:"
+               (animate-message
+                support-chars "Julie, the LTP and ... "
+                (animate-message
+                 you "You!"
+                 (lambda ()
+                   (in 40 ;;about the end of the song?
+                       (lambda ()
+                         (stop-sfx 'star-wars-op)
+                         (exit-simulation 'intro-A)))))))))))))
+
+
 ;; Ai reaction event. This thread-like event will simulate a player
 ;; behaviour, based on random "thoughts", where in fact a thought is
 ;; an animation either moving the player or make him shoot.
@@ -1713,7 +1771,9 @@
                    (sem-lock! (level-mutex level)))
                (set! game-paused? (not game-paused?)))
 
-              ((r) (corout-kill-all!))
+              ((r)
+               (stop-sfx 'all)
+               (corout-kill-all!))
 
               ((d) (error "DEBUG"))))
         (in manager-time-interfal manager-event))))
@@ -1729,7 +1789,10 @@
             (case msg
               ((1) (exit-simulation 'start-1p-game))
               ((2) (exit-simulation 'start-2p-game))
-              ((r) (exit-simulation 'intro-A))
+              ((c) (exit-simulation 'show-credits))
+              ((r)
+               (stop-sfx 'all)
+               (exit-simulation 'intro-A))
               ((d) (error "DEBUG"))))
         (in manager-time-interfal manager-event))))
   manager-event)
@@ -1823,6 +1886,10 @@
          ((eq? result 'intro-B)
           (inf-loop hi-score
                     (play-level (new-animation-level-B hi-score))))
+
+         ((eq? result 'show-credits)
+          (inf-loop hi-score
+                    (play-level (new-credits-level hi-score))))
 
          ((eq? result 'demo)
           (let ((ai (new-corout 

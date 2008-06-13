@@ -29,6 +29,7 @@
 (define FPS (create-simple-moving-avg))
 
 ;; SDL mixer sound chunks
+(define star-wars-chunk #f)
 (define test-chunk #f)
 (define test-chunk2 #f)
 
@@ -40,8 +41,12 @@
 (define (play-sfx sfx)
   (case sfx
     [(mothership-sfx)
-     (when test-chunk2 (SDL::Mix::play-channel 0 test-chunk2 4))]))
+     (when test-chunk2 (SDL::Mix::play-channel 0 test-chunk2 4))]
+    [(star-wars-op)
+     (when star-wars-chunk (SDL::Mix::play-channel 0 star-wars-chunk 0))]))
 
+(define (stop-sfx sfx)
+  (SDL::Mix::halt-channel -1))
 
 
 
@@ -313,6 +318,7 @@
       [(key-p)            (register-user-action 'p)]
       [(key-1)            (register-user-action '1)]
       [(key-2)            (register-user-action '2)]
+      [(key-c)            (register-user-action 'c)]
       [(key-d)            (register-user-action 'd)]
       [(key-f)            (set! display-fps? (not display-fps?))]
       [(key-q)            (request-exit)])
@@ -422,15 +428,16 @@
 (define (redraw-loop)
   (SDL::set-window-caption "Space Invaders" "Space Invaders")
   (SDL::set-window-icon (SDL::load-bmp-file "sprites/medium1.bmp") #f)
-;;   (let ((audio-rate 22050)
-;;         (audio-format SDL::Mix::AUDIO_S16SYS)
-;;         (audio-channels 2)
-;;         (audio-buffers 4096))
-;;     (SDL::Mix::open-audio audio-rate audio-format
-;;                           audio-channels audio-buffers))
+  (let ((audio-rate 22050)
+        (audio-format SDL::Mix::AUDIO_S16SYS)
+        (audio-channels 2)
+        (audio-buffers 4096))
+    (SDL::Mix::open-audio audio-rate audio-format
+                          audio-channels audio-buffers))
 ;;   (set! test-chunk (SDL::Mix::load-wav "sounds/25753_FreqMan_raygun01.wav"))
 ;;   (set! test-chunk2 (SDL::Mix::load-wav
 ;;                      "sounds/32562_FreqMan_chronosphere_ish.wav"))
+  (set! star-wars-chunk (SDL::Mix::load-wav "sounds/starwars.wav"))
   
   (let ( (screen (SDL::set-video-mode
                     screen-max-x screen-max-y 32

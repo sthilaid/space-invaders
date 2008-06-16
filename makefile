@@ -158,7 +158,8 @@ tarball: makefile $(wildcard *.scm) $(SPRITE_FILES) $(FONT_FILES) $(DOC_FILES)
 
 release: space-invaders.exe $(SPRITE_FILES) $(FONT_FILES) $(SOUND_FILES)
 ifeq ($(OS), win)
-	tar cvzf space-invaders.tar.gz $(foreach file, $^ SDL.dll SDL_mixer.dll, ../space-invaders/$(file))
+# 	tar cvzf space-invaders.tar.gz $(foreach file, $^ SDL.dll SDL_mixer.dll, ../space-invaders/$(file))
+	zip -r space-invaders.zip $(foreach file, $^ SDL.dll SDL_mixer.dll, ../space-invaders/$(file))
 else
 	tar cvzf space-invaders.tar.gz $(foreach file, $^, ../space-invaders/$(file))
 endif

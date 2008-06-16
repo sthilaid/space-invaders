@@ -8,8 +8,8 @@ CC=gcc
 
 GLUT_FILES = opengl.scm glu.scm 
 
-SPRITE_FILES = $(wildcard sprites/*.ppm)
-FONT_FILES = $(wildcard fonts/*.ppm)
+SPRITE_FILES = $(wildcard sprites/*.ppm) $(wildcard sprites/*.bmp)
+FONT_FILES = $(wildcard fonts/*.ppm) $(wildcard fonts/*.scm)
 DOC_FILES = $(wildcard doc/*.ppm)
 SOUND_FILES = $(wildcard sounds/*.wav)
 

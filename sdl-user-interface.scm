@@ -1,15 +1,18 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-;; filename: user-interface.scm
+;; filename: sdl-user-interface.scm
 ;;
-;; description: Glut user interface for space invaders, based on the
+;; description: SDL user interface for space invaders, based on the
 ;; engine.scm space invader model. This file contains the
-;; application's "main" function. During the initialization, 1 other
-;; thread will be started and will contain the engine's game-loop. The
-;; other thread will be controlled by glut. The user input will be
-;; forwarded as needed to the engine, and in return, the engine will
-;; tell to the glut thread when to execute redraw on the screen. This
-;; communication is made through the gambit thread mailbox system.
+;; application's "main" function. During the initialization, 2 other
+;; threads will be started. The first will contain the engine's
+;; game-loop and the second will contain the sdl event polling
+;; loop. Thus the primordial thread will be the one which will render
+;; the opengl image on the screen. Any user input will be forwarded as
+;; needed to the engine, and in return, the engine will tell to the
+;; primordial thread when to execute redraw on the screen, or play
+;; sounds. This communication is made through the gambit thread
+;; mailbox system.
 ;;
 ;; author: David St-Hilaire
 ;;
@@ -51,14 +54,6 @@
 
 
 ;;;;;;;;;;;;;;;;;;;;;;; Render-Sceneing function ;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Deprecated
-;; (define (render-sprite sprite-name x y state)
-;;   (if (not (number? state)) (error "sprite state must be a number."))
-;;   (let ((sprite-name
-;;          (string-append (symbol->string sprite-name)
-;;                         (number->string state))))
-;;     (draw-sprite sprite-name x y)))
 
 (define (render-string x y str color)
   (if (not (eq? color 'black))

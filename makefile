@@ -29,7 +29,7 @@ LD_OPTIONS_COMMON =-L$(GAMBIT_LIB) -L$(GL_LIB) -lgambc
 else
 UI_FILES = sdl-interface.scm sdl-user-interface.scm
 LD_OPTIONS_LIN = -lutil -lSDL -lSDL_mixer -lglut
-LD_OPTIONS_MAC = -framework SDL -framework SDL_mixer -lobjc -framework OpenGL
+LD_OPTIONS_MAC = -framework SDL -framework SDL_mixer -lobjc -framework OpenGL -framework Cocoa
 LD_OPTIONS_WIN = -lSDL -lSDL_mixer -lglu32 -lopengl32 -lws2_32 -mwindows
 LD_OPTIONS_COMMON =-L$(GAMBIT_LIB) -L$(GL_LIB) -L$(SDL_LIB) -lgambc 
 endif
@@ -44,9 +44,14 @@ GL_LIB=$(PATH_TO_GL)/Libraries
 
 GLUT_INCLUDE=/System/Library/Frameworks/GLUT.framework/Headers
 
-PATH_TO_SDL=??
-SDL_INCLUDE=$(PATH_TO_SDL)/include/SDL
-SDL_LIB=$(PATH_TO_SDL)/lib
+PATH_TO_SDL=/System/Library/Frameworks/SDL.framework
+SDL_INCLUDE=$(PATH_TO_SDL)/Headers
+SDL_LIB=$(PATH_TO_SDL)
+
+PATH_TO_SDL_devel=/System/Library/Frameworks/SDL.framework/SDL-devel-extras/SDLMain/NIBless
+
+PATH_TO_SDL_mixer=/System/Library/Frameworks/SDL_mixer.framework
+SDL_mixer_INCLUDE=$(PATH_TO_SDL_mixer)/Headers
 
 LD_OPTIONS = $(LD_OPTIONS_COMMON) $(LD_OPTIONS_MAC)
 endif
@@ -62,6 +67,9 @@ PATH_TO_SDL=/usr/local
 SDL_INCLUDE=$(PATH_TO_SDL)/include/SDL
 SDL_LIB=$(PATH_TO_SDL)/lib
 SDL_BIN=$(PATH_TO_SDL)/bin
+
+PATH_TO_SDL_mixer=/usr/local
+SDL_mixer_INCLUDE=$(PATH_TO_SDL_mixer)/include/SDL
 
 LD_OPTIONS = $(LD_OPTIONS_COMMON) $(LD_OPTIONS_WIN)
 endif
@@ -79,6 +87,9 @@ PATH_TO_SDL=/usr
 SDL_INCLUDE=$(PATH_TO_SDL)/include/SDL
 SDL_LIB=$(PATH_TO_SDL)/lib
 
+PATH_TO_SDL_mixer=/usr
+SDL_mixer_INCLUDE=$(PATH_TO_SDL_mixer)/include/SDL
+
 LD_OPTIONS = $(LD_OPTIONS_COMMON) $(LD_OPTIONS_LIN)
 endif
 
@@ -87,11 +98,11 @@ endif
 ifeq ($(UI), glut)
 INCLUDE_OPTIONS=-I$(GAMBIT_INCLUDE) -I$(GL_INCLUDE) -I$(GLUT_INCLUDE)
 else
-INCLUDE_OPTIONS=-I$(GAMBIT_INCLUDE) -I$(GL_INCLUDE) -I$(SDL_INCLUDE)
+INCLUDE_OPTIONS=-I$(GAMBIT_INCLUDE) -I$(GL_INCLUDE) -I$(SDL_INCLUDE) -I$(SDL_mixer_INCLUDE) -I$(PATH_TO_SDL_devel)
 endif
 
 .SUFFIXES:
-.SUFFIXES: .c .scm .o .o1
+.SUFFIXES: .c .scm .o .o1 .m
 .PHONY: all clean shared-objects tarball welcome
 
 all: welcome space-invaders.exe dll
@@ -103,12 +114,29 @@ ifeq ($(UI), sdl)
 endif
 endif
 
+ifeq ($(OS), mac)
+space-invaders.exe: $(GLUT_FILES:.scm=.o) $(SPACE_INVADERS_FILES:.scm=.o) $(UI_FILES:.scm=.o) space-invaders_.o SDLMain.m
+	$(CC) $(INCLUDE_OPTIONS) -o $@ $^ $(LD_OPTIONS)
+else
 space-invaders.exe: $(GLUT_FILES:.scm=.o) $(SPACE_INVADERS_FILES:.scm=.o) $(UI_FILES:.scm=.o) space-invaders_.o
 	$(CC) $(INCLUDE_OPTIONS) -o $@ $^ $(LD_OPTIONS)
+endif
 
+## only in mac osx, the main function must be renaimed to SDL_main by including SDL.h 
+## in the gambit link file
+ifeq ($(OS), mac)
+ifeq ($(UI), sdl)
+space-invaders_.o: space-invaders_.c
+	cat $^ > link-temp
+	echo "#include <SDL.h>" > $^
+	cat link-temp >> $^
+	rm link-temp
+	$(CC) $(INCLUDE_OPTIONS) -c $^
+endif
+endif
 
 space-invaders_.c: $(GLUT_FILES:.scm=.c) $(SPACE_INVADERS_FILES:.scm=.c) $(UI_FILES:.scm=.c)
-	$(GSC) -o $@ -link $^ 
+	$(GSC) -o $@ -link $^
 
 user-interface-images.c: user-interface-images.scm texture-macro.scm font-macro.scm scm-lib-macro.scm
 	$(GSC) -c user-interface-images.scm 
@@ -129,6 +157,8 @@ glu.c: glu.scm glu-header.scm
 glut.c: glut.scm glut-header.scm
 	$(GSC) -c glut.scm
 
+.m.o:
+	$(CC) $(INCLUDE_OPTIONS) -c $*.m
 
 .c.o:
 	$(CC) $(INCLUDE_OPTIONS) -c $*.c
@@ -141,7 +171,7 @@ glut.c: glut.scm glut-header.scm
 .scm.o1:
 	$(GSC) -ld-options "-lglut" -debug-source -o $*.o1 $*.scm
 
-welcome:
+ welcome:
 ifeq ($(PATH_TO_GAMBIT), /opt/gambit-c/current)
 	@echo Please set the PATH_TO_GAMBIT variable to your gambit\'s current installation path.
 	@echo ex: make PATH_TO_GAMBIT=/opt/gambit/current

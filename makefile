@@ -41,6 +41,7 @@ GAMBIT_INCLUDE=$(PATH_TO_GAMBIT)/include
 ## Default options
 UI=sdl
 OS=linux
+VERSION=1.0
 
 ## UI dependent variables
 ifeq ($(UI), glut)
@@ -244,16 +245,16 @@ endif
 
 ALL_SCM = $(wildcard *.scm)
 clean:
-	rm -f $(ALL_SCM:.scm=.c) *_.c *.o* space-invaders.exe *.tar.gz *.~*~
+	rm -f $(ALL_SCM:.scm=.c) *_.c *.o* space-invaders.exe *.tar.gz *.tgz *.~*~ *.zip
 	$(MAKE) clean -C doc
 
 tarball: makefile README $(wildcard *.scm) $(SPRITE_FILES) $(FONT_FILES) $(DOC_FILES) $(SOUND_FILES)
-	tar cvzf space-invaders-src.tar.gz $(foreach file, $^, ../space-invaders/$(file))
+	tar cvzf space-invaders-src-v$(VERSION).tgz $(foreach file, $^, ../space-invaders/$(file))
 
 release: space-invaders.exe $(SPRITE_FILES) $(FONT_FILES) $(SOUND_FILES)
 ifeq ($(OS), win)
 # 	tar cvzf space-invaders.tar.gz $(foreach file, $^ SDL.dll SDL_mixer.dll, ../space-invaders/$(file))
-	zip -r space-invaders.zip $(foreach file, $^ SDL.dll SDL_mixer.dll, ../space-invaders/$(file))
+	zip -r space-invaders-$(OS).zip $(foreach file, $^ SDL.dll SDL_mixer.dll, ../space-invaders/$(file))
 else
-	tar cvzf space-invaders.tar.gz $(foreach file, $^, ../space-invaders/$(file))
+	tar cvzf space-invaders-$(OS).tar.gz $(foreach file, $^, ../space-invaders/$(file))
 endif

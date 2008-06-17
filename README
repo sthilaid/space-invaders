@@ -48,11 +48,36 @@ sthilaid@iro.umontreal.ca
 
 
 
+Game Controls:
+--------------
+
+Menu controls:
+     '1' -> Starts 1 player game
+     '2' -> Starts 2 players game
+     'r' -> Reset the engine
+     'c' -> Show game credits
+     'f' -> Show framerate
+     'q' -> Quit
+
+In-game controls:
+     'left-arrow'  -> move left
+     'right-arrow' -> move right
+     'space bar'   -> shoot a laser
+     'r'           -> rest the engine
+     'f'           -> Show the framerate
+     'q'           -> Quit
+
+
+
+
 Liscence:
 ---------
 
 The code provided is to be used in the public domain, without any
-restrictions.
+restrictions. The source code is accompanied by a small Star Wars
+music sound clip which I believe not to be in the public domain. I
+still transmit it with hope that George Williams will spare me for
+being a star wars fanboy...! o_-
 
 
 

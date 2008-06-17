@@ -75,7 +75,7 @@ PATH_TO_SDL=/System/Library/Frameworks/SDL.framework
 SDL_INCLUDE=$(PATH_TO_SDL)/Headers
 SDL_LIB=$(PATH_TO_SDL)
 
-PATH_TO_SDL_devel=/System/Library/Frameworks/SDL.framework/SDL-devel-extras/SDLMain/NIBless
+PATH_TO_SDL_devel=/System/Library/Frameworks/SDL.framework/SDL-devel-extras
 
 PATH_TO_SDL_mixer=/System/Library/Frameworks/SDL_mixer.framework
 SDL_mixer_INCLUDE=$(PATH_TO_SDL_mixer)/Headers
@@ -151,7 +151,7 @@ endif
 ## contained in the SDL devel package for mac osx.
 ifeq ($(OS), mac)
 ifeq ($(UI), sdl)
-space-invaders.exe: $(GL_FILES:.scm=.o) $(SPACE_INVADERS_FILES:.scm=.o) $(UI_FILES:.scm=.o) space-invaders_.o $(PATH_TO_SDL_devel)/SDLMain.m
+space-invaders.exe: $(GL_FILES:.scm=.o) $(SPACE_INVADERS_FILES:.scm=.o) $(UI_FILES:.scm=.o) space-invaders_.o $(PATH_TO_SDL_devel)/SDLMain/NIBless/SDLMain.m
 	$(CC) $(INCLUDE_OPTIONS) -o $@ $^ $(LD_OPTIONS)
 endif
 else

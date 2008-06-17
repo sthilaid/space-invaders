@@ -125,16 +125,19 @@ space-invaders.exe: $(GLUT_FILES:.scm=.o) $(SPACE_INVADERS_FILES:.scm=.o) $(UI_F
 	$(CC) $(INCLUDE_OPTIONS) -o $@ $^ $(LD_OPTIONS)
 endif
 
-## only in mac osx, the main function must be renaimed to SDL_main by including SDL.h 
-## in the gambit link file
+## only in mac osx, the main function must be renaimed to SDL_main.
+## The "right" way is to add #include <SDL.h> in the file where main is defined
+## but since it is difficult to add it to the link file, we chose to define it 
+## by ourselves. The commented code can be used if the -Dmain=SDL_main stops working
+## at some point
 ifeq ($(OS), mac)
 ifeq ($(UI), sdl)
 space-invaders_.o: space-invaders_.c
-	cat $^ > link-temp
-	echo "#include <SDL.h>" > $^
-	cat link-temp >> $^
-	rm link-temp
-	$(CC) $(INCLUDE_OPTIONS) -c $^
+#	cat $^ > link-temp
+#	echo "#include <SDL.h>" > $^
+#	cat link-temp >> $^
+#	rm link-temp
+	$(CC) $(INCLUDE_OPTIONS) -c $^ -Dmain=SDL_main
 endif
 endif
 

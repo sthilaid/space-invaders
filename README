@@ -1,0 +1,123 @@
+
+
+                        Scheme Space Invaders
+
+                             version 1.0
+
+                   #     #                 @     @
+                    #   #                @  @   @  @
+                   #######               @ @@@@@@@ @
+                  ## ### ##              @@@ @@@ @@@
+                 ###########             @@@@@@@@@@@
+                 # ####### #               @@@@@@@ 
+                 # #     # #               @     @ 
+                    ## ##                 @       @
+
+About
+-----
+
+This re-make of the classic arcade game "space invaders" is based on
+the version available on the well known arcade emulator called
+mame. It is made to look as close as possible to the original arcade
+game.
+
+This game was made for fun, but also in the context of my master's
+thesis at the university of Montreal under the supervision of Marc
+Feeley. The aim behind writing video games in scheme is to try to
+demonstrate not only that it is possible to write games in scheme, but
+that such games would have smaller developpement time, better code,
+less bugs, etc...
+
+Thus space invaders is only the first step into my thesis and more
+games will be comming up later! I would like also to note that the
+version 1.0 is only a draft. Much ugly things can be found in the code
+and I will still continue the developpement of this game further by
+ameliorating the way the code is structured and modify parts of it's
+basic architecture to experiment different design ideas. This is
+what's beautifull about scheme, isn't it? I tried to comment the code
+so that it should be understandable by interested schemers.
+
+I hope you can enjoy this game as well as I enjoyed developping it!
+
+
+
+
+David St-Hilaire
+sthilaid@iro.umontreal.ca
+
+
+
+
+Liscence:
+---------
+
+The code provided is to be used in the public domain, without any
+restrictions.
+
+
+
+
+Compilation Notes:
+------------------
+
+This game possess 2 user interfaces, one built over glut and the other
+over SDL. The SDL version is much better then the glut one, but both
+are still supported. The makefile should make the compilation
+straightforward. The compilation dependance are the following:
+
+common dependencies:
+  -gambit-c version v4.2+
+  -opengl and glu
+
+glut specific dependencies:
+  -glut
+
+sdl specific dependencies:
+  -SDL
+  -SDL_mixer
+
+If the required dependencies are installed in their "normal" path then
+the compilation should be straightforward, otherwise the path can be
+adjusted while using the "make" command. Please refer to the makefile
+for details about how to ajust these path variables.
+
+The provided makefile supports mingw (windows), linux and mac osx.
+
+
+-Windows and linux instructions:
+
+The glut version does NOT work in windows (as much as I tried to make
+it work...). For SDL, Gambit, SDL and SDL_mixer must be compiled and
+then, by setting their path correclty with the PATH_TO_XXX variables,
+the compilation should be straightforward.
+
+
+-Mac OSX instructions:
+
+Gambit needs to be compiled with gcc. Then, SDL and SDL_mixer
+frameworks must be downloaded from the SDL website
+(http://www.libsdl.org/download-1.2.php) and installed into the
+/System/Library/Frameworks directory. The SDL-devel-extra needs also
+to be installed somewhere. Again, by setting their path correclty with
+the PATH_TO_XXX variables, the compilation should be straightforward.
+
+
+-General instructions:
+
+There are 2 important flags to use which are OS={win,linux,mac} and
+UI={glut,sdl}, which should make the desired executable. Here are
+exemples of usage of the makefile:
+
+make PATH_TO_GAMBIT=/opt/gambit-c/current OS=linux UI=sdl
+
+make PATH_TO_GAMBIT=$HOME/gambit-c/current OS=mac UI=sdl
+
+
+Here is the command I use to cross compile the game from gentoo linux
+to a windows executable release .zip bundle:
+
+make OS=win UI=sdl PATH_TO_SDL=../SDL-win32 PATH_TO_SDL_mixer=../SDL-win32 PATH_TO_GL=/usr/i686-mingw32/usr GAMBIT_INCLUDE=../win-gambit-c/v4.2.8/include GAMBIT_LIB=../win-gambit-c/v4.2.8/lib CC=i686-mingw32-gcc && make release OS=win
+
+In this complex example, PATH_TO_GAMBIT could not be used because we
+need to use the system's (linux version) of gsc but use the windows
+version of the library and header files.

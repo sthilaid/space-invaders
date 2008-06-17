@@ -1,23 +1,48 @@
+##											 Space-invaders makefile
+##
+## usage: The makefile possess 2 main variables OS and UI which
+## controls respectively the operating system used (win, mac, linux)
+## and the user interface used (glut or sdl).
+##
+## There are also many PATH_TO_XYZ variables that encapsulates the
+## dependent library paths. These PATH_TO variables are usually
+## accompanied by XYZ_INCLUDE and XYZ_LIB variables which gives the
+## location of the library file and header files associated with
+## XYZ. Setting only the PATH_TO_XYZ should work in most cases, but
+## setting directly the XYZ_LIB and XYZ_INCLUDE variables gives finer
+## granularity over the compilation and is required to cross-compile
+## the program.
+##
+## some general usage exemples:
+##
+## make OS=linux UI=sdl PATH_TO_SDL_mixer=$HOME/SDL_mixer
+## make OS=linux UI=glut
+## make OS=win UI=sdl PATH_TO_GAMBIT=$HOME/gambit-c-win/current
 
-PATH_TO_GAMBIT=/opt/gambit-c/current
-GAMBIT_LIB=$(PATH_TO_GAMBIT)/lib
-GAMBIT_INCLUDE=$(PATH_TO_GAMBIT)/include
-
-GSC=$(PATH_TO_GAMBIT)/bin/gsc -:=$(PATH_TO_GAMBIT) -debug
-CC=gcc
-
-GLUT_FILES = opengl.scm glu.scm 
-
+## Source files
 SPRITE_FILES = $(wildcard sprites/*.ppm) $(wildcard sprites/*.bmp)
 FONT_FILES = $(wildcard fonts/*.ppm) $(wildcard fonts/*.scm)
 DOC_FILES = $(wildcard doc/*.ppm)
 SOUND_FILES = $(wildcard sounds/*.wav)
 
+GL_FILES = opengl.scm glu.scm 
 SPACE_INVADERS_FILES =  scm-lib.scm rbtree.scm ppm-reader.scm event-simulation.scm texture.scm sprite.scm font.scm coroutine.scm engine.scm user-interface-images.scm 
 
+
+## compilers
+GSC=$(PATH_TO_GAMBIT)/bin/gsc -:=$(PATH_TO_GAMBIT)
+CC=gcc
+
+## Gambit-c
+PATH_TO_GAMBIT=/usr/local/gambit-c/current
+GAMBIT_LIB=$(PATH_TO_GAMBIT)/lib
+GAMBIT_INCLUDE=$(PATH_TO_GAMBIT)/include
+
+## Default options
 UI=sdl
 OS=linux
 
+## UI dependent variables
 ifeq ($(UI), glut)
 UI_FILES = glut.scm user-interface.scm
 LD_OPTIONS_LIN = -lutil -lglut
@@ -35,7 +60,9 @@ LD_OPTIONS_COMMON =-L$(GAMBIT_LIB) -L$(GL_LIB) -L$(SDL_LIB) -lgambc
 endif
 
 
+############### OS dependent variables ###############
 
+## MAC OSX
 ifeq ($(OS), mac)
 # Paths not required for mac os if using the -framework options?
 PATH_TO_GL=/System/Library/Frameworks/OpenGL.framework
@@ -57,6 +84,8 @@ ALL_SDL_INCLUDE=-I$(SDL_INCLUDE) -I$(SDL_mixer_INCLUDE) -I$(PATH_TO_SDL_devel)
 LD_OPTIONS = $(LD_OPTIONS_COMMON) $(LD_OPTIONS_MAC)
 endif
 
+
+## Windows
 ifeq ($(OS), win)
 PATH_TO_GL=/mingw
 GL_INCLUDE=$(PATH_TO_GL)/include/GL
@@ -77,7 +106,7 @@ LD_OPTIONS = $(LD_OPTIONS_COMMON) $(LD_OPTIONS_WIN)
 endif
 
 
-
+## Linux
 ifeq ($(OS), linux)
 PATH_TO_GL=/usr
 GL_INCLUDE=$(PATH_TO_GL)/include/GL
@@ -96,13 +125,13 @@ ALL_SDL_INCLUDE=-I$(SDL_INCLUDE) -I$(SDL_mixer_INCLUDE)
 LD_OPTIONS = $(LD_OPTIONS_COMMON) $(LD_OPTIONS_LIN)
 endif
 
-
-
 ifeq ($(UI), glut)
 INCLUDE_OPTIONS=-I$(GAMBIT_INCLUDE) -I$(GL_INCLUDE) -I$(GLUT_INCLUDE)
 else
 INCLUDE_OPTIONS=-I$(GAMBIT_INCLUDE) -I$(GL_INCLUDE) $(ALL_SDL_INCLUDE)
 endif
+
+
 
 .SUFFIXES:
 .SUFFIXES: .c .scm .o .o1 .m
@@ -117,11 +146,16 @@ ifeq ($(UI), sdl)
 endif
 endif
 
+
+## the SDL mac version must be compiled with the SDLMain.m file
+## contained in the SDL devel package for mac osx.
 ifeq ($(OS), mac)
-space-invaders.exe: $(GLUT_FILES:.scm=.o) $(SPACE_INVADERS_FILES:.scm=.o) $(UI_FILES:.scm=.o) space-invaders_.o $(PATH_TO_SDL_devel)/SDLMain.m
+ifeq ($(UI), sdl)
+space-invaders.exe: $(GL_FILES:.scm=.o) $(SPACE_INVADERS_FILES:.scm=.o) $(UI_FILES:.scm=.o) space-invaders_.o $(PATH_TO_SDL_devel)/SDLMain.m
 	$(CC) $(INCLUDE_OPTIONS) -o $@ $^ $(LD_OPTIONS)
+endif
 else
-space-invaders.exe: $(GLUT_FILES:.scm=.o) $(SPACE_INVADERS_FILES:.scm=.o) $(UI_FILES:.scm=.o) space-invaders_.o
+space-invaders.exe: $(GL_FILES:.scm=.o) $(SPACE_INVADERS_FILES:.scm=.o) $(UI_FILES:.scm=.o) space-invaders_.o
 	$(CC) $(INCLUDE_OPTIONS) -o $@ $^ $(LD_OPTIONS)
 endif
 
@@ -141,17 +175,24 @@ space-invaders_.o: space-invaders_.c
 endif
 endif
 
-space-invaders_.c: $(GLUT_FILES:.scm=.c) $(SPACE_INVADERS_FILES:.scm=.c) $(UI_FILES:.scm=.c)
+## Scheme link file
+space-invaders_.c: $(GL_FILES:.scm=.c) $(SPACE_INVADERS_FILES:.scm=.c) $(UI_FILES:.scm=.c)
 	$(GSC) -o $@ -link $^
 
+
+## "included" macro dependant scheme source files
 user-interface-images.c: user-interface-images.scm texture-macro.scm font-macro.scm scm-lib-macro.scm
 	$(GSC) -c user-interface-images.scm 
 
 user-interface.c: user-interface.scm scm-lib-macro.scm opengl-header.scm
 	$(GSC) -c user-interface.scm 
 
+sdl-user-interface.c: sdl-user-interface.scm scm-lib-macro.scm opengl-header.scm
+	$(GSC) -c sdl-user-interface.scm 
+
 engine.c: engine.scm event-simulation-macro.scm
 	$(GSC) -c engine.scm
+
 
 # Opengl interface interdependance
 opengl.c: opengl.scm opengl-header.scm
@@ -163,6 +204,8 @@ glu.c: glu.scm glu-header.scm
 glut.c: glut.scm glut-header.scm
 	$(GSC) -c glut.scm
 
+
+## General build instructions
 .m.o:
 	$(CC) $(INCLUDE_OPTIONS) -c $*.m
 
@@ -177,19 +220,34 @@ glut.c: glut.scm glut-header.scm
 .scm.o1:
 	$(GSC) -ld-options "-lglut" -debug-source -o $*.o1 $*.scm
 
+
+## Welcome banner
  welcome:
-ifeq ($(PATH_TO_GAMBIT), /opt/gambit-c/current)
-	@echo Please set the PATH_TO_GAMBIT variable to your gambit\'s current installation path.
-	@echo ex: make PATH_TO_GAMBIT=/opt/gambit/current
+	@echo "*** Global Variables ***"
+	@echo
+	@echo OS=$(OS)
+	@echo UI=$(UI)
+	@echo
+	@echo "*** Currently using following paths ***"
+	@echo
+	@echo PATH_TO_GAMBIT=$(PATH_TO_GAMBIT)
+	@echo PATH_TO_GL=$(PATH_TO_GL)
+ifeq ($(UI), sdl)
+	@echo PATH_TO_SDL=$(PATH_TO_SDL)
+	@echo PATH_TO_SDL_mixer=$(PATH_TO_SDL_mixer)
+ifeq ($(OS), mac)
+	@echo PATH_TO_SDL_devel=$(PATH_TO_SDL_devel)
+endif
 endif
 	@echo
+	@echo "*** Beginning compilation ***"
 
 ALL_SCM = $(wildcard *.scm)
 clean:
 	rm -f $(ALL_SCM:.scm=.c) *_.c *.o* space-invaders.exe *.tar.gz *.~*~
 	$(MAKE) clean -C doc
 
-tarball: makefile $(wildcard *.scm) $(SPRITE_FILES) $(FONT_FILES) $(DOC_FILES)
+tarball: makefile README $(wildcard *.scm) $(SPRITE_FILES) $(FONT_FILES) $(DOC_FILES) $(SOUND_FILES)
 	tar cvzf space-invaders-src.tar.gz $(foreach file, $^, ../space-invaders/$(file))
 
 release: space-invaders.exe $(SPRITE_FILES) $(FONT_FILES) $(SOUND_FILES)

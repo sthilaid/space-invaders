@@ -263,7 +263,7 @@
    ((#\r #\R) (register-user-action 'r))
    ((#\p #\P) (register-user-action 'p))
    ((#\d #\D) (register-user-action 'd))
-   ((#\c #\C) (register-user-action 'd))
+   ((#\c #\C) (register-user-action 'c))
    ((#\1) (register-user-action '1))
    ((#\2) (register-user-action '2))
    ))

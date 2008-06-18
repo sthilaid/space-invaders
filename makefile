@@ -34,7 +34,7 @@ GSC=$(PATH_TO_GAMBIT)/bin/gsc -:=$(PATH_TO_GAMBIT)
 CC=gcc
 
 ## Gambit-c
-PATH_TO_GAMBIT=/usr/local/gambit-c/current
+PATH_TO_GAMBIT=/usr/local/Gambit-C/current
 GAMBIT_LIB=$(PATH_TO_GAMBIT)/lib
 GAMBIT_INCLUDE=$(PATH_TO_GAMBIT)/include
 
@@ -57,7 +57,7 @@ UI_FILES = sdl-interface.scm sdl-user-interface.scm
 LD_OPTIONS_LIN = -lutil -lSDL -lSDL_mixer -lglut
 LD_OPTIONS_MAC = -framework SDL -framework SDL_mixer -lobjc -framework OpenGL -framework Cocoa
 LD_OPTIONS_WIN = -lSDL -lSDL_mixer -lglu32 -lopengl32 -lws2_32 -mwindows
-LD_OPTIONS_COMMON =-L$(GAMBIT_LIB) -L$(GL_LIB) -L$(SDL_LIB) -lgambc 
+LD_OPTIONS_COMMON =-L$(GAMBIT_LIB) -L$(GL_LIB) -L$(SDL_LIB) -L$(SDL_mixer_LIB) -lgambc 
 endif
 
 
@@ -80,6 +80,7 @@ PATH_TO_SDL_devel=/System/Library/Frameworks/SDL.framework/SDL-devel-extras
 
 PATH_TO_SDL_mixer=/System/Library/Frameworks/SDL_mixer.framework
 SDL_mixer_INCLUDE=$(PATH_TO_SDL_mixer)/Headers
+SDL_mixer_LIB=$(PATH_TO_SDL_mixer)
 
 ALL_SDL_INCLUDE=-I$(SDL_INCLUDE) -I$(SDL_mixer_INCLUDE) -I$(PATH_TO_SDL_devel)
 LD_OPTIONS = $(LD_OPTIONS_COMMON) $(LD_OPTIONS_MAC)
@@ -101,6 +102,7 @@ SDL_BIN=$(PATH_TO_SDL)/bin
 
 PATH_TO_SDL_mixer=/usr/local
 SDL_mixer_INCLUDE=$(PATH_TO_SDL_mixer)/include/SDL
+SDL_mixer_LIB=$(PATH_TO_SDL_mixer)/lib
 
 ALL_SDL_INCLUDE=-I$(SDL_INCLUDE) -I$(SDL_mixer_INCLUDE)
 LD_OPTIONS = $(LD_OPTIONS_COMMON) $(LD_OPTIONS_WIN)
@@ -121,6 +123,7 @@ SDL_LIB=$(PATH_TO_SDL)/lib
 
 PATH_TO_SDL_mixer=/usr
 SDL_mixer_INCLUDE=$(PATH_TO_SDL_mixer)/include/SDL
+SDL_mixer_LIB=$(PATH_TO_SDL_mixer)/lib
 
 ALL_SDL_INCLUDE=-I$(SDL_INCLUDE) -I$(SDL_mixer_INCLUDE)
 LD_OPTIONS = $(LD_OPTIONS_COMMON) $(LD_OPTIONS_LIN)

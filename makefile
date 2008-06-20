@@ -27,10 +27,12 @@ SOUND_FILES = $(wildcard sounds/*.wav)
 
 GL_FILES = opengl.scm glu.scm 
 SPACE_INVADERS_FILES =  scm-lib.scm rbtree.scm ppm-reader.scm event-simulation.scm texture.scm sprite.scm font.scm coroutine.scm engine.scm user-interface-images.scm 
+OOPS_FILES = oops/src/format.scm oops/src/mechanics.scm oops/src/slots.scm oops/src/instance.scm oops/src/class.scm oops/src/subclass.scm  oops/src/setget.scm oops/src/class-hierarchy.scm oops/src/define-class.scm oops/src/methods.scm oops/src/generics.scm oops/src/describe.scm oops/src/limited-types.scm oops/src/collection-classes.scm oops/src/conditions.scm oops/src/collection-methods.scm oops/src/ts-table.scm
+
 
 
 ## compilers
-GSC=$(PATH_TO_GAMBIT)/bin/gsc -:=$(PATH_TO_GAMBIT)
+GSC=$(PATH_TO_GAMBIT)/bin/gsc -:=$(PATH_TO_GAMBIT) -debug
 CC=gcc
 
 ## Gambit-c
@@ -155,11 +157,11 @@ endif
 ## contained in the SDL devel package for mac osx.
 ifeq ($(OS), mac)
 ifeq ($(UI), sdl)
-space-invaders.exe: $(GL_FILES:.scm=.o) $(SPACE_INVADERS_FILES:.scm=.o) $(UI_FILES:.scm=.o) space-invaders_.o $(PATH_TO_SDL_devel)/SDLMain/NIBless/SDLMain.m
+space-invaders.exe: $(GL_FILES:.scm=.o) $(OOPS_FILES:.scm:.o) $(SPACE_INVADERS_FILES:.scm=.o) $(UI_FILES:.scm=.o) space-invaders_.o $(PATH_TO_SDL_devel)/SDLMain/NIBless/SDLMain.m
 	$(CC) $(INCLUDE_OPTIONS) -o $@ $^ $(LD_OPTIONS)
 endif
 else
-space-invaders.exe: $(GL_FILES:.scm=.o) $(SPACE_INVADERS_FILES:.scm=.o) $(UI_FILES:.scm=.o) space-invaders_.o
+space-invaders.exe: $(GL_FILES:.scm=.o) $(OOPS_FILES:.scm:.o) $(SPACE_INVADERS_FILES:.scm=.o) $(UI_FILES:.scm=.o) space-invaders_.o
 	$(CC) $(INCLUDE_OPTIONS) -o $@ $^ $(LD_OPTIONS)
 endif
 
@@ -180,7 +182,7 @@ endif
 endif
 
 ## Scheme link file
-space-invaders_.c: $(GL_FILES:.scm=.c) $(SPACE_INVADERS_FILES:.scm=.c) $(UI_FILES:.scm=.c)
+space-invaders_.c: $(GL_FILES:.scm=.c) $(OOPS_FILES:.scm:.c) $(SPACE_INVADERS_FILES:.scm=.c) $(UI_FILES:.scm=.c)
 	$(GSC) -o $@ -link $^
 
 
@@ -194,7 +196,7 @@ user-interface.c: user-interface.scm scm-lib-macro.scm opengl-header.scm
 sdl-user-interface.c: sdl-user-interface.scm scm-lib-macro.scm opengl-header.scm
 	$(GSC) -c sdl-user-interface.scm 
 
-engine.c: engine.scm event-simulation-macro.scm
+engine.c: engine.scm event-simulation-macro.scm oops/src/oops-macros.scm
 	$(GSC) -c engine.scm
 
 

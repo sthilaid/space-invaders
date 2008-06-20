@@ -38,90 +38,7 @@
 
 
 
-
-;;;;;;;;;;;;;;;;;;;;;;; Sound rendering functions ;;;;;;;;;;;;;;;;;;;;;;;
-
-(define (play-sfx sfx)
-  (case sfx
-    [(mothership-sfx)
-     (when test-chunk2 (SDL::Mix::play-channel 0 test-chunk2 4))]
-    [(star-wars-op)
-     (when star-wars-chunk (SDL::Mix::play-channel 0 star-wars-chunk 0))]))
-
-(define (stop-sfx sfx)
-  (SDL::Mix::halt-channel -1))
-
-
-
-;;;;;;;;;;;;;;;;;;;;;;; Render-Sceneing function ;;;;;;;;;;;;;;;;;;;;;;;
-
-(define (render-string x y str color)
-  (if (not (eq? color 'black))
-      (let loop ((i 0) (chars (string->list str)))
-        (if (pair? chars)
-            (begin
-              (draw-char "bb_fonts" color (car chars) x y i)
-              (loop (+ i 1) (cdr chars)))))))
-
-(define (render-fontified-sprite sprite-name x y state color)
-  (draw-char (symbol->string sprite-name) color state x y 0))
-
-(define (render-message msg-obj)
-  (glBlendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA)
-  (let* ((pos (game-object-pos msg-obj))
-         (x (pos2d-x pos))
-         (y (pos2d-y pos))
-         (color (game-object-color msg-obj))
-         (str (message-obj-text msg-obj)))
-    (render-string x y str color)))
-    ;;(display-message x y (message-obj-text msg-obj) state)))
-
-(define (render-shield shield)
-  (glBlendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA)
-  (set-openGL-color 'green)
-  (for-each (lambda (particle)
-              (let* ((shield-x (pos2d-x (game-object-pos shield)))
-                     (shield-y (pos2d-y (game-object-pos shield)))
-                     (x (+ shield-x (pos2d-x particle)))
-                     (y (+ shield-y (pos2d-y particle))))
-                (glBegin GL_QUADS)
-                (glVertex2i x y)
-                (glVertex2i x (- y 1))
-                (glVertex2i (+ x 1) (- y 1))
-                (glVertex2i (+ x 1) y)
-                (glEnd)))
-            (shield-particles shield)))
-
-(define (render-object obj)
-  (define x (pos2d-x (game-object-pos obj)))
-  (define y (pos2d-y (game-object-pos obj)))
-  (define type (type-id (game-object-type obj)))
-  (define state (game-object-state obj))
-  (define color (game-object-color obj))
-  (case type
-    ((easy)   (render-fontified-sprite 'easy x y state color))
-    ((medium) (render-fontified-sprite 'medium x y state color))
-    ((hard)   (render-fontified-sprite 'hard x y state color))
-    ((player) (render-fontified-sprite 'player x y state color))
-    ((laserA) (render-fontified-sprite 'laserA x y state color))
-    ((laserB) (render-fontified-sprite 'laserB x y state color))
-    ((laserC) (render-fontified-sprite 'laserC x y state color))
-    ((player_laser) (render-fontified-sprite 'player_laser x y state color))
-    ((invader_explosion)
-     (render-fontified-sprite 'invader_explosion x y state color))
-    ((invader_laser_explosion)
-     (render-fontified-sprite 'invader_laser_explosion x y state color))
-    ((player_laser_explosion)
-     (render-fontified-sprite 'player_laser_explosion x y state color))
-    ((player_explosion)
-     (render-fontified-sprite 'player_explosion x y state color))
-    ((mothership) (render-fontified-sprite 'mothership x y state color))
-    ((mothership_explosion) (render-fontified-sprite 'mothership_explosion
-                                           x y state color))
-    ((message) (render-message obj))
-    ((shield) (render-shield obj))
-    (else (error (string-append "Cannot render unknown object type:"
-                                (symbol->string type))))))
+;;;;;;;;;;;;;;;;;;;;;;; Opengl abstractions  ;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Simple abstraction over open-gl to set up the desired color.
 (define (set-openGL-color color)
@@ -138,12 +55,68 @@
     (else (error "unknown color"))))
 
 
+
+;;;;;;;;;;;;;;;;;;;;;;; Sound rendering functions ;;;;;;;;;;;;;;;;;;;;;;;
+
+(define (play-sfx sfx)
+  (case sfx
+    [(mothership-sfx)
+     (when test-chunk2 (SDL::Mix::play-channel 0 test-chunk2 4))]
+    [(star-wars-op)
+     (when star-wars-chunk (SDL::Mix::play-channel 0 star-wars-chunk 0))]))
+
+(define (stop-sfx sfx)
+  (SDL::Mix::halt-channel -1))
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;; Scene rendering ;;;;;;;;;;;;;;;;;;;;;;;
+
+(define (render-string x y str color)
+  (if (not (eq? color 'black))
+      (let loop ((i 0) (chars (string->list str)))
+        (if (pair? chars)
+            (begin
+              (draw-char "bb_fonts" color (car chars) x y i)
+              (loop (+ i 1) (cdr chars)))))))
+
+(define-method (render (msg-obj <message>))
+  (glBlendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA)
+  (let* ((color (color msg-obj))
+         (str (text msg-obj)))
+    (render-string (x (pos msg-obj)) (y (pos msg-obj)) str color)))
+    ;;(display-message x y (message-obj-text msg-obj) state)))
+
+(define-method (render (shield <shield>))
+  (glBlendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA)
+  (set-openGL-color 'green)
+  (for-each (lambda (particle)
+              (let* ((shield-x (x (pos shield)))
+                     (shield-y (y (pos shield)))
+                     (x (+ shield-x (x particle)))
+                     (y (+ shield-y (y particle))))
+                (glBegin GL_QUADS)
+                (glVertex2i x y)
+                (glVertex2i x (- y 1))
+                (glVertex2i (+ x 1) (- y 1))
+                (glVertex2i (+ x 1) y)
+                (glEnd)))
+            (shield-particles shield)))
+
+
+(define-method (render (obj <sprite-object>))
+  (draw-char
+   (symbol->string (id obj)) (color obj) (state obj)
+   (x (pos obj)) (y (pos obj)) 0))
+
 ;; Will render a full game level
-(define (render-game-level level)
+(define-method (render (level <game-level>))
   (glBlendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA)
 
+  (for-each render-object (level-all-objects level))
+  
   ;; Must verify if the game field should be drawn or not...
-  (if (game-level-draw-game-field? level)
+  (if (draw-game-field? level)
       (begin
         ;; Draw horizontal bottom green wall and remove damaged parts by
         ;; redrawing over it in black.
@@ -163,9 +136,9 @@
                     (glVertex2i (+ (pos2d-x p) 1) (+ (pos2d-y p) 2))
                     (glVertex2i (+ (pos2d-x p) 1) (+ (pos2d-y p) 1))
                     (glEnd))
-                  (game-level-wall-damage level))
+                  (wall-damage level))
 
-        (for-each render-shield (game-level-shields level)))
+        (for-each render (shields level)))
       ;; if we don't the draw the field, a black square is drawn to
       ;; cover unwanted already drawn objects.
       (begin
@@ -177,22 +150,28 @@
         (glVertex2i 0 screen-max-y)
         (glEnd)
         ;; Re-draw all message over the black screen
-        (for-each (lambda (msg) (render-object msg))
-                  (level-messages level))))
+        (for-each render (level-messages level))))
 
   ;; Draw lives
-  (let ((nb-lives (game-level-lives level)))
+  (let ((nb-lives (lives level)))
     (render-string 13 0 (number->string nb-lives) 'white)
     (for i 0 (< i (- nb-lives 1))
-         (render-fontified-sprite 'player (+ 30 (* i 15)) 0 0 'green))))
+         (render (<player> id: (gensym 'life)
+                           pos: (<2dcoord> x: (+ 30 (* i 15)) y: 0)
+                           state: 0
+                           color: 'green)))))
   
 
-(define (render-level level)
-  ;; Draw all objects
-  (for-each render-object (level-all-objects level))
-  
-  (if (game-level? level)
-      (render-game-level level)))
+(define-method (render (level <level>))
+  (for-each render (level-all-objects level)))
+
+(define-method (render unknown-obj)
+  (error (with-output-to-string
+           ""
+           (show "Cannot render obj of type: "
+                 (class-name (class-of unknown-obj))))))
+
+
 
 ;; Main rendering function, also calculates the redraw frame-rate
 (define render-scene
@@ -217,7 +196,7 @@
          (glBlendFunc GL_ONE GL_ZERO)
          
          ;; Draw background stuff
-         (render-level level)
+         (render level)
 
          (let ((now (time->seconds (current-time))))
            (if (not (= last-render-time 0))

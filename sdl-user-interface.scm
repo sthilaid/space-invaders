@@ -21,7 +21,9 @@
 
 (include "scm-lib-macro.scm")
 (include "opengl-header.scm")
-
+;; (parameterize ((current-directory "oops/src"))
+;;   (load "oops"))
+(include "oops/src/oops-macros.scm")
 
 ;;;;;;;;;;;;;;;;;;;;;;; Global state variables  ;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -82,32 +84,32 @@
 
 (define-method (render (msg-obj <message>))
   (glBlendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA)
-  (let* ((color (color msg-obj))
-         (str (text msg-obj)))
-    (render-string (x (pos msg-obj)) (y (pos msg-obj)) str color)))
+  (let* ((color (:color msg-obj))
+         (str (:text msg-obj)))
+    (render-string (:x (:pos msg-obj)) (:y (:pos msg-obj)) str color)))
     ;;(display-message x y (message-obj-text msg-obj) state)))
 
 (define-method (render (shield <shield>))
   (glBlendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA)
   (set-openGL-color 'green)
   (for-each (lambda (particle)
-              (let* ((shield-x (x (pos shield)))
-                     (shield-y (y (pos shield)))
-                     (x (+ shield-x (x particle)))
-                     (y (+ shield-y (y particle))))
+              (let* ((shield-x (:x (:pos shield)))
+                     (shield-y (:y (:pos shield)))
+                     (x (+ shield-x (:x particle)))
+                     (y (+ shield-y (:y particle))))
                 (glBegin GL_QUADS)
                 (glVertex2i x y)
                 (glVertex2i x (- y 1))
                 (glVertex2i (+ x 1) (- y 1))
                 (glVertex2i (+ x 1) y)
                 (glEnd)))
-            (shield-particles shield)))
+            (:particles shield)))
 
 
 (define-method (render (obj <sprite-object>))
   (draw-char
-   (symbol->string (id obj)) (color obj) (state obj)
-   (x (pos obj)) (y (pos obj)) 0))
+   (symbol->string (:class-id obj)) (:color obj) (:state obj)
+   (:x (:pos obj)) (:y (:pos obj)) 0))
 
 ;; Will render a full game level
 (define-method (render (level <game-level>))
@@ -136,7 +138,7 @@
                     (glVertex2i (+ (pos2d-x p) 1) (+ (pos2d-y p) 2))
                     (glVertex2i (+ (pos2d-x p) 1) (+ (pos2d-y p) 1))
                     (glEnd))
-                  (wall-damage level))
+                  (:wall-damage level))
 
         (for-each render (shields level)))
       ;; if we don't the draw the field, a black square is drawn to
@@ -156,10 +158,10 @@
   (let ((nb-lives (lives level)))
     (render-string 13 0 (number->string nb-lives) 'white)
     (for i 0 (< i (- nb-lives 1))
-         (render (<player> id: (gensym 'life)
-                           pos: (<2dcoord> x: (+ 30 (* i 15)) y: 0)
-                           state: 0
-                           color: 'green)))))
+         (render (<player> :id: (gensym 'life)
+                           :pos: (<2dcoord> :x: (+ 30 (* i 15)) :y: 0)
+                           :state: 0
+                           :color: 'green)))))
   
 
 (define-method (render (level <level>))

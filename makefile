@@ -27,7 +27,7 @@ SOUND_FILES = $(wildcard sounds/*.wav)
 
 GL_FILES = opengl.scm glu.scm 
 SPACE_INVADERS_FILES =  scm-lib.scm rbtree.scm ppm-reader.scm event-simulation.scm texture.scm sprite.scm font.scm coroutine.scm engine.scm user-interface-images.scm 
-OOPS_FILES = oops/src/format.scm oops/src/mechanics.scm oops/src/slots.scm oops/src/instance.scm oops/src/class.scm oops/src/subclass.scm  oops/src/setget.scm oops/src/class-hierarchy.scm oops/src/define-class.scm oops/src/methods.scm oops/src/generics.scm oops/src/describe.scm oops/src/limited-types.scm oops/src/collection-classes.scm oops/src/conditions.scm oops/src/collection-methods.scm oops/src/ts-table.scm
+#OOPS_FILES = oops/src/format.scm oops/src/mechanics.scm oops/src/slots.scm oops/src/instance.scm oops/src/class.scm oops/src/subclass.scm  oops/src/setget.scm oops/src/class-hierarchy.scm oops/src/define-class.scm oops/src/methods.scm oops/src/generics.scm oops/src/describe.scm oops/src/limited-types.scm oops/src/collection-classes.scm oops/src/conditions.scm oops/src/collection-methods.scm oops/src/ts-table.scm
 
 
 
@@ -51,7 +51,7 @@ UI_FILES = glut.scm user-interface.scm
 LD_OPTIONS_LIN = -lutil -lglut
 LD_OPTIONS_MAC = -framework GLUT -lobjc -framework OpenGL
 LD_OPTIONS_WIN = -lglut32 -lglu32 -lopengl32 -lws2_32 -mwindows
-LD_OPTIONS_COMMON =-L$(GAMBIT_LIB) -L$(GL_LIB) -lgambc
+LD_OPTIONS_COMMON =-L$(GAMBIT_LIB) -L$(GL_LIB) -lgambc -loops
 
 # SDL used in general:
 else
@@ -157,13 +157,17 @@ endif
 ## contained in the SDL devel package for mac osx.
 ifeq ($(OS), mac)
 ifeq ($(UI), sdl)
-space-invaders.exe: $(GL_FILES:.scm=.o) $(OOPS_FILES:.scm:.o) $(SPACE_INVADERS_FILES:.scm=.o) $(UI_FILES:.scm=.o) space-invaders_.o $(PATH_TO_SDL_devel)/SDLMain/NIBless/SDLMain.m
+space-invaders.exe: $(GL_FILES:.scm=.o) $(SPACE_INVADERS_FILES:.scm=.o) $(UI_FILES:.scm=.o) space-invaders_.o $(PATH_TO_SDL_devel)/SDLMain/NIBless/SDLMain.m
 	$(CC) $(INCLUDE_OPTIONS) -o $@ $^ $(LD_OPTIONS)
 endif
 else
-space-invaders.exe: $(GL_FILES:.scm=.o) $(OOPS_FILES:.scm:.o) $(SPACE_INVADERS_FILES:.scm=.o) $(UI_FILES:.scm=.o) space-invaders_.o
-	$(CC) $(INCLUDE_OPTIONS) -o $@ $^ $(LD_OPTIONS)
+space-invaders.exe: $(GL_FILES:.scm=.o) $(SPACE_INVADERS_FILES:.scm=.o) $(UI_FILES:.scm=.o) space-invaders_.o liboops.so
+	$(CC) $(INCLUDE_OPTIONS) -o $@ $(GL_FILES:.scm=.o) $(SPACE_INVADERS_FILES:.scm=.o) $(UI_FILES:.scm=.o) space-invaders_.o $(LD_OPTIONS)
 endif
+
+liboops.so:
+	$(MAKE) -C oops/src
+	cp -f oops/src/liboops.so .
 
 ## only in mac osx, the main function must be renaimed to SDL_main.
 ## The "right" way is to add #include <SDL.h> in the file where main is defined
@@ -182,7 +186,7 @@ endif
 endif
 
 ## Scheme link file
-space-invaders_.c: $(GL_FILES:.scm=.c) $(OOPS_FILES:.scm:.c) $(SPACE_INVADERS_FILES:.scm=.c) $(UI_FILES:.scm=.c)
+space-invaders_.c: $(GL_FILES:.scm=.c) $(SPACE_INVADERS_FILES:.scm=.c) $(UI_FILES:.scm=.c)
 	$(GSC) -o $@ -link $^
 
 
@@ -194,10 +198,10 @@ user-interface.c: user-interface.scm scm-lib-macro.scm opengl-header.scm
 	$(GSC) -c user-interface.scm 
 
 sdl-user-interface.c: sdl-user-interface.scm scm-lib-macro.scm opengl-header.scm
-	$(GSC) -c sdl-user-interface.scm 
+	$(GSC) -c -e '(parameterize ((current-directory "oops/src")) (load "oops"))' sdl-user-interface.scm 
 
 engine.c: engine.scm event-simulation-macro.scm oops/src/oops-macros.scm
-	$(GSC) -c engine.scm
+	$(GSC) -c -e '(parameterize ((current-directory "oops/src")) (load "oops"))' engine.scm
 
 
 # Opengl interface interdependance
@@ -252,6 +256,7 @@ ALL_SCM = $(wildcard *.scm)
 clean:
 	rm -f $(ALL_SCM:.scm=.c) *_.c *.o* space-invaders.exe *.tar.gz *.tgz *.~*~ *.zip
 	$(MAKE) clean -C doc
+	$(MAKE) clean -C oops/src
 
 tarball: makefile README $(wildcard *.scm) $(SPRITE_FILES) $(FONT_FILES) $(DOC_FILES) $(SOUND_FILES)
 	tar cvzf space-invaders-src-v$(VERSION).tgz $(foreach file, $^, ../space-invaders/$(file))

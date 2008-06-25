@@ -1,4 +1,4 @@
-g;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; filename: engine.scm
 ;;
@@ -120,7 +120,7 @@ g;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
          (max-inv-nb 55)
          (slope (/ (- max-delta min-delta) max-inv-nb)))
     (lambda (level)
-      (let ((:x (length (level-invaders level))))
+      (let ((x (length (level-invaders level))))
         (+  (* slope x) min-delta)))))
 
 
@@ -138,32 +138,6 @@ g;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
 
-
-;;*****************************************************************************
-;;
-;;             Multiplayer coroutines stuff
-;;
-;;*****************************************************************************
-
-;; dynamically scoped coroutines pointers that should be available
-;; inside 2 players level simulations
-(define p1-corout (make-parameter #f))
-(define p2-corout (make-parameter #f))
-
-(define (send-update-msg-to-other level finished?)
-  (let ((msg (cons (game-level-score level) finished?)))
-    (if (eq? (game-level-player-id level) 'p2)
-        (! (p1-corout) msg)
-        (! (p2-corout) msg))))
-
-(define-method (receive-update-msg-from-other! (level <2p-game-level>))
-  (if (not (corout-empty-mailbox?))
-      (let ((msg (?)))
-        (:other-score-set! level (car msg))
-        (:other-finished?-set! level (cdr msg)))))
-
-(define-method (receive-update-msg-from-other! level)
-  'nothing)
 
 ;;*****************************************************************************
 ;;
@@ -217,9 +191,9 @@ g;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
 (define-class <game-object> ()
-  (#; (class-id allocation: class:)
-   #; (bbox allocation: class:)
-   #; (state-num allocation: class:)
+  (#;(:class-id allocation: class:)
+   #;(:bbox allocation: class:)
+   #;(:state-num allocation: class:)
    (:id)
    (:pos)))
 
@@ -242,16 +216,17 @@ g;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ())
 
 (define-method (type-height (obj <game-object>))
-  (:height (:bbox t)))
+  (:height (:bbox obj)))
+
 (define-method (type-width (obj <game-object>))
-  (:width (:bbox t)))
+  (:width (:bbox obj)))
 
 (define-method (cycle-state! (obj <statefull-object>))
   (define current-state (:state obj))
   (if (number? current-state)
       (:state-set! obj (modulo (+ current-state 1) (:state-num obj)))))
 
-(define-method (get-absolute-bounding-box (obj <game-object>))
+(define (get-absolute-bounding-box obj)
   (<rect> :x: (+ (:x (:pos obj)) (:x (:bbox obj)))
           :y: (+ (:y (:pos obj)) (:y (:bbox obj)))
           :width: (type-width obj)
@@ -308,8 +283,9 @@ g;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define-class <player> (<sprite-object>
                         <movable-object>)
-  ((:bbox        allocation: class: init-value: (<rect> :x: 0 :y: 0
-                                                       :width: 13 :height: 8))
+  ((:class-id    allocation: class: init-value: 'player)
+   (:bbox        allocation: class: init-value: (<rect> :x: 0 :y: 0
+                                                        :width: 13 :height: 8))
    (:state-num   allocation: class: init-value: 1)))
 
 (define-class <mothership> (<sprite-object>
@@ -354,9 +330,9 @@ g;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
                         <colored-object>)
   ((:class-id    allocation: class: init-value: 'shield)
    (:bbox        allocation: class:
-                init-value: (<rect> :x: 0 :y: 0 :width: 22 :height: 16))
+                 init-value: (<rect> :x: 0 :y: 0 :width: 22 :height: 16))
    (:state-num   allocation: class: init-value: 1)
-   (particles)))
+   (:particles)))
 
 (define-class <explosion> (<sprite-object>
                            <movable-object>)
@@ -396,7 +372,10 @@ g;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
                          <movable-object>
                          <colored-object>)
   ;; Class allocated slots ignored here at the moment...
-  (:text))
+  ((:class-id    allocation: class: init-value: 'message)
+   (:bbox        allocation: class: init-value: (<rect> :x: 0 :y: 0
+                                                        :width: 0 :height: 0))
+   (:text)))
 
 ;; (define-type-of-game-object invader-ship row col)
 ;; (define-type-of-game-object player-ship)
@@ -500,26 +479,28 @@ g;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (generate-shields)
   (define speed (<2dcoord> :x: 0 :y: 0))
   (define (generate-particles)
-      (rgb-pixels-to-boolean-point-list
-       (parse-ppm-image-file "sprites/shield0.ppm")
-       rgb-threshold?))
+    (map (lambda (p) (<2dcoord> :x: (car p) :y: (cdr p)))
+         (rgb-pixels-to-boolean-point-list
+          (parse-ppm-image-file "sprites/shield0.ppm")
+          rgb-threshold?)))
+  
 
   (list (<shield> :id: 'shield1
                   :pos: (<2dcoord> :x: 36 :y: 40)
                   :color: 'green
-                  particles: (generate-particles))
+                  :particles: (generate-particles))
         (<shield> :id: 'shield2
                   :pos: (<2dcoord> :x: 81 :y: 40)
                   :color: 'green
-                  particles: (generate-particles))
+                  :particles: (generate-particles))
         (<shield> :id: 'shield3
                   :pos: (<2dcoord> :x: 126 :y: 40)
                   :color: 'green
-                  particles: (generate-particles))
+                  :particles: (generate-particles))
         (<shield> :id: 'shield4
                   :pos: (<2dcoord> :x: 171 :y: 40)
                   :color: 'green
-                  particles: (generate-particles))))
+                  :particles: (generate-particles))))
 
 
 ;; (define (get-explosion-particles colliding-obj)
@@ -546,8 +527,8 @@ g;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
    rgb-threshold? 'dont-center))
 
 (define-method (get-explosion-particles (inv <invader>))
-  (define height (:height inv))
-  (define width (:width inv))
+  (define height (type-height inv))
+  (define width (type-width inv))
   (let loop-y ((y 0) (acc '()))
     (if (< y height)
         (loop-y (+ y 1)
@@ -567,7 +548,7 @@ g;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   (define explosion-pos (:pos colliding-obj))
   (define explosion-speed (:speed colliding-obj))
   (define shield-pos (:pos shield))
-  (define particles (particles shield))
+  (define particles (:particles shield))
   
   (define relative-expl-particles
     (let ((relative-expl-pos (sub explosion-pos shield-pos)))
@@ -615,7 +596,7 @@ g;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
    (:id)))
 
 (define (new-wall x y width height id)
-  (<wall> :rect: (<rect> :x: :y: :width: :height: ) :id: id))
+  (<wall> :rect: (<rect> :x: x :y: y :width: width :height: height) :id: id))
 
 ;; (define wall? wall-struct?)
 ;; (define wall-rect wall-struct-rect)
@@ -705,7 +686,7 @@ g;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   (:score-set! level (+ (score level) (:score-value obj))))
 
 (define (level-damage-wall! level damage)
-  (define current-damage (wall-damage level))
+  (define current-damage (:wall-damage level))
   (:wall-damage-set! level (union current-damage damage)))
 
 (define (game-over! level)
@@ -754,6 +735,39 @@ g;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
         ((< score 100) (string-append "00" (number->string score)))
         ((< score 1000) (string-append "0" (number->string score)))
         (else (number->string score))))
+
+
+
+
+;;*****************************************************************************
+;;
+;;             Multiplayer coroutines stuff
+;;
+;;*****************************************************************************
+
+;; dynamically scoped coroutines pointers that should be available
+;; inside 2 players level simulations
+(define p1-corout (make-parameter #f))
+(define p2-corout (make-parameter #f))
+
+(define (send-update-msg-to-other level finished?)
+  (let ((msg (cons (game-level-score level) finished?)))
+    (if (eq? (game-level-player-id level) 'p2)
+        (! (p1-corout) msg)
+        (! (p2-corout) msg))))
+
+(define-generic (receive-update-msg-from-other! level))
+
+(define-method (receive-update-msg-from-other! (level <2p-game-level>))
+  (if (not (corout-empty-mailbox?))
+      (let ((msg (?)))
+        (:other-score-set! level (car msg))
+        (:other-finished?-set! level (cdr msg)))))
+
+(define-method (receive-update-msg-from-other! level)
+  'nothing)
+
+
 
 
 ;;*****************************************************************************
@@ -1037,12 +1051,10 @@ g;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (detect-collision? obj level)
   ;; exists is exptected to return the object that satisfy the condition
   (or (exists (lambda (collision-obj)
-                (if (is-a? collision-obj <shield>)
-                    (obj-shield-collision? obj collision-obj)
-                    (obj-obj-collision? obj collision-obj)))
+                (obj-collision? obj collision-obj))
               (level-all-objects level))
       (exists (lambda (wall) (obj-collision? obj wall))
-              (walls level))))
+              (:walls level))))
 
 
 ;; collision detection between 2 game objects
@@ -1054,18 +1066,20 @@ g;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
                                (get-absolute-bounding-box obj2)))))
 
 (define-method (obj-collision? (obj <game-object>) (wall <wall>))
-  (rectangle-collision? (get-bounding-box obj)
-                        (wall-rect wall)))
+  (rectangle-collision? (:bbox obj)
+                        (:rect wall)))
+
 (define-method (obj-collision? (wall <wall>) (obj <game-object>))
   (obj-collision? obj wall))
 
 (define-method (obj-collision? (obj <game-object>) (shield <shield>))
-  (if (obj-obj-collision? obj shield)
+  ;; (if (obj-obj-collision? obj shield)
+  (if (next-method obj shield)
       (let* ((pos (:pos shield)))
         (exists (lambda (particle)
                   (point-rect-collision? (add pos particle)
-                                         (get-bounding-box obj)))
-                (shield-particles shield)))
+                                         (:bbox obj)))
+                (:particles shield)))
       #f))
 (define-method (obj-collision? (shield <shield>) (obj <game-object>))
   (obj-collision? obj shield))
@@ -1288,20 +1302,22 @@ g;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   (define y-offset (- 265 152))
 
   (define (determine-type-id col)
-    (cond ((< col 2) 'easy)
-          ((< col 4) 'medium)
-          (else 'hard)))
+    (cond ((< col 2) <easy>)
+          ((< col 4) <medium>)
+          (else <hard>)))
 
   (define (generate-inv! row col)
-    (let* ((invader
-            (<invader> :id: (gensym 'inv)
-                       :pos: (<2dcoord> :x: (+ x-offset (* col invader-spacing))
-                                       :y: (+ y-offset (* row invader-spacing)))
-                       :state: 1
-                       :color: 'white
-                       :speed:  (<2dcoord> :x: invader-x-movement-speed :y: 0)
-                       :row: row
-                       :col: col)))
+    (let* ((constructor (determine-type-id col))
+           (invader
+            (constructor :id: (gensym 'inv)
+                         :pos: (<2dcoord>
+                                :x: (+ x-offset (* col invader-spacing))
+                                :y: (+ y-offset (* row invader-spacing)))
+                         :state: 1
+                         :color: 'white
+                         :speed:  (<2dcoord> :x: invader-x-movement-speed :y: 0)
+                         :row: row
+                         :col: col)))
       (level-add-object! level invader)))
   
   (define (generate-inv-event row col)
@@ -1327,7 +1343,7 @@ g;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (create-init-invader-move-event level)
   (synchronized-event-thunk level
     (let* ((rows (get-all-invader-rows level))
-           (walls (walls level))
+           (walls (:walls level))
            (wall-collision?
             (exists
              (lambda (row)
@@ -1435,14 +1451,14 @@ g;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     (lambda (inv)
       (let* ((inv-rect (<rect> :x:      (:x (:pos inv))
                                :y:      (:y (:pos inv))
-                               :width:  (:width inv)
-                               :height: (:height inv))))
+                               :width:  (type-width inv)
+                               :height: (type-height inv))))
         (rectangle-collision? rect inv-rect))))
                                   
   (define (bottom-invader? inv)
     (let* ((rect (<rect> :x: (:x (:pos inv))
                          :y: (- (:y (:pos inv)) 1)
-                         :width: (:width inv)
+                         :width: (type-width inv)
                          :height: (- (:y (:pos inv))))))
       (not (exists (rect-inv-collision? rect) (level-invaders level)))))
                        
@@ -1486,13 +1502,13 @@ g;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-method (shoot-laser! level (laser <laser>) shooter-obj dy)
   (let* ((shooter-x (:x (:pos shooter-obj)))
          (shooter-y (:y (:pos shooter-obj)))
-         (x (+ shooter-x (floor (/ (:width shooter-obj)) 2)))
-         (y `(if (< dy 0)
+         (x (+ shooter-x (floor (/ (type-width shooter-obj) 2))))
+         (y (if (< dy 0)
                 (- shooter-y
-                   (type-height (get-type laser-type))
+                   (type-height laser)
                    invader-y-movement-speed)
                 (+ shooter-y
-                   (:height shooter-obj))))
+                   (type-height shooter-obj))))
          (pos (<2dcoord> :x: x :y: y))
          (laser-id (if (eq? laser-type 'player_laser)
                        'player-laser
@@ -1514,7 +1530,7 @@ g;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     (synchronized-event-thunk level
       ;; centered laser position (depending on the laser type...
       (let ((pos (add (:pos laser-obj)
-                      (<2dcoord> :x: (floor (/ (:width laser-obj) 2))
+                      (<2dcoord> :x: (floor (/ (type-width laser-obj) 2))
                                  :y: 0)))
             (collision-occured? (move-object! level laser-obj)))
         (if (or (not collision-occured?)
@@ -2091,9 +2107,12 @@ g;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
             (case msg
               ((space)
                (if (player-can-move?)
-                   (shoot-laser! level (<player-laser>)
-                                 (level-player level)
-                                 player-laser-speed)))
+                   (begin
+                     (display <player-laser>)
+                     (shoot-laser! level (<player-laser>)
+                                   (level-player level)
+                                   player-laser-speed)
+                     (display <player-laser>))))
               ((right)
                (if (player-can-move?)
                    (let ((new-speed (<2dcoord> :x: player-movement-speed
@@ -2152,7 +2171,7 @@ g;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
                                'player1-score-msg
                                'player2-score-msg))))
     (receive-update-msg-from-other! level)
-    (:text-set! score-obj (get-score-string (score level)))
+    (:text-set! score-obj (get-score-string (:score level)))
     ;; not worth to do a separate method, would have too much
     ;; duplicated code
     (if (is-a? level <2p-game-level>)

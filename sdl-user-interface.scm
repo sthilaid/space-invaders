@@ -115,10 +115,10 @@
 (define-method (render (level <game-level>))
   (glBlendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA)
 
-  (for-each render-object (level-all-objects level))
+  (for-each render (level-all-objects level))
   
   ;; Must verify if the game field should be drawn or not...
-  (if (draw-game-field? level)
+  (if (:draw-game-field? level)
       (begin
         ;; Draw horizontal bottom green wall and remove damaged parts by
         ;; redrawing over it in black.
@@ -140,7 +140,7 @@
                     (glEnd))
                   (:wall-damage level))
 
-        (for-each render (shields level)))
+        (for-each render (game-level-shields level)))
       ;; if we don't the draw the field, a black square is drawn to
       ;; cover unwanted already drawn objects.
       (begin
@@ -155,7 +155,7 @@
         (for-each render (level-messages level))))
 
   ;; Draw lives
-  (let ((nb-lives (lives level)))
+  (let ((nb-lives (:lives level)))
     (render-string 13 0 (number->string nb-lives) 'white)
     (for i 0 (< i (- nb-lives 1))
          (render (<player> :id: (gensym 'life)

@@ -18,7 +18,7 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-
+(include "statprof.scm")
 (include "scm-lib-macro.scm")
 (include "opengl-header.scm")
 ;; (parameterize ((current-directory "oops/src"))
@@ -474,4 +474,7 @@
     (display usage-message))))
 
 
+(profile-start!)
 (main)
+(profile-stop!)
+(write-profile-report "profiling-report")

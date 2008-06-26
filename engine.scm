@@ -694,7 +694,7 @@
                                           current-damage damage)))
 
 (define (game-over! level)
-  ;;(exit-simulation (game-level-score level)))
+  ;;(exit-simulation (:score level)))
   (terminate-corout (:score level)))
 
 
@@ -755,7 +755,7 @@
 (define p2-corout (make-parameter #f))
 
 (define (send-update-msg-to-other level finished?)
-  (let ((msg (cons (game-level-score level) finished?)))
+  (let ((msg (cons (:score level) finished?)))
     (if (eq? (game-level-player-id level) 'p2)
         (! (p1-corout) msg)
         (! (p2-corout) msg))))
@@ -853,7 +853,6 @@
     
     (add-global-score-messages! level)
 
-    #;
     (for-each (lambda (s) (level-add-object! level s)) shields)
 
     ;; Schedule the initial game animation and start events
@@ -1223,6 +1222,12 @@
   'do-nothing)
 
 (define-method (resolve-collision! level (expl <explosion>) any-obj)
+  'do-nothing)
+
+(define-method (resolve-collision! level any-obj (expl <message>))
+  'do-nothing)
+
+(define-method (resolve-collision! level (expl <message>) any-obj)
   'do-nothing)
 
 ;; Default collision handler

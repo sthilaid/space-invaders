@@ -31,7 +31,15 @@
 (define simulation-thread #f)
 (define event-thread #f)
 (define display-fps? #f)
+#;
 (define FPS (create-simple-moving-avg))
+  (define FPS
+    (let ((fps-val 0))
+      (lambda ( #!optional (x #f))
+        (if x
+            (set! fps-val x)
+            fps-val))))
+  
 
 ;; SDL mixer sound chunks
 (define star-wars-chunk #f)
@@ -133,10 +141,10 @@
         (set-openGL-color 'black)
         (for-each (lambda (p)
                     (glBegin GL_QUADS)
-                    (glVertex2i (pos2d-x p) (+ (pos2d-y p) 1))
-                    (glVertex2i (pos2d-x p) (+ (pos2d-y p) 2))
-                    (glVertex2i (+ (pos2d-x p) 1) (+ (pos2d-y p) 2))
-                    (glVertex2i (+ (pos2d-x p) 1) (+ (pos2d-y p) 1))
+                    (glVertex2i (:x p) (+ (:y p) 1))
+                    (glVertex2i (:x p) (+ (:y p) 2))
+                    (glVertex2i (+ (:x p) 1) (+ (:y p) 2))
+                    (glVertex2i (+ (:x p) 1) (+ (:y p) 1))
                     (glEnd))
                   (:wall-damage level))
 
@@ -396,8 +404,10 @@
   )
 
 (define (start-threads!)
-  (set! simulation-thread (make-thread (game-loop (current-thread))))
-  (set! event-thread      (make-thread event-thread-thunk))
+  (set! simulation-thread
+        (make-thread (game-loop (current-thread)) 'sim-thread))
+  (set! event-thread
+        (make-thread event-thread-thunk 'event-thread))
   (thread-start! simulation-thread)
   (thread-start! event-thread))
 

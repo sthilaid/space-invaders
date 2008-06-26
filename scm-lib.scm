@@ -90,11 +90,11 @@
    ((null? (car lst)) (cleanse (cdr lst)))
    (else (cons (car lst) (cleanse (cdr lst))))))
 
-(define (union l1 l2)
+(define (generic-union comparator l1 l2)
   (let loop ((l1 l1) (acc l2))
     (if (not (pair? l1))
         acc
-        (if (member (car l1) l2)
+        (if (generic-member comparator (car l1) l2)
             (loop (cdr l1) acc)
             (loop (cdr l1) (cons (car l1) acc))))))
 

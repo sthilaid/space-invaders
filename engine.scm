@@ -756,7 +756,7 @@
 
 (define (send-update-msg-to-other level finished?)
   (let ((msg (cons (:score level) finished?)))
-    (if (eq? (game-level-player-id level) 'p2)
+    (if (eq? (:player-id level) 'p2)
         (! (p1-corout) msg)
         (! (p2-corout) msg))))
 
@@ -1007,6 +1007,7 @@
   ;; 1st move the object, then detect/respond to a collision if
   ;; required.
   (move-object-raw! obj)
+
   (let ((collision-obj (detect-collision? obj level)))
     (if collision-obj
         (begin (resolve-collision! level obj collision-obj)
@@ -1619,7 +1620,7 @@
 
 (define-method (explode-player-continuation (level <2p-game-level>))
   (if (<= (:lives level) 0)
-      (if (2p-game-level-other-finished? level)
+      (if (:other-finished? level)
           (begin
             (game-over-2p-animation-event
              level

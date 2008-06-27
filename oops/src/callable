@@ -1,0 +1,47 @@
+class.scm:  proc->class
+class.scm:;; (define-values (proc->class class? make-class-ref make-class-set! class-slot-bind!)
+class.scm:;;     (proc->callable %%class-tag%% %%num-standard-class-slots%%))
+class.scm:(define proc->class     #f)
+class.scm:    (proc->callable %%class-tag%% %%num-standard-class-slots%%))
+class.scm:    (set! proc->class     construct)
+class.scm:  (let* ( (this-class (proc->class procedure)) )
+generics.scm:  proc->generic
+generics.scm:;; (define-values (proc->generic generic? make-generic-ref make-generic-set! make-generic-bind!)
+generics.scm:;;     (proc->callable %%generic-tag%% %%num-standard-generic-slots%%))
+generics.scm:(define proc->generic     #f)
+generics.scm:    (proc->callable %%generic-tag%% %%num-standard-generic-slots%%))
+generics.scm:    (set! proc->generic     construct)
+generics.scm:               (proc->generic
+mechanics.scm:  %%clone-proc-plus
+mechanics.scm:  proc->callable
+mechanics.scm:(define %%clone-proc-plus
+mechanics.scm:  (let ( (%%interp-proc-type%% (##vector-ref (eval '(lambda (x) x)) 0)) )
+mechanics.scm:                                    %%interp-proc-type%%)))
+mechanics.scm:(define proc->callable 
+mechanics.scm:       (letrec ( (proc->thing
+mechanics.scm:                    (let ( (new-proc (%%clone-proc-plus proc (+ 1 num-slots))) )
+mechanics.scm:         (values proc->thing thing? make-slot-ref make-slot-set! slot-bind!)
+methods.scm:  proc->method
+methods.scm:;; (define-values (proc->method method? make-method-ref make-method-set! make-method-bind!)
+methods.scm:;;     (proc->callable %%method-tag%% %%num-standard-method-slots%%))
+methods.scm:(define proc->method     #f)
+methods.scm:    (proc->callable %%method-tag%% %%num-standard-method-slots%%))
+methods.scm:    (set! proc->method     construct)
+methods.scm:    (let ( (new-method (proc->method procedure)) )
+setget.scm:  proc->callable
+setget.scm:  proc->ref
+setget.scm:  proc->set!
+setget.scm:;; (define-values (proc->ref ref? make-ref-ref make-ref-set! make-ref-bind!)
+setget.scm:;;     (proc->callable %%ref-tag%% %%num-standard-ref-slots%%))
+setget.scm:(define proc->ref     #f)
+setget.scm:    (proc->callable %%ref-tag%% %%num-standard-ref-slots%%))
+setget.scm:    (set! proc->ref     construct)
+setget.scm:      (set! new-ref (proc->ref getter))
+setget.scm:            (getter-info-proc-set!  info proc)
+setget.scm:;; (define-values (proc->set! set!? make-set!-ref make-set!-set! make-set!-bind!)
+setget.scm:;;     (proc->callable %%set!-tag%% %%num-standard-set!-slots%%))
+setget.scm:(define proc->set!     #f)
+setget.scm:    (proc->callable %%set!-tag%% %%num-standard-set!-slots%%))
+setget.scm:    (set! proc->set!     construct)
+setget.scm:      (set! new-set! (proc->set! setter))
+setget.scm:              (setter-info-proc-set!        info proc)

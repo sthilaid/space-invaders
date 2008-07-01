@@ -5,33 +5,32 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
-(define-type corout id kont mailbox)
+(define-type thrd id kont mailbox)
 
-
-(define current-coroutine (make-parameter #f))
-(define corout-q (make-parameter #f))
+(define current-thrd (make-parameter #f))
+(define q (make-parameter #f))
 (define root-k (make-parameter #f))
 (define return-value-handler (make-parameter #f))
 (define return-value (make-parameter #f))
 
 
 (define (corout-scheduler)
-  (if (corout? (current-coroutine))
-      (enqueue! (corout-q) (current-coroutine))
+  (if (thrd? (current-thrd))
+      (enqueue! (q) (current-thrd))
       (return-value
        (if (not (return-value))
-           (current-coroutine)
-           ((return-value-handler) (return-value) (current-coroutine)))))
+           (current-thrd)
+           ((return-value-handler) (return-value) (current-thrd)))))
 
   ;; Get the next coroutine, if one is available
   (with-exception-catcher
    (lambda (e) (case e ((empty-q) #f) (else (raise e))))
-   (lambda () (current-coroutine (dequeue! (corout-q)))))
+   (lambda () (current-thrd (dequeue! (q)))))
   
   ;; if there is one coroutine, run it, else stop the coroutine
-  ;; scheduler.
-  (if (corout? (current-coroutine))
-      ((corout-kont (current-coroutine)) 'go)
+  ;; corout-scheduler.
+  (if (thrd? (current-thrd))
+      ((thrd-kont (current-thrd)) 'go)
       ((root-k) (return-value))))
 
 
@@ -39,54 +38,54 @@
 ;; External definitions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define (new-corout id thunk)
-  (make-corout id (lambda (dummy) (thunk)) (new-queue)))
+(define (new-thrd id thunk)
+  (make-thrd id (lambda (dummy) (thunk)) (new-queue)))
 
 
-(define (corout-empty-mailbox?)
-  (empty-queue? (corout-mailbox (current-coroutine))))
+(define (empty-mailbox?)
+  (empty-queue? (thrd-mailbox (current-thrd))))
 
 
 (define (?)
-  (define mail (corout-mailbox (current-coroutine)))
+  (define mail (thrd-mailbox (current-thrd)))
   (if (empty-queue? mail)
-      (begin (yield-corout)
+      (begin (corout-yield)
              (?))
       (dequeue! mail)))
 
 
-(define (! dest-corout msg)
-  (enqueue! (corout-mailbox dest-corout) msg))
+(define (! dest-thrd msg)
+  (enqueue! (thrd-mailbox dest-thrd) msg))
 
 
-(define (yield-corout)
+(define (corout-yield)
   (call/cc
    (lambda (k)
-     (corout-kont-set! (current-coroutine) k)
+     (thrd-kont-set! (current-thrd) k)
      (corout-scheduler))))
 
 
 
 (define (terminate-corout exit-val)
-  (current-coroutine exit-val)
+  (current-thrd exit-val)
   (corout-scheduler))
 
-(define (corout-simple-boot c1 . cs)
+(define (simple-corout-boot c1 . cs)
   (apply corout-boot (lambda (acc val) val) c1 cs))
 
 (define (corout-boot return-handler c1 . cs)
   (call/cc
    (lambda (k)
      (parameterize ((root-k k)
-                    (current-coroutine #f)
-                    (corout-q (new-queue))
+                    (current-thrd #f)
+                    (q (new-queue))
                     (return-value-handler return-handler)
                     (return-value #f))
-       (for-each (lambda (c) (enqueue! (corout-q) c))
+       (for-each (lambda (c) (enqueue! (q) c))
                  (cons c1 cs))
        (corout-scheduler)))))
 
-(define (corout-kill-all!)
+(define (kill-all!)
   ((root-k) 'reset))
 
 
@@ -95,33 +94,33 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define (simple-test)
-  (let ((c1 (new-corout 'c1 (lambda ()
+  (let ((c1 (new-thrd 'c1 (lambda ()
                               (pp 'A)
-                              (yield-corout)
+                              (corout-yield)
                               (pp 'B)
                               (terminate-corout 'C))))
-        (c2 (new-corout 'c2 (lambda ()
+        (c2 (new-thrd 'c2 (lambda ()
                               (pp 1)
-                              (yield-corout)
+                              (corout-yield)
                               (pp 2)
                               (terminate-corout 3)))))
-    (corout-simple-boot c1 c2)))
+    (simple-corout-boot c1 c2)))
 
 
 (define (test-ret-val-handler)
-  (let ((c1 (new-corout 'c1 (lambda ()
+  (let ((c1 (new-thrd 'c1 (lambda ()
                               (pp 'A)
-                              (yield-corout)
+                              (corout-yield)
                               (pp 'B)
                               (terminate-corout '1))))
-        (c2 (new-corout 'c2 (lambda ()
+        (c2 (new-thrd 'c2 (lambda ()
                               (pp 1)
-                              (yield-corout)
+                              (corout-yield)
                               (pp 2)
                               (terminate-corout 2))))
-        (c3 (new-corout 'c3 (lambda ()
+        (c3 (new-thrd 'c3 (lambda ()
                               (pp #\a)
-                              (yield-corout)
+                              (corout-yield)
                               (pp #\b)
                               (terminate-corout 3)))))
     (pp `(return value (expecting 6) =
@@ -129,21 +128,21 @@
                                c1 c2 c3)))))
 
 (define (test-mailboxes)
-  (letrec ((c1 (new-corout 'c1 (lambda ()
+  (letrec ((c1 (new-thrd 'c1 (lambda ()
                                  (pp `(c1 received ,(?)))
                                  (pp `(c1 received ,(?)))
                                  (terminate-corout 'done))))
-           (c2 (new-corout 'c2 (lambda ()
+           (c2 (new-thrd 'c2 (lambda ()
                                  (pp 'sending-data-from-c2)
                                  (! c1 'allo)
                                  (terminate-corout 'do))))
-           (c3 (new-corout 'c3 (lambda ()
+           (c3 (new-thrd 'c3 (lambda ()
                                  (pp 'sending-data-from-c3)
                                  (! c1 'salut)
                                  (terminate-corout 'ne)))))
-    (corout-simple-boot c1 c2 c3)))
+    (simple-corout-boot c1 c2 c3)))
 
-(define (corout-tests)
+(define (tests)
   (simple-test)
   (newline)
   (test-ret-val-handler)

@@ -1,3 +1,4 @@
+(include "statprof.scm")
 (include "scm-lib-macro.scm")
 (load "scm-lib")
 
@@ -6,63 +7,105 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
-(define-type thrd id kont mailbox parent-state state)
+(define-type thrd id kont mailbox state)
 
-(define current-thrd (make-parameter #f))
-(define q (make-parameter #f))
-(define root-k (make-parameter #f))
-(define return-value-handler (make-parameter #f))
-(define return-value (make-parameter #f))
-;; (define parent-state (make-parameter #f))
+(define current-thrd (make-parameter 'unbound))
+(define q (make-parameter 'unbound))
+(define root-k (make-parameter 'unbound))
+(define return-value-handler (make-parameter 'unbound))
+(define return-value (make-parameter 'unbound))
+(define parent-state (make-parameter 'unbound))
+(define return-to-sched (make-parameter 'unbound))
+
+(define (unbound? v) (eq? v 'unbound))
 
 (define (save-state!)
   (let ((current-state (save-state)))
     (thrd-parent-state-set! (current-thrd) current-state)))
 
 (define (save-state)
-  (pp 'save-state)
-  (if (thrd? (current-thrd))
-      (vector (current-thrd)
-              (q)
-              (root-k)
-              (return-value-handler)
-              (return-value))
-      #f))
+  (if (not (or (unbound? (current-thrd))
+               (unbound? (q))
+               (unbound? (root-k))
+               (unbound? (return-value-handler))
+               (unbound? (return-value))))
+      
+      (begin
+        (pp 'saved-state)
+        (vector (current-thrd)
+                (q)
+                (root-k)
+                (return-value-handler)
+                (return-value)
+                (parent-state)
+                (return-to-sched)))
+      (begin
+        (pp 'did-not-saved-state)
+        #f)))
 
 (define (restore-state state)
-  (pp 'reloading-previous-state)
+  (pp 'restoring-state)
   (if state
       (begin
         (current-thrd         (vector-ref state 0))
         (q                    (vector-ref state 1))
         (root-k               (vector-ref state 2))
         (return-value-handler (vector-ref state 3))
-        (return-value         (vector-ref state 4)))))
+        (return-value         (vector-ref state 4))
+        (parent-state         (vector-ref state 5))
+        (return-to-sched      (vector-ref state 6)))))
 
 
 (define (corout-scheduler)
-  (pp 'test-scheduler)
-  (if (thrd? (current-thrd))
-      (enqueue! (q) (current-thrd))
-      (return-value
-       (if (not (return-value))
-           (current-thrd)
-           ((return-value-handler) (return-value) (current-thrd)))))
+  (let loop ()
+    (pp `(test-scheduler
+        current:
+        ,(if (thrd? (current-thrd))
+             (thrd-id (current-thrd))
+             `(value: ,(current-thrd)))
+        parent? ,(not (not (parent-state)))))
 
-  ;; Get the next coroutine, if one is available
-  (with-exception-catcher
-   (lambda (e) (case e ((empty-q) #f) (else (raise e))))
-   (lambda () (current-thrd (dequeue! (q)))))
-  
-  ;; if there is one coroutine, run it, else stop the coroutine
-  ;; corout-scheduler.
-  (if (thrd? (current-thrd))
-      (begin
-        (thrd-parent-state-set! (current-thrd) (save-state))
-        (if (thrd-state (current-thrd))
-            (restore-state (thrd-state (current-thrd))))
-        ((thrd-kont (current-thrd)) 'go))
-      ((root-k) (return-value))))
+
+    (if (thrd? (current-thrd))
+        (enqueue! (q) (current-thrd))
+        (return-value
+         (if (not (return-value))
+             (current-thrd)
+             ((return-value-handler) (return-value) (current-thrd)))))
+
+    ;; Get the next coroutine, if one is available
+    (with-exception-catcher
+     (lambda (e) (case e ((empty-q) #f) (else (raise e))))
+     (lambda () (current-thrd (dequeue! (q)))))
+    
+    ;; if there is one coroutine, run it, else stop the coroutine
+    ;; corout-scheduler.
+    (if (thrd? (current-thrd))
+        ;; execute the thread
+        (begin (call/cc (lambda (k)
+                          (return-to-sched k)
+                          (if (thrd-state (current-thrd))
+                              (let ((state (save-state)))
+                                (restore-state (thrd-state (current-thrd)))
+                                (parent-state state)))
+                          ((thrd-kont (current-thrd)) 'go)))
+
+               ;; temporary testing?
+               ;; can't work here, inf loop
+               (special-yield)
+
+               (loop))
+        ;; finish up the scheduling process
+        (let ((finish-scheduling (root-k)))
+          (pp 'ending-sheduling)
+          (restore-state (parent-state))
+          (finish-scheduling (return-value))))
+    ))
+
+
+(define (resume-scheduling)
+  ((return-to-sched) 'back-in-sched))
+
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -70,7 +113,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define (new-thrd id thunk)
-  (make-thrd id (lambda (dummy) (thunk)) (new-queue) #f #f))
+  (make-thrd id (lambda (dummy) (thunk)) (new-queue) #f))
 
 
 (define (empty-mailbox?)
@@ -89,24 +132,38 @@
   (enqueue! (thrd-mailbox dest-thrd) msg))
 
 
+;;TODO??? Sauver parent-state dans variable dyn, et current-state ds
+;; corout.  evaluer dans parameterize a l'interieur du sched la
+;; partie de code appartement a la coroutine du sched.
+
 (define (corout-yield)
-  (pp 'test-yield)
   (call/cc
    (lambda (k)
-     (if (not (thrd? (current-thrd)))
-         (let ((state (save-state)))
-           (restore-state ())))
-     ;;TODO??? Sauver parent-state dans variable dyn, et current-state ds
-     ;; corout.  evaluer dans parameterize a l'interieur du sched la
-     ;; partie de code appartement a la coroutine du sched.
      (thrd-kont-set! (current-thrd) k)
-     (corout-scheduler))))
+     (resume-scheduling))))
 
+
+;; If current-thrd is not set, then the yield should have occured
+;; within the scheduler.
+(define (special-yield)
+  (pp 'test-special-yield)
+  (call/cc
+   (lambda (k)
+     (if (parent-state)
+         (let ((state (save-state)))
+           (restore-state (parent-state))
+           ;; current-thrd should be restored on the parent's
+           ;; level. It just thus be defined as the new coroutine
+           ;; system's coroutine.
+           (thrd-state-set! (current-thrd) state)
+           (thrd-kont-set! (current-thrd) k)
+           (resume-scheduling))))))
 
 
 (define (terminate-corout exit-val)
   (current-thrd exit-val)
-  (corout-scheduler))
+  (resume-scheduling))
+
 
 (define (simple-corout-boot c1 . cs)
   (apply corout-boot (lambda (acc val) val) c1 cs))
@@ -114,14 +171,16 @@
 (define (corout-boot return-handler c1 . cs)
   (call/cc
    (lambda (k)
-     (parameterize ((root-k k)
+     (parameterize ((parent-state (save-state))
+                    (root-k k)
                     (current-thrd #f)
                     (q (new-queue))
                     (return-value-handler return-handler)
                     (return-value #f))
        (for-each (lambda (c) (enqueue! (q) c))
                  (cons c1 cs))
-       (corout-scheduler)))))
+       (corout-scheduler))))
+  (pp 'boot-finished))
 
 (define (kill-all!)
   ((root-k) 'reset))
@@ -184,7 +243,6 @@
   (let* ((sA (new-thrd 'sA (lambda () (for i 0 (< i 3)
                                            (begin (pp 'A)
                                                   (corout-yield)))
-                                   (pp 'allo)
                                    (terminate-corout 'sA))))
          (sB (new-thrd 'sB (lambda () (for i 0 (< i 3)
                                            (begin (pp 'B)
@@ -193,22 +251,34 @@
          (s1 (new-thrd 's1 (lambda () (for i 0 (< i 3)
                                            (begin (pp 1)
                                                   (corout-yield)))
+                                   (pp 's1-finished)
                                    (terminate-corout 's1))))
          (s2 (new-thrd 's2 (lambda () (for i 0 (< i 3)
                                            (begin (pp 2)
                                                   (corout-yield)))
+                                   (pp 's2-finished)
                                    (terminate-corout 's2))))
          (meta-AB
           (new-thrd 'meta-AB
                     (lambda ()
-                      (corout-boot (lambda (x y) (pp 'testing-handler) (corout-yield)) sA sB)
+                      (simple-corout-boot sA sB)
                       (terminate-corout 'meta-AB-done!))))
          (meta-12
           (new-thrd 'meta-12
                     (lambda ()
-                      (corout-boot (lambda (x y) (corout-yield)) s1 s2)
+                      (simple-corout-boot s1 s2)
                       (terminate-corout 'meta-12-done!)))))
     (simple-corout-boot meta-AB meta-12)))
+
+(define (test-prof)
+  (profile-start!)
+  (let ((exit-test (make-parameter #f)))
+    (call/cc
+     (lambda (k)
+       (exit-test (lambda () (k 'fini)))
+       (test-recursive-sim))))
+  (profile-stop!)
+  (write-profile-report "thread-profiling"))
 
 (define (tests)
   (simple-test)

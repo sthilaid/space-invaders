@@ -21,7 +21,8 @@
 (define parent-state (make-parameter 'unbound))
 (define return-to-sched (make-parameter 'unbound))
 
-(define (unbound? v) (eq? v 'unbound))
+(define unbound 'unbound)
+(define (unbound? v) (eq? v unbound))
 
 (define (save-state!)
   (let ((current-state (save-state)))
@@ -60,7 +61,16 @@
         (return-value-handler (state-return-value-handler state))
         (return-value         (state-return-value state))
         (return-to-sched      (state-return-to-sched state))
-        (parent-state         (state-parent-state state)))))
+        (parent-state         (state-parent-state state)))
+      ;; un-initializing the global simulation state
+      (begin
+        (current-thrd         unbound)
+        (q                    unbound)
+        (root-k               unbound)
+        (return-value-handler unbound)
+        (return-value         unbound)
+        (return-to-sched      unbound)
+        (parent-state         unbound))))
 
 
 
@@ -184,12 +194,14 @@
 (define (corout-boot return-handler c1 . cs)
   (call/cc
    (lambda (k)
-     (parent-state (save-state))
-     (root-k k)
-     (current-thrd #f)
-     (q (new-queue))
-     (return-value-handler return-handler)
-     (return-value #f)
+     (let ((fresh-start? (unbound? (current-thrd))))
+       (if (not fresh-start?) (parent-state (save-state)))
+       (root-k k)
+       (current-thrd #f)
+       (q (new-queue))
+       (return-value-handler return-handler)
+       (return-value #f)
+       (if fresh-start? (parent-state #f)))
      (for-each (lambda (c) (enqueue! (q) c))
                (cons c1 cs))
      (corout-scheduler))))

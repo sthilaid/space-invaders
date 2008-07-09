@@ -8,120 +8,180 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Data type definitions
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (define-type corout id kont mailbox (state unprintable:))
+
 (define-type state
-  current-corout q root-k return-value-handler
+  current-corout q sleep-q root-k return-value-handler
   return-value return-to-sched
   (parent-state unprintable:))
 
-(define current-corout (make-parameter 'unbound))
-(define q (make-parameter 'unbound))
-(define root-k (make-parameter 'unbound))
-(define return-value-handler (make-parameter 'unbound))
-(define return-value (make-parameter 'unbound))
-(define parent-state (make-parameter 'unbound))
-(define return-to-sched (make-parameter 'unbound))
+(define (make-sleep-q-el cond corout) (cons cond corout))
+(define (sleep-q-el-condition? sleep-q-el)
+  ((car sleep-q-el)))
+(define sleep-q-el-coroutine cdr)
 
-(define unbound 'unbound)
+(define unbound '!---unbound---!)
 (define (unbound? v) (eq? v unbound))
 
-(define (save-state!)
-  (let ((current-state (save-state)))
-    (corout-parent-state-set! (current-corout) current-state)))
+(define sleeping '!---sleeping---!)
+(define (sleeping? v) (eq? v unbound))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Scheduling state global variables
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+(define current-corout unbound)
+(define q unbound)
+(define sleep-q unbound)
+(define root-k unbound)
+(define return-value-handler unbound)
+(define return-value unbound)
+(define parent-state unbound)
+(define return-to-sched unbound)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; State management functionnalities
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Saves the current scheduler's state into an object
 (define (save-state)
-  (if (not (or (unbound? (current-corout))
-               (unbound? (q))
-               (unbound? (root-k))
-               (unbound? (return-value-handler))
-               (unbound? (return-value))))
+  (if (not (or (unbound? current-corout)
+               (unbound? q)
+               (unbound? sleep-q)
+               (unbound? root-k)
+               (unbound? return-value-handler)
+               (unbound? return-value)))
       
-      (begin
-        #;
-        (pp 'saved-state)
-        (make-state (current-corout)
-                    (q)
-                    (root-k)
-                    (return-value-handler)
-                    (return-value)
-                    (return-to-sched)
-                    (parent-state)))
-      (begin
-        #;
-        (pp 'did-not-saved-state)
-        #f)))
+      (make-state current-corout
+                  q
+                  sleep-q
+                  root-k
+                  return-value-handler
+                  return-value
+                  return-to-sched
+                  parent-state)
+      #f))
 
+;; Restores the givent state object into the environment
 (define (restore-state state)
-  #;
-  (pp `(restoring-state ,state))
   (if state
       (begin
-        (current-corout       (state-current-corout state))
-        (q                    (state-q state))
-        (root-k               (state-root-k state))
-        (return-value-handler (state-return-value-handler state))
-        (return-value         (state-return-value state))
-        (return-to-sched      (state-return-to-sched state))
-        (parent-state         (state-parent-state state)))
+        (set! current-corout       (state-current-corout state))
+        (set! q                    (state-q state))
+        (set! sleep-q              (state-sleep-q state))
+        (set! root-k               (state-root-k state))
+        (set! return-value-handler (state-return-value-handler state))
+        (set! return-value         (state-return-value state))
+        (set! return-to-sched      (state-return-to-sched state))
+        (set! parent-state         (state-parent-state state)))
+
       ;; un-initializing the global simulation state
       (begin
-        (current-corout       unbound)
-        (q                    unbound)
-        (root-k               unbound)
-        (return-value-handler unbound)
-        (return-value         unbound)
-        (return-to-sched      unbound)
-        (parent-state         unbound))))
+        (set! current-corout       unbound)
+        (set! q                    unbound)
+        (set! sleep-q              unbound)
+        (set! root-k               unbound)
+        (set! return-value-handler unbound)
+        (set! return-value         unbound)
+        (set! return-to-sched      unbound)
+        (set! parent-state         unbound))))
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Scheduler's internals
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; If the current-corout is not a corout, it means that the last
+;; coroutine finished, and the value of current-corout is the return
+;; value of that coroutine. Exception, when current-corout is
+;; unbound, this happens when the q is empty and no coroutine in the
+;; sleep-q can be awaken yet.
+(define (manage-return-value)
+  (cond
+   ((corout? current-corout) (enqueue! q current-corout))
+   ((not (sleeping? current-corout))
+    (set! return-value
+          (if (not return-value)
+              current-corout
+              (return-value-handler return-value current-corout))))))
+
+(define (wake-up-sleepers)
+  (let loop ((sleeping-el (dequeue!? sleep-q)) (still-sleeping '()))
+    (if sleeping-el
+        (if (sleep-q-el-condition? sleeping-el)
+            (begin
+              (enqueue! q (sleep-q-el-coroutine sleeping-el))
+              (loop (dequeue!? sleep-q) still-sleeping))
+            (loop (dequeue!? sleep-q)
+                  (cons sleeping-el still-sleeping)))
+            (for-each (lambda (el) (enqueue! sleep-q el))
+                      still-sleeping))))
+
+(define (resume-coroutine)
+  (call/cc (lambda (k)
+               (set! return-to-sched k)
+               (let ((kontinuation (corout-kont current-corout)))
+                 ;; if it is a statefull couroutine
+                 ;; (executing a scheduler) then restore its
+                 ;; environnement
+                 (if (corout-state current-corout)
+                     (let ((state (save-state)))
+                       (restore-state (corout-state current-corout))
+                       (set! parent-state state)))
+                 ;; run the coroutine
+                 (kontinuation 'go)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Scheduler
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; This is the main coroutine scheduler. Dispatches coroutine one
+;; after another, manages the coroutine's return values and returns to
+;; it's super scheduer (if there is one) when all the coroutines
+;; finishes.
 (define (corout-scheduler)
-  #;
-  (pp `(test-scheduler
-  current:
-  ,(if (corout? (current-corout))
-  (corout-id (current-corout))
-  `(value: ,(current-corout)))
-  parent? ,(not (not (parent-state)))))
-
-
-  (if (corout? (current-corout))
-      (enqueue! (q) (current-corout))
-      (return-value
-       (if (not (return-value))
-           (current-corout)
-           ((return-value-handler) (return-value) (current-corout)))))
+  ;; Verify for a return value
+  (manage-return-value)
+  
+  ;; Verify if the sleeping elements can be woke up
+  (wake-up-sleepers)
 
   ;; Get the next coroutine, if one is available
-  (with-exception-catcher
-   (lambda (e) (case e ((empty-q) #f) (else (raise e))))
-   (lambda () (current-corout (dequeue! (q)))))
-  
+  (set! current-corout (dequeue!? q))
+
   ;; if there is one coroutine, run it, else stop the coroutine
-  ;; corout-scheduler.
-  (if (corout? (current-corout))
-      ;; execute the thread
-      (begin (call/cc (lambda (k)
-                        (return-to-sched k)
-                        (let ((kontinuation (corout-kont (current-corout))))
-                          (if (corout-state (current-corout))
-                              (let ((state (save-state)))
-                                (restore-state (corout-state (current-corout)))
-                                (parent-state state)))
-                          (kontinuation 'go))))
-             
-             (corout-scheduler))
-      ;; finish up the scheduling process
-      (let ((finish-scheduling (root-k))
-            (ret-val (return-value)))
-        #;
-        (pp `(ending-sheduling with ,ret-val))
-        (restore-state (parent-state))
-        (finish-scheduling ret-val))))
+  ;; scheduler.
+  (cond
+   ((corout? current-corout)
+    (begin
+      (resume-coroutine)
+      ;; loop the scheduler, if the coroutine finished
+      (corout-scheduler)))
+
+   ;; If only sleeping coroutines are left, sleep for a while
+   ((not (empty-queue? sleep-q))
+    (begin
+      (thread-sleep! 0.1) ; TODO: change this?
+      (set! current-corout sleeping)
+      (corout-scheduler)))
+      
+   ;; finish up the scheduling process by restoring the super
+   ;; environnement and end this scheduler
+   (else (let ((finish-scheduling root-k)
+               (ret-val return-value))
+           (restore-state parent-state)
+           (finish-scheduling ret-val)))))
 
 
+;; Simple abstraction that just resumes the scheduler's calculation
 (define (resume-scheduling)
-  ((return-to-sched) 'back-in-sched))
+  (return-to-sched 'back-in-sched))
+
 
 
 
@@ -129,6 +189,8 @@
 ;; External definitions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; Creation of a new coroutine object with id as it's identifier
+;; (mostly used for debugging and the given thunk as its body.
 (define (new-corout id thunk)
   (make-corout id
                ;; here the terminate-corout call is added to ensure that
@@ -136,82 +198,107 @@
                (lambda (dummy) (terminate-corout (thunk)))
                (new-queue) #f))
 
-
+;; Querry the current-coroutine's mailbox to see if its empty
 (define (empty-mailbox?)
-  (empty-queue? (corout-mailbox (current-corout))))
+  (empty-queue? (corout-mailbox current-corout)))
 
-
+;; Gets the next message in the mailbox queue. If no message is
+;; available, the coroutine will sleep until a message is received.
 (define (?)
-  (define mail (corout-mailbox (current-corout)))
+  (define mail (corout-mailbox current-corout))
   (if (empty-queue? mail)
       (begin (corout-yield)
              (?))
       (dequeue! mail)))
 
 
+;; Send a message to the givent destination coroutine object.
 (define (! dest-corout msg)
   (enqueue! (corout-mailbox dest-corout) msg))
 
-
-;;TODO??? Sauver parent-state dans variable dyn, et current-state ds
-;; corout.  evaluer dans parameterize a l'interieur du sched la
-;; partie de code appartement a la coroutine du sched.
-
+;; Yields the current coroutine's calculation. The calculation will
+;; resume where it left once the scheduler decides to resume it.
 (define (corout-yield)
   (call/cc
    (lambda (k)
-     (corout-kont-set! (current-corout) k)
+     (corout-kont-set! current-corout k)
      (resume-scheduling))))
 
 
-;; If current-corout is not set, then the yield should have occured
-;; within the scheduler.
+;; This will yield the work of the scheduler itselft, assuming that
+;; the scheduler runs inside a coroutine too, i.e. that we are in a
+;; child recursive coroutine.
 (define (super-yield)
-  #;
-  (pp 'test-super-yield)
   (call/cc
    (lambda (k)
-     (if (parent-state)
+     (if parent-state
          (let ((state (save-state)))
-           (restore-state (parent-state))
+           (restore-state parent-state)
            ;; current-corout should be restored on the parent's
            ;; level. It just thus be defined as the new coroutine
            ;; system's coroutine.
-           (corout-state-set! (current-corout) state)
-           (corout-kont-set! (current-corout) k)
-           (resume-scheduling))
-         #;
-         (pp 'ignored)))))
+           (corout-state-set! current-corout state)
+           (corout-kont-set! current-corout k)
+           (resume-scheduling))))))
 
-
+;; Terminates early the calculation of the current coroutine and
+;; returns with the givent ret-val.
 (define (terminate-corout exit-val)
-  (current-corout exit-val)
+  (set! current-corout exit-val)
   (resume-scheduling))
 
-
+;; Starts the scheduling of the passed coroutines. This call will
+;; return when all the coroutine will have terminated. It will use the
+;; default return value handler, thus will return the value returned
+;; by the last coroutine to finish.
 (define (simple-corout-boot c1 . cs)
   (apply corout-boot (lambda (acc val) val) c1 cs))
 
+;; Starts the scheduling of the givent coroutines with a specific
+;; return value handler. The return value handler must have the
+;; following format: (lambda (acc val) ...) where acc is the
+;; accumulated return value and val is the last returned value by a
+;; coroutine. The accumulated value will be return when the scheduling
+;; process finishes.
 (define (corout-boot return-handler c1 . cs)
   (call/cc
    (lambda (k)
-     (let ((fresh-start? (unbound? (current-corout))))
-       (if (not fresh-start?) (parent-state (save-state)))
-       (root-k k)
-       (current-corout #f)
-       (q (new-queue))
-       (return-value-handler return-handler)
-       (return-value #f)
-       (if fresh-start? (parent-state #f)))
-     (for-each (lambda (c) (enqueue! (q) c))
+     (let ((fresh-start? (unbound? current-corout)))
+       (if (not fresh-start?) (set! parent-state (save-state)))
+       (set! root-k k)
+       (set! current-corout #f)
+       (set! q (new-queue))
+       (set! sleep-q (new-queue))
+       (set! return-value-handler return-handler)
+       (set! return-value #f)
+       (if fresh-start? (set! parent-state #f)))
+     (for-each (lambda (c) (enqueue! q c))
                (cons c1 cs))
      (corout-scheduler))))
 
+;; Kills all the currently executing coroutines. This will operate on
+;; only 1 level of scheduling, killing thus the currently executing
+;; scheduler.
 (define (kill-all!)
-  (let ((finish-scheduling (root-k))
-        (ret-val (return-value)))
-    (restore-state (parent-state))
+  (let ((finish-scheduling root-k)
+        (ret-val return-value))
+    (restore-state parent-state)
     (finish-scheduling 'killed-all)))
+
+;; Will put the coroutine into sleep, until the condition-thunk
+;; returns #t.
+(define (sleep-until condition-thunk)
+  (if (not (condition-thunk))
+      (call/cc
+       (lambda (k)
+         (corout-kont-set! current-corout k)
+         (enqueue! sleep-q (make-sleep-q-el condition-thunk current-corout))
+         (set! current-corout sleeping)
+         (return-to-sched 'asleep)))))
+
+(define (sleep-for secs)
+  (let ((alarm (+ (time->seconds (current-time)) secs)))
+    (sleep-until (lambda () (> (time->seconds (current-time)) alarm)))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -337,3 +424,27 @@
                         'meta-12-done!))))
     (simple-corout-boot meta-AB meta-12)))
 
+
+;; We are here expecting that running 5 times inside the scheduler
+;; should occur faster than 2 secs... (should take about 5*0.1 secs)
+(define-test test-sleep
+  (string-append "bon-matin\n"
+                 "bonne-aprem\n"
+                 "bonne-nuit\n")
+  'dont-care
+  (let ((c1 (new-corout
+             'c1
+             (lambda ()
+               (let ((counter 0))
+                 (sleep-until (lambda ()
+                                (set! counter (+ counter 2))
+                                (> counter 5))))
+               (pretty-print 'bonne-aprem))))
+        (c2 (new-corout 'c2 (lambda () (pretty-print 'bon-matin))))
+        (c3 (new-corout
+             'c3
+             (lambda ()
+               (sleep-for 1)
+               (pretty-print 'bonne-nuit)))))
+    (simple-corout-boot c1 c2 c3)
+    'dont-care))

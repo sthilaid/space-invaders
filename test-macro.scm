@@ -23,11 +23,11 @@
   
   `(begin
      (define (,name)
+       (show ',name ": ")
        (call-with-values (to-string-val ,e ,@es)
          (lambda (,retval ,output)
            (let* ((,test-out (string=? ,output ,expected-out))
                   (,test-ret (equal? ,retval ,expected-retval)))
-             (show ',name ": ")
              (if (or (not ,test-ret) (not ,test-out))
                  (display 'failed!)
                  (display 'passed))

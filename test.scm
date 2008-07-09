@@ -7,5 +7,5 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define tests '())
-(define (run-tests) (for-each (lambda (t) (t)) tests))
+(define (run-tests) (for-each (lambda (t) (t)) (reverse tests)))
 

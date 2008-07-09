@@ -277,13 +277,16 @@
         (queue-list-set! queue (drop-right list 1))
         queue-head)))
 
+;; Will return #f if the queue is empty
+(define (dequeue!? queue)
+  (with-exception-catcher
+   (lambda (e) (case e ((empty-q) #f) (else (raise e))))
+   (lambda () (dequeue! queue))))
+
 (define (empty-queue? q) (not (pair? (queue-list q))))
 
 (define (queue-find-obj? q predicate)
   (exists predicate (queue-list q)))
-
-
-
 
 
 ;; Randomize current mrg's seed

@@ -18,9 +18,7 @@
                    false)))))
 
 (define-macro (to-string e1 . es)
-  `(with-output-to-string
-     ""
-     (lambda () ,e1 ,@es)))
+  `(with-output-to-string "" (lambda () ,e1 ,@es)))
 
 (define-macro (when test . body)
   `(if ,test (begin ,@body)))

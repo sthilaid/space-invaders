@@ -510,3 +510,10 @@
                                                            (display "3"))))))
     (simple-corout-boot c1 c2 c3)
     'done))
+
+(define-test test-continuation "12" 'done
+  (let* ((mut (new-mutex))
+         (c1 (new-corout 'c1 (lambda () (display "2"))))
+         (c2 (new-corout 'c2 (lambda () (display "1") c1))))
+    (simple-corout-boot c2)
+    'done))

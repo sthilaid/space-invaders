@@ -283,7 +283,7 @@
    (lambda (e) (case e ((empty-q) #f) (else (raise e))))
    (lambda () (dequeue! queue))))
 
-(define (queue-push queue val)
+(define (queue-push! queue val)
   (queue-list-set! queue (append (queue-list queue) (list val))))
 
 (define (empty-queue? q) (not (pair? (queue-list q))))

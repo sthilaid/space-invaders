@@ -1,5 +1,6 @@
 (include "test-macro.scm")
 (include "scm-lib-macro.scm")
+(include "thread-simulation-macro.scm")
 (load "scm-lib")
 (load "test")
 
@@ -12,7 +13,7 @@
 ;; Data type definitions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define-type corout id kont mailbox (state unprintable:))
+(define-type corout id kont mailbox (state unprintable:) prioritize?)
 
 (define-type state
   current-corout q sleep-q root-k return-value-handler
@@ -20,6 +21,21 @@
   (parent-state unprintable:))
 
 (define-type sem value wait-queue)
+
+;; Must be used to enqueue a coroutine in the coroutine active
+;; queue. The sleep queue *must not* use otherwise, it will result in
+;; an infinite loop if a coroutine is to be prioritized.
+(define (corout-enqueue! q corout)
+  (if (corout-prioritize? corout)
+      (queue-push! q corout)
+      (enqueue! q corout)))
+
+;; A prioritized coroutine will be scheduled as the next coroutine to
+;; run, if scheduled with corout-enqueue!.
+(define (prioritize! c)
+  (corout-prioritize?-set! c #t))
+(define (unprioritize! c)
+  (corout-prioritize?-set! c #f))
 
 (define (make-sleep-q-el cond corout) (cons cond corout))
 (define (sleep-q-el-condition? sleep-q-el)
@@ -32,10 +48,10 @@
 (define sleeping '!---sleeping---!)
 (define (sleeping? v) (eq? v unbound))
 
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Scheduling state global variables
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
 
 (define current-corout unbound)
 (define q unbound)
@@ -105,7 +121,7 @@
 ;; sleep-q can be awaken yet.
 (define (manage-return-value)
   (cond
-   ((corout? current-corout) (enqueue! q current-corout))
+   ((corout? current-corout) (corout-enqueue! q current-corout))
    ((not (sleeping? current-corout))
     (set! return-value
           (if (not return-value)
@@ -117,7 +133,7 @@
     (if sleeping-el
         (if (sleep-q-el-condition? sleeping-el)
             (begin
-              (enqueue! q (sleep-q-el-coroutine sleeping-el))
+              (corout-enqueue! q (sleep-q-el-coroutine sleeping-el))
               (loop (dequeue!? sleep-q) still-sleeping))
             (loop (dequeue!? sleep-q)
                   (cons sleeping-el still-sleeping)))
@@ -147,6 +163,12 @@
 ;; it's super scheduer (if there is one) when all the coroutines
 ;; finishes.
 (define (corout-scheduler)
+  #;
+  (pp `(corout-scheduler cur: ,(if (corout? current-corout)
+                                   (corout-id current-corout)
+                                   current-corout)
+                         q: ,(map corout-id (queue-list q))))
+  
   ;; Verify for a return value
   (manage-return-value)
   
@@ -155,6 +177,13 @@
 
   ;; Get the next coroutine, if one is available
   (set! current-corout (dequeue!? q))
+
+  #;
+  (pp `(now booting on ,(if (corout? current-corout)
+                            (corout-id current-corout)
+                            current-corout)
+            q: ,(map corout-id (queue-list q))
+            sleep-q: ,(map corout-id (queue-list sleep-q))))
 
   ;; if there is one coroutine, run it, else stop the coroutine
   ;; scheduler.
@@ -174,27 +203,22 @@
       
    ;; finish up the scheduling process by restoring the super
    ;; environnement and end this scheduler
-   (else (let ((finish-scheduling root-k)
-               (ret-val return-value))
-           (restore-state parent-state)
-           (finish-scheduling ret-val)))))
+   (else
+    (let ((finish-scheduling root-k)
+          (ret-val return-value))
+      (restore-state parent-state)
+      (finish-scheduling ret-val)))))
 
 
 ;; Simple abstraction that just resumes the scheduler's calculation
 (define (resume-scheduling)
   (return-to-sched 'back-in-sched))
 
-;;;;; Internal control functions ;;;;
+;; Semaphore's internals 
 (define (sem-increase! sem) (sem-value-set! sem (+ (sem-value sem) 1)))
 (define (sem-decrease! sem) (sem-value-set! sem (- (sem-value sem) 1)))
 
-;; innefficient queue implementation...
-(define (sem-enqueue-k! sem k)
-  (sem-wait-queue-set! sem (cons k (sem-wait-queue sem))))
-(define (sem-dequeue-k! sem)
-  (let ((k (car (take-right (sem-wait-queue sem) 1))))
-    (sem-wait-queue-set! sem (drop-right (sem-wait-queue sem) 1))
-    k))
+
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -208,7 +232,7 @@
                ;; here the terminate-corout call is added to ensure that
                ;; the thread will terminate cleanly.
                (lambda (dummy) (terminate-corout (thunk)))
-               (new-queue) #f))
+               (new-queue) #f #f))
 
 ;; Querry the current-coroutine's mailbox to see if its empty
 (define (empty-mailbox?)
@@ -284,7 +308,7 @@
        (set! return-value-handler return-handler)
        (set! return-value #f)
        (if fresh-start? (set! parent-state #f)))
-     (for-each (lambda (c) (enqueue! q c))
+     (for-each (lambda (c) (corout-enqueue! q c))
                (cons c1 cs))
      (corout-scheduler))))
 
@@ -308,15 +332,17 @@
          (set! current-corout sleeping)
          (return-to-sched 'asleep)))))
 
+;; Will put the current-corout to sleep for about "secs" seconds
 (define (sleep-for secs)
   (let ((alarm (+ (time->seconds (current-time)) secs)))
     (sleep-until (lambda () (> (time->seconds (current-time)) alarm)))))
 
 
-
+;; Create a new semaphore or mutex object
 (define (new-semaphore init-value) (make-sem init-value '()))
 (define (new-mutex) (new-semaphore 1))
 
+;; Return #t if the semaphore is locked or #f if not
 (define (sem-locked? sem) (< (sem-value sem) 1))
 
 ;; Usual lock and unlock (P/V, take/release, etc...) implementation
@@ -327,25 +353,9 @@
   (if (< (sem-value sem) 0)
       (sleep-until (lambda ()(not (sem-locked? sem))))
       (sem-decrease! sem)))
-
-
 (define (sem-unlock! sem)
   (sem-increase! sem))
 
-
-
-;; Critical section used with the semaphores. action and actions will
-;; be executed inside the given semaphore (that should be a mutex for
-;; a critical-section) and the semaphore will be released after the
-;; execution of the actions is finished. The last returned value of
-;; action/actions will be returned by this macro.
-(define-macro (critical-section! sem action . actions)
-  (let ((result (gensym 'crit-section-result)))
-    `(begin
-       (sem-lock! ,sem)
-       (let ((,result (begin ,action ,@actions)))
-         (sem-unlock! ,sem)
-         ,result))))
 
 
 
@@ -511,9 +521,19 @@
     (simple-corout-boot c1 c2 c3)
     'done))
 
-(define-test test-continuation "12" 'done
+(define-test test-continuation "21" 'done
   (let* ((mut (new-mutex))
-         (c1 (new-corout 'c1 (lambda () (display "2"))))
-         (c2 (new-corout 'c2 (lambda () (display "1") c1))))
+         (c1 (new-corout 'c1 (lambda () (display "1"))))
+         (c2 (new-corout 'c2 (lambda () (display "2") c1))))
     (simple-corout-boot c2)
+    'done))
+
+(define-test test-prioritized-cont "2431" 'done
+  (let* ((mut (new-mutex))
+         (c1 (new-corout 'c1 (lambda () (display "1"))))
+         (c2 (new-corout 'c2 (lambda () (display "2") c1)))
+         (c3 (new-corout 'c3 (lambda () (display "3"))))
+         (c4 (new-corout 'c4 (lambda () (display "4")
+                                     (prioritized-continuation c3)))))
+    (simple-corout-boot c2 c4)
     'done))

@@ -19,6 +19,8 @@
   return-value return-to-sched
   (parent-state unprintable:))
 
+(define-type sem value wait-queue)
+
 (define (make-sleep-q-el cond corout) (cons cond corout))
 (define (sleep-q-el-condition? sleep-q-el)
   ((car sleep-q-el)))
@@ -182,7 +184,17 @@
 (define (resume-scheduling)
   (return-to-sched 'back-in-sched))
 
+;;;;; Internal control functions ;;;;
+(define (sem-increase! sem) (sem-value-set! sem (+ (sem-value sem) 1)))
+(define (sem-decrease! sem) (sem-value-set! sem (- (sem-value sem) 1)))
 
+;; innefficient queue implementation...
+(define (sem-enqueue-k! sem k)
+  (sem-wait-queue-set! sem (cons k (sem-wait-queue sem))))
+(define (sem-dequeue-k! sem)
+  (let ((k (car (take-right (sem-wait-queue sem) 1))))
+    (sem-wait-queue-set! sem (drop-right (sem-wait-queue sem) 1))
+    k))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -299,6 +311,42 @@
 (define (sleep-for secs)
   (let ((alarm (+ (time->seconds (current-time)) secs)))
     (sleep-until (lambda () (> (time->seconds (current-time)) alarm)))))
+
+
+
+(define (new-semaphore init-value) (make-sem init-value '()))
+(define (new-mutex) (new-semaphore 1))
+
+(define (sem-locked? sem) (< (sem-value sem) 1))
+
+;; Usual lock and unlock (P/V, take/release, etc...) implementation
+;; where the executed event will be put into a sleep queue if it tries
+;; to take an unavailable semaphore, and the first enqueued (fifo)
+;; event will be resumed when an unlock is performed.
+(define (sem-lock! sem)
+  (if (< (sem-value sem) 0)
+      (sleep-until (lambda ()(not (sem-locked? sem))))
+      (sem-decrease! sem)))
+
+
+(define (sem-unlock! sem)
+  (sem-increase! sem))
+
+
+
+;; Critical section used with the semaphores. action and actions will
+;; be executed inside the given semaphore (that should be a mutex for
+;; a critical-section) and the semaphore will be released after the
+;; execution of the actions is finished. The last returned value of
+;; action/actions will be returned by this macro.
+(define-macro (critical-section! sem action . actions)
+  (let ((result (gensym 'crit-section-result)))
+    `(begin
+       (sem-lock! ,sem)
+       (let ((,result (begin ,action ,@actions)))
+         (sem-unlock! ,sem)
+         ,result))))
+
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -448,3 +496,17 @@
                (pretty-print 'bonne-nuit)))))
     (simple-corout-boot c1 c2 c3)
     'dont-care))
+
+(define-test test-mutex "123" 'done
+  (let* ((mut (new-mutex))
+         (c1 (new-corout 'c1 (lambda () (critical-section! mut
+                                                           (corout-yield)
+                                                           (display "1")))))
+         (c2 (new-corout 'c2 (lambda () (critical-section! mut
+                                                           (corout-yield)
+                                                           (display "2")))))
+         (c3 (new-corout 'c3 (lambda () (critical-section! mut
+                                                           (corout-yield)
+                                                           (display "3"))))))
+    (simple-corout-boot c1 c2 c3)
+    'done))

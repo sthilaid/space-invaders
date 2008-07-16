@@ -507,7 +507,7 @@
     (simple-corout-boot c1 c2 c3)
     'dont-care))
 
-(define-test test-mutex "123" 'done
+(define-test test-mutex "4123" 'done
   (let* ((mut (new-mutex))
          (c1 (new-corout 'c1 (lambda () (critical-section! mut
                                                            (corout-yield)
@@ -517,8 +517,9 @@
                                                            (display "2")))))
          (c3 (new-corout 'c3 (lambda () (critical-section! mut
                                                            (corout-yield)
-                                                           (display "3"))))))
-    (simple-corout-boot c1 c2 c3)
+                                                           (display "3")))))
+         (c4 (new-corout 'c4 (lambda () (display "4")))))
+    (simple-corout-boot c1 c2 c3 c4)
     'done))
 
 (define-test test-continuation "21" 'done

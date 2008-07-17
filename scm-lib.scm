@@ -36,7 +36,13 @@
              (lambda ()
                (with-output-to-port out p))))))
       (with-input-from-port in c)))) 
-  
+
+;;;;;;;;;;;;;;;;;;;;;;; symbol operations ;;;;;;;;;;;;;;;;;;;;;;;;
+
+(define (symbol-append s1 . ss)
+  (string->symbol (apply string-append
+                         (symbol->string s1)
+                         (map symbol->string ss))))
 
 ;;;;;;;;;;;;;;;;;;;;;;; list operations ;;;;;;;;;;;;;;;;;;;;;;;;;;
 

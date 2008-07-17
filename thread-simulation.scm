@@ -525,16 +525,26 @@
 (define-test test-continuation "21" 'done
   (let* ((mut (new-mutex))
          (c1 (new-corout 'c1 (lambda () (display "1"))))
-         (c2 (new-corout 'c2 (lambda () (display "2") c1))))
+         (c2 (new-corout 'c2 (lambda () (display "2")
+                               (corout-continuation c1)))))
     (simple-corout-boot c2)
     'done))
 
 (define-test test-prioritized-cont "2431" 'done
   (let* ((mut (new-mutex))
          (c1 (new-corout 'c1 (lambda () (display "1"))))
-         (c2 (new-corout 'c2 (lambda () (display "2") c1)))
+         (c2 (new-corout 'c2 (lambda () (display "2")
+                                     (corout-continuation c1))))
          (c3 (new-corout 'c3 (lambda () (display "3"))))
          (c4 (new-corout 'c4 (lambda () (display "4")
                                      (prioritized-continuation c3)))))
     (simple-corout-boot c2 c4)
     'done))
+
+(define-test test-thunk-composition "123" 'ok
+  (let* ((t1 (lambda () (display "1")))
+         (t2 (lambda () (display "2")))
+         (t3 (lambda () (display "3") 'ok))
+         (c1 (new-corout
+              'c1 (compose-thunks t1 t2 t3))))
+    (simple-corout-boot c1)))

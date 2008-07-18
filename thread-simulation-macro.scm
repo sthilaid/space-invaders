@@ -32,6 +32,13 @@
 (define-macro (corout-continuation continuation-corout)
   `(terminate-corout ,continuation-corout))
 
+(define-macro (corout-thunk-continuation! continuation-thunk)
+  `(begin
+     (corout-kont-set! (current-corout)
+                       (lambda (,(gensym 'dummy-arg)) (,continuation-thunk)))
+     (corout-continuation (current-corout))))
+
+
 (define-macro (compose-thunks . thunks)
   (define (id id1 id2) `(gensym (symbol-append 'composition-of- ,id1 ,id2)))
   (define (composition thunks)
@@ -45,8 +52,8 @@
         
           (else `(lambda (,(gensym 'dummy-arg))
                    (,(car thunks))
-                   (corout-kont-set! current-corout
+                   (corout-kont-set! (current-corout)
                                      ,(composition (cdr thunks)))
-                   (corout-continuation current-corout)))))
+                   (corout-continuation (current-corout))))))
 
     `(lambda () (,(composition thunks) 'dummy)))

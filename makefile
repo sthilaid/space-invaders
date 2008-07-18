@@ -26,7 +26,7 @@ DOC_FILES = $(wildcard doc/*.ppm)
 SOUND_FILES = $(wildcard sounds/*.wav)
 
 GL_FILES = opengl.scm glu.scm 
-SPACE_INVADERS_FILES =  scm-lib.scm rbtree.scm ppm-reader.scm event-simulation.scm texture.scm sprite.scm font.scm coroutine.scm engine.scm user-interface-images.scm 
+SPACE_INVADERS_FILES =  scm-lib.scm rbtree.scm ppm-reader.scm thread-simulation.scm texture.scm sprite.scm font.scm engine.scm user-interface-images.scm 
 
 
 ## compilers
@@ -194,7 +194,7 @@ user-interface.c: user-interface.scm scm-lib-macro.scm opengl-header.scm
 sdl-user-interface.c: sdl-user-interface.scm scm-lib-macro.scm opengl-header.scm
 	$(GSC) -c sdl-user-interface.scm 
 
-engine.c: engine.scm event-simulation-macro.scm 
+engine.c: engine.scm thread-simulation-macro.scm 
 	$(GSC) -c engine.scm
 
 

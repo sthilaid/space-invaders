@@ -315,11 +315,21 @@
 ;; Kills all the currently executing coroutines. This will operate on
 ;; only 1 level of scheduling, killing thus the currently executing
 ;; scheduler.
-(define (kill-all!)
+(define (kill-all! exit-val)
   (let ((finish-scheduling (root-k))
-        (ret-val (return-value)))
+        #; (ret-val (return-value)))
     (restore-state (parent-state))
-    (finish-scheduling 'killed-all)))
+    (finish-scheduling exit-val)))
+
+;; Will spawn the brother coroutine into the scheduler of the
+;; currently executing coroutine
+(define (corout-spawn-brother corout)
+  (enqueue! (q) corout))
+
+;; Spawns an anonymous brother coroutine.
+(define (corout-spawn-brother-thunk id thunk)
+  (enqueue! (q) (new-corout id thunk)))
+
 
 ;; Will put the coroutine into sleep, until the condition-thunk
 ;; returns #t.
@@ -378,10 +388,11 @@
 
 (define-test test-kill-all "12" 'killed-all
   (let ((c1 (new-corout 'c1 (lambda ()
-                              (for i 0 (< i 3) (begin (if (= i 1)
-                                                          (kill-all!))
-                                                      (display 1)
-                                                      (corout-yield))))))
+                              (for i 0 (< i 3)
+                                   (begin (if (= i 1)
+                                              (kill-all! 'killed-all))
+                                          (display 1)
+                                          (corout-yield))))))
         (c2 (new-corout 'c2 (lambda ()
                               (for i 0 (< i 3) (begin (display 2)
                                                       (corout-yield)))))))
@@ -462,7 +473,8 @@
                                                     (super-yield)
                                                     (corout-yield))))))
          (s1 (new-corout 's1 (lambda () (for i 0 (< i 3)
-                                             (begin (if (= i 1) (kill-all!))
+                                             (begin (if (= i 1)
+                                                        (kill-all! 'over))
                                                     (display 1)
                                                     (super-yield)
                                                     (corout-yield))))))
@@ -548,3 +560,13 @@
          (c1 (new-corout
               'c1 (compose-thunks t1 t2 t3))))
     (simple-corout-boot c1)))
+
+(define-test test-spawning "CABD" 'done
+  (let* ((c1 (new-corout 'c1 (lambda () (display 'A))))
+         (t2 (lambda () (display 'B) (corout-yield) 'done))
+         (c3 (new-corout 'c3 (lambda () (display 'C)
+                                     (corout-spawn-brother c1)
+                                     (corout-spawn-brother-thunk t2)
+                                     (corout-yield)
+                                     (display 'D)))))
+    (simple-corout-boot c3)))

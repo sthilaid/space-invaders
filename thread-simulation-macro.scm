@@ -29,6 +29,12 @@
                              (k ,arg))))
      (terminate-corout ,c)))
 
+(define-macro (prioritized-thunk-continuation thunk-cont)
+  `(begin
+     (corout-kont-set! (current-corout)
+                       (lambda (,(gensym 'dummy-arg)) (,thunk-cont)))
+     (prioritized-continuation (current-corout))))
+
 (define-macro (corout-continuation continuation-corout)
   `(terminate-corout ,continuation-corout))
 

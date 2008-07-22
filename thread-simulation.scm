@@ -197,7 +197,7 @@
    ;; If only sleeping coroutines are left, sleep for a while
    ((not (empty-queue? (sleep-q)))
     (begin
-      (thread-sleep! 0.1) ; TODO: change this?
+      (thread-sleep! 0.0001) ; TODO: change this?
       (current-corout sleeping)
       (corout-scheduler)))
       

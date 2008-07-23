@@ -899,8 +899,8 @@
   ;; Collision resolution is straightforward
   (cond ((invader-ship? collision-obj) 
          (level-increase-score! level collision-obj)
-         (explode-invader! level collision-obj)
-         (destroy-laser! level laser-obj))
+         (destroy-laser! level laser-obj)
+         (explode-invader! level collision-obj))
         
         ((laser-obj? collision-obj)
          (let ((inv-laser
@@ -985,15 +985,18 @@
   (define mut (gensym 'mutex))
   `(lambda ()
      (let ((,mut (level-mutex ,level)))
-       (sem-lock! sem)
-       (sem-unlock! sem)
+       (sem-lock! ,mut)
+       (sem-unlock! ,mut)
        ,action
        ,@actions))
 
 
   ;; Tought of defining yield and sleep operations with a dynamic
   ;; scoping and maybe use a parameterize form to shape them as
-  ;; required, ex:
+  ;; required, 
+  ;;   note: that (yield) does not call yield, but would get
+  ;;         its current dynamic value...)
+  ;; ex: 
   #; 
   (let ((old-yield (yield))
         (old-sleep-until (sleep-until)))
@@ -1145,19 +1148,19 @@
   (define rows (get-all-invader-rows level))
   (synchronized-thunk level
     (let ((dt (get-invader-move-refresh-rate level)))
-     (let loop ((row-index 0))
-       (if (< row-index invader-row-number)
-           (let ((current-row (get-invaders-from-row level row-index)))
-             (if (not (null? current-row))
-                 (begin
-                   (for-each
-                    (lambda (inv) (let ((speed (make-pos2d dx dy)))
-                                    (game-object-speed-set! inv speed)))
-                    current-row)
-                   (move-ship-row! level row-index)
-                   (sleep-for dt))
-                 (yield))
-             (loop (+ row-index 1))))))))
+      (let loop ((row-index 0))
+        (if (< row-index invader-row-number)
+            (let ((current-row (get-invaders-from-row level row-index)))
+              (if (not (null? current-row))
+                  (begin
+                    (for-each
+                     (lambda (inv) (let ((speed (make-pos2d dx dy)))
+                                     (game-object-speed-set! inv speed)))
+                     current-row)
+                    (move-ship-row! level row-index)
+                    (sleep-for dt))
+                  (yield))
+              (loop (+ row-index 1))))))))
 
 ;; Creates a new mothership and schedules its first move event.
 (define (create-new-mothership level)
@@ -1396,7 +1399,9 @@
                    (new-player! level))))))
     (sem-lock! (level-mutex level))
     (continue-with-thunk!
-     (player-explosion-animation level expl-obj animation-duration))))
+     (compose-thunks
+      (player-explosion-animation level expl-obj animation-duration)
+      continuation))))
 
 ;; Event used in 2 player games, where the games returns to the
 ;; current game.
@@ -1740,7 +1745,7 @@
 
 
 ;; Will display in the top screen the final game over message.
-(define (game-over-animation level continuation)
+(define (game-over-animation level)
   (define continuation-delay 2)
   (lambda ()
     (let* ((type (get-type 'message))
@@ -1757,7 +1762,7 @@
 ;; Will display in the lower scren the game over message for 1 player
 ;; in a 2 player game. A final game over message should be displayed
 ;; afterward if both player are game over.
-(define (game-over-2p-animation level continuation)
+(define (game-over-2p-animation level)
   (define continuation-delay 1.2)
   (lambda ()
     (let* ((player-id (game-level-player-id level))

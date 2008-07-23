@@ -155,7 +155,7 @@
 
 (define (receive-update-msg-from-other! level)
   (if (and (2p-game-level? level)
-           (not (corout-empty-mailbox?)))
+           (not (empty-mailbox?)))
       (let ((msg (?)))
         (2p-game-level-other-score-set! level (car msg))
         (2p-game-level-other-finished?-set! level (cdr msg)))))
@@ -498,15 +498,14 @@
                                (generic-union equal? current-damage damage)))
 
 (define (game-over! level)
-  ;;(exit-simulation (game-level-score level)))
-  (terminate-corout (game-level-score level)))
+  (kill-all! (game-level-score level)))
 
 
 ;; Returns (not efficiently) the list of all invaders located on the
 ;; specified row index or '() if none exists.
 (define (get-invaders-from-row level row-index)
   (filter (lambda (inv) (= (invader-ship-row inv) row-index))
-            (level-invaders level)))
+          (level-invaders level)))
 
 (define (get-all-invader-rows level)
   (let loop ((i 0) (acc '()))
@@ -533,7 +532,7 @@
     (level-add-object! level player-ship)))
 
 (define (play-level level)
-  (apply simple-corout-boot (level-init-corouts level)))
+  (apply simple-boot (level-init-corouts level)))
 
 (define (get-score-string score)
   (cond ((= score 0) "0000")
@@ -604,47 +603,32 @@
                  'invader-move
                  (compose-thunks
                   ;; Intro anim
-                  (start-of-game-animation-event level)
-                  (generate-invaders-event level)
+                  (start-of-game-animation level)
+                  (generate-invaders level)
 
                   ;; Setup level and start primordial game corouts
-                  (lambda () (new-player! level))
-                  (corout-spawn-brother-thunk
-                   'invader-laser-corout
-                   (compose-thunks
-                    (lambda () (sleep-for 1))
-                    (create-invader-laser-event level)))
-                  (corout-spawn-brother-thunk
-                   'mother-ship-corout
-                   (compose-thunks
-                    (lambda () (sleep-for (mothership-random-delay)))
-                    (create-new-mothership-event level)))
+                  (lambda ()
+                    (new-player! level)
+                    (spawn-brother-thunk
+                     'invader-laser-corout
+                     (compose-thunks
+                      (lambda () (sleep-for 1))
+                      (create-invader-laser level)))
+                    (spawn-brother-thunk
+                     'mother-ship-corout
+                     (compose-thunks
+                      (lambda () (sleep-for (mothership-random-delay)))
+                      (create-new-mothership level))))
                   
-                  (create-init-invader-move-event level)))
+                  (create-init-invader-move level)))
                 
-                (new-corout 'main-manag (create-main-manager-event level))
-                (new-corout 'redraw (create-redraw-event level)))))
+                (new-corout 'main-manag (create-main-manager level))
+                (new-corout 'redraw (create-redraw level)))))
     
     (add-global-score-messages! level)
     (for-each (lambda (s) (level-add-object! level s)) shields)
+    (level-init-corouts-set! level init-corouts)
 
-    ;; Schedule the initial game animation and start events
-    (schedule-event!
-     sim 0
-     (start-of-game-animation-event
-      level 
-      (generate-invaders-event
-       level
-       (lambda ()
-         (new-player! level)
-         (in 0 (create-init-invader-move-event level))
-         (in 1 (create-invader-laser-event level))
-         (in (mothership-random-delay)
-             (create-new-mothership-event level))))))
-
-    ;; Also schedule manager events
-    (schedule-event! sim 0 (create-main-manager-event level))
-    (schedule-event! sim 0 (create-redraw-event level))
     level))
 
 ;; Creation of the default initial intro movie
@@ -652,9 +636,9 @@
   (let* ((level (make-level screen-max-y screen-max-x (make-table)
                             hi-score 'unbound (new-mutex)))
          (init-corouts
-          (list (new-corout 'animA (create-animation-A-corout level))
-                (new-corout 'intro-man (create-intro-manager-corout level))
-                (new-corout 'redraw    (create-redraw-corout level)))))
+          (list (new-corout 'animA (create-animation-A level))
+                (new-corout 'intro-man (create-intro-manager level))
+                (new-corout 'redraw    (create-redraw level)))))
     (level-init-corouts-set! level init-corouts)
     (add-global-score-messages! level)
     level))
@@ -664,9 +648,9 @@
   (let* ((level (make-level screen-max-y screen-max-x (make-table)
                             hi-score 'unbound (new-mutex)))
          (init-corouts
-          (list (new-corout 'animB (create-animation-B-event level))
-                (new-corout 'intro-man (create-intro-manager-corout level))
-                (new-corout 'redraw (create-redraw-corout level)))))
+          (list (new-corout 'animB (create-animation-B level))
+                (new-corout 'intro-man (create-intro-manager level))
+                (new-corout 'redraw (create-redraw level)))))
     (level-init-corouts-set! level init-corouts)
     (add-global-score-messages! level)
     level))
@@ -679,18 +663,46 @@
   (let* ((walls (generate-walls))
          (wall-damage '())
          (shields (generate-shields))
-         (sim (create-simulation))
+         (init-corouts 'unbound)
          (player-id 'demo)
          (lives 3)
          (score 0)
          (draw-game-field? #t)
-         (other-finished? #f)  ;; only used for 2p games
-         (other-score 0)       ;; only used for 2p games
+         (other-finished? #f)  ; only used for 2p games
+         (other-score 0)       ; only used for 2p games
          (level (make-game-level
                  screen-max-y screen-max-x (make-table)
-                 hi-score sim (new-mutex)
+                 hi-score init-corouts (new-mutex)
                  player-id score lives 
-                 walls wall-damage draw-game-field?)))
+                 walls wall-damage draw-game-field?))
+         (init-corouts
+          (list (new-corout
+                 'invader-move
+                 (compose-thunks
+                  (generate-invaders level)
+                  ;; Setup level and start primordial game corouts
+                  (lambda ()
+                    (new-player! level)
+                    (spawn-brother-thunk 'ai (create-ai-player level))
+                    (spawn-brother-thunk
+                     'flashing-demo-msg
+                     (create-text-flash-animation
+                      level (level-get level 'demo-msg) +inf.0))
+                    (spawn-brother-thunk
+                     'invader-laser-corout
+                     (compose-thunks
+                      (lambda () (sleep-for 1))
+                      (create-invader-laser level)))
+                    (spawn-brother-thunk
+                     'mother-ship-corout
+                     (compose-thunks
+                      (lambda () (sleep-for (mothership-random-delay)))
+                      (create-new-mothership level))))
+                  
+                  (create-init-invader-move level)))
+                
+                (new-corout 'inro-manag (create-intro-manager level))
+                (new-corout 'redraw (create-redraw level)))))
     
     (add-global-score-messages! level)
     (level-add-object!
@@ -698,41 +710,24 @@
      (make-message-obj 'demo-msg (get-type 'message)
                        (make-pos2d 100 (- screen-max-y 60))
                        'dummy 'white (make-pos2d 0 0) "DEMO"))
+    
     (for-each (lambda (s) (level-add-object! level s)) shields)
+    (level-init-corouts-set! level init-corouts)
 
-    ;; Schedule initial demo game events
-    (schedule-event!
-     sim 0
-     (generate-invaders-event
-      level
-      (lambda ()
-        (new-player! level)
-        (schedule-event! sim 0 (create-ai-player-event level))
-        ;; Extra: The flashing demo was not present in the arcade
-        ;; version, but I believe it is better to avoid confusion...
-        (in 0 (create-text-flash-animation-event
-               level
-               (level-get level 'demo-msg)
-               +inf.0 end-of-continuation-event))
-        (in 0 (create-init-invader-move-event level))
-        (in 1 (create-invader-laser-event level))
-        (in (mothership-random-delay)
-            (create-new-mothership-event level)))))
-
-    (schedule-event! sim 0 (create-intro-manager-event level))
-    (schedule-event! sim 0 (create-redraw-event level))
     level))
 
 ;; Creation of the instructions intro movie
 (define (new-credits-level hi-score)
-  (let* ((sim (create-simulation))
-         (level (make-level screen-max-y screen-max-x (make-table)
-                            hi-score sim (new-mutex))))
+  (let* ((level (make-level screen-max-y screen-max-x (make-table)
+                            hi-score 'unbound (new-mutex)))
+         (init-corouts
+          (list
+           (new-corout 'credit-anim (create-animation-credit level))
+           (new-corout 'intro-man   (create-intro-manager level))
+           (new-corout 'redraw      (create-redraw level)))))
     (add-global-score-messages! level)
-    
-    (schedule-event! sim 0 (create-animation-credit-event level))
-    (schedule-event! sim 0 (create-intro-manager-event level))
-    (schedule-event! sim 0 (create-redraw-event level))
+    (level-init-corouts-set! level init-corouts)
+
     level))
 
 
@@ -873,99 +868,108 @@
 ;; Collision resolution
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; ;; Will resolve the collision between obj and collision-obj, depending
-;; ;; on their types.
-;; (define (resolve-collision! level obj collision-obj)
-;;   (cond
-;;    ((player-ship? obj) (resolve-player-collision! level obj collision-obj))
-;;    ((laser-obj? obj) (resolve-laser-collision! level obj collision-obj))
-;;    ((invader-ship? obj) (resolve-invader-collision! level obj collision-obj))
-;;    ((mothership? obj) (resolve-mothership-collision! level obj collision-obj))
-;;    (else
-;;     (error "cannot resolve object collision.")))
-;;   (get-type-id collision-obj))
+;; Will resolve the collision between obj and collision-obj, depending
+;; on their types.
+(define (resolve-collision! level obj collision-obj)
+  (cond
+   ((player-ship? obj) (resolve-player-collision! level obj collision-obj))
+   ((laser-obj? obj) (resolve-laser-collision! level obj collision-obj))
+   ((invader-ship? obj) (resolve-invader-collision! level obj collision-obj))
+   ((mothership? obj) (resolve-mothership-collision! level obj collision-obj))
+   (else
+    (error "cannot resolve object collision.")))
+  (get-type-id collision-obj))
 
-;; ;; Abstraction used to simplify the resolve-laser-collision!
-;; ;; function. This will remove the laser object from the level and
-;; ;; depending on the laser type, might re-scheduled a new laser shot.
-;; (define (destroy-laser! level laser-obj)
-;;   (level-remove-object! level laser-obj)
-;;   (if (not (eq? (object-type-id (game-object-type laser-obj)) 'player_laser))
-;;       (in next-invader-laser-interval (create-invader-laser-event level))
-;;       (set! player-laser-last-destruction-time
-;;             (time->seconds (current-time)))))
+;; Abstraction used to simplify the resolve-laser-collision!
+;; function. This will remove the laser object from the level and
+;; depending on the laser type, might re-scheduled a new laser shot.
+(define (destroy-laser! level laser-obj)
+  (level-remove-object! level laser-obj)
+  (if (not (eq? (object-type-id (game-object-type laser-obj)) 'player_laser))
+      (spawn-brother-thunk
+       'inv-laser (compose-thunks
+                   (lambda () (sleep-for next-invader-laser-interval))
+                   (create-invader-laser level)))
+      (set! player-laser-last-destruction-time
+            (time->seconds (current-time)))))
 
-;; (define (resolve-laser-collision! level laser-obj collision-obj)
-;;   (define type-id (object-type-id (game-object-type laser-obj)))
+(define (resolve-laser-collision! level laser-obj collision-obj)
+  (define type-id (object-type-id (game-object-type laser-obj)))
 
-;;   ;; Collision resolution is straightforward
-;;   (cond ((invader-ship? collision-obj) 
-;;          (level-increase-score! level collision-obj)
-;;          (explode-invader! level collision-obj)
-;;          (destroy-laser! level laser-obj))
+  ;; Collision resolution is straightforward
+  (cond ((invader-ship? collision-obj) 
+         (level-increase-score! level collision-obj)
+         (explode-invader! level collision-obj)
+         (destroy-laser! level laser-obj))
         
-;;         ((laser-obj? collision-obj)
-;;          (let ((inv-laser
-;;                 (if (not (eq? type-id 'player_laser)) laser-obj collision-obj)))
-;;            (explode-laser! level inv-laser)
-;;            (destroy-laser! level inv-laser)))
+        ((laser-obj? collision-obj)
+         (let ((inv-laser
+                (if (not (eq? type-id 'player_laser)) laser-obj collision-obj)))
+           (explode-laser! level inv-laser)
+           (destroy-laser! level inv-laser)))
         
-;;         ((player-ship? collision-obj)
-;;          (explode-player! level collision-obj)
-;;          (destroy-laser! level laser-obj))
+        ((player-ship? collision-obj)
+         (explode-player! level collision-obj)
+         (destroy-laser! level laser-obj))
 
-;;         ((shield? collision-obj)
-;;          (let ((penetrated-pos (get-laser-penetration-pos laser-obj)))
-;;            (game-object-pos-set! laser-obj penetrated-pos)
-;;            (explode-laser! level laser-obj)
-;;            (shield-explosion! collision-obj laser-obj))
-;;          (destroy-laser! level laser-obj))
+        ((shield? collision-obj)
+         (let ((penetrated-pos (get-laser-penetration-pos laser-obj)))
+           (game-object-pos-set! laser-obj penetrated-pos)
+           (explode-laser! level laser-obj)
+           (shield-explosion! collision-obj laser-obj))
+         (destroy-laser! level laser-obj))
 
-;;         ((mothership? collision-obj)
-;;          (destroy-laser! level laser-obj)
-;;          (explode-mothership! level collision-obj)
-;;          (level-increase-score! level collision-obj)
-;;          (let ((delta-t (mothership-random-delay)))
-;;            (in delta-t (create-new-mothership-event level))))
+        ((mothership? collision-obj)
+         (destroy-laser! level laser-obj)
+         (explode-mothership! level collision-obj)
+         (level-increase-score! level collision-obj)
+         (let ((delta-t (mothership-random-delay)))
+           (spawn-brother-thunk
+            'mothership (compose-thunks
+                         (lambda () (sleep-for delta-t))
+                         (create-new-mothership level)))))
 
-;;         ((wall? collision-obj)
-;;          (damage-wall! level laser-obj)
-;;          (explode-laser! level laser-obj)
-;;          (destroy-laser! level laser-obj))))
+        ((wall? collision-obj)
+         (damage-wall! level laser-obj)
+         (explode-laser! level laser-obj)
+         (destroy-laser! level laser-obj))))
 
   
-;; (define (resolve-invader-collision! level invader collision-obj)
-;;   (cond ((laser-obj? collision-obj)
-;;          (resolve-laser-collision! level collision-obj invader))
-;;         ((shield? collision-obj)
-;;          (shield-explosion! collision-obj invader))
-;;         ((wall? collision-obj)
-;;          (if (eq? (wall-id collision-obj) 'bottom)
-;;              (game-over! level)))))
+(define (resolve-invader-collision! level invader collision-obj)
+  (cond ((laser-obj? collision-obj)
+         (resolve-laser-collision! level collision-obj invader))
+        ((shield? collision-obj)
+         (shield-explosion! collision-obj invader))
+        ((wall? collision-obj)
+         (if (eq? (wall-id collision-obj) 'bottom)
+             (game-over! level)))))
 
-;; (define (resolve-player-collision! level player collision-obj)
-;;   (cond ((wall? collision-obj)
-;;          (let ((current-speed (game-object-speed player)))
-;;            (game-object-speed-set! player
-;;                                    (make-pos2d (- (pos2d-x current-speed))
-;;                                                (pos2d-y current-speed)))
-;;            (move-object! level player)))
+(define (resolve-player-collision! level player collision-obj)
+  (cond ((wall? collision-obj)
+         (let ((current-speed (game-object-speed player)))
+           (game-object-speed-set! player
+                                   (make-pos2d (- (pos2d-x current-speed))
+                                               (pos2d-y current-speed)))
+           (move-object! level player)))
         
-;;         ((laser-obj? collision-obj)
-;;          (resolve-laser-collision! level collision-obj player))
+        ((laser-obj? collision-obj)
+         (resolve-laser-collision! level collision-obj player))
         
-;;         ((invader-ship? collision-obj)
-;;          (explode-player! level collision-obj)
-;;          (explode-invader! level collision-obj))))
+        ((invader-ship? collision-obj)
+         (explode-player! level collision-obj)
+         (explode-invader! level collision-obj))))
 
-;; (define (resolve-mothership-collision! level mothership collision-obj)
-;;   (cond ((wall? collision-obj)
-;;          (level-remove-object! level mothership)
-;;          (let ((delta-t (mothership-random-delay)))
-;;            (in delta-t (create-new-mothership-event level))))
+(define (resolve-mothership-collision! level mothership collision-obj)
+  (cond ((wall? collision-obj)
+         (level-remove-object! level mothership)
+         (let ((delta-t (mothership-random-delay)))
+           (spawn-brother-thunk
+            'mothership (compose-thunks
+                         (lambda () (sleep-for delta-t))
+                         (create-new-mothership level)))))
         
-;;         ((laser-obj? collision-obj)
-;;          (resolve-laser-collision! level collision-obj mothership))))
+        ((laser-obj? collision-obj)
+         (resolve-laser-collision! level collision-obj mothership))))
   
 
 
@@ -977,14 +981,14 @@
 
 ;; Macro used to synchronize certain game events, such that the game
 ;; may be paused.
-(define-macro (synchronized-event-thunk level action . actions)
+(define-macro (synchronized-thunk level action . actions)
+  (define mut (gensym 'mutex))
   `(lambda ()
-     (critical-section! (level-mutex ,level)
-        ,action
-        ,@actions)))
-
-;; ;; A dummy event that just stop the continuation of a CPS event
-;; (define (end-of-continuation-event) 'eoc-event)
+     (let ((,mut (level-mutex ,level)))
+      (dynamic-wind
+          (lambda () (sem-lock! ,mut))
+          (lambda () ,action ,@actions)
+          (lambda () (sem-unlock! ,mut))))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -992,7 +996,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; ;; Will animate a flashing PLAY PLAYER<X> in a black screen.
-(define (start-of-game-animation-event level)
+(define (start-of-game-animation level)
   (define animation-duration 3)
   (define player-id (game-level-player-id level))
   (lambda ()
@@ -1010,17 +1014,18 @@
       (let ((score-msg-obj (if (eq? player-id 'p2)
                                'player2-score-msg
                                'player1-score-msg)))
-        (corout-thunk-continuation!
+        (continue-with-thunk!
          (compose-thunks
-          (create-text-flash-animation-event level
-                                             (level-get level score-msg-obj))
+          (create-text-flash-animation
+           level (level-get level score-msg-obj) animation-duration)
           (lambda () (level-remove-object! level msg)
                   (game-level-draw-game-field?-set! level #t))
+          #;
           (lambda () (sleep-for animation-duration))))))))
 
 ;; ;; Generate all the invaders in a level, with a little animation which
 ;; ;; displays them one after the other with a small dt interval.
-(define (generate-invaders-event level)
+(define (generate-invaders level)
   (define animation-delay 0.01)
   (define x-offset 30)
   (define y-offset (- 265 152))
@@ -1042,20 +1047,18 @@
              (gensym 'inv) current-type pos state 'white speed row col)))
       (level-add-object! level invader)))
                          
-  (define (generate-inv-event row col)
-    (synchronized-event-thunk level
-     (if (< row invader-row-number)
-         (if (< col invader-col-number)
-             (begin (generate-inv! row col)
-                    (sleep-for animation-delay)
-                    (generate-inv-event row (+ col 1)))
-             (begin
-               (corout-yield)
-               (generate-inv-event (+ row 1) 0)))
-         (corout-thunk-continuation!
-          (lambda () (sleep-for animation-delay))))))
-  
-  (generate-inv-event 0 0))
+  (synchronized-thunk level
+    (let loop ((row 0) (col 0))
+      (if (< row invader-row-number)
+          (if (< col invader-col-number)
+              (begin (generate-inv! row col)
+                     (sleep-for animation-delay)
+                     (loop row (+ col 1)))
+              (begin
+                (yield)
+                (loop (+ row 1) 0)))
+          (continue-with-thunk!
+           (lambda () (sleep-for animation-delay)))))))
 
 
 
@@ -1066,8 +1069,8 @@
 
 
 ;; ;; Event that will move a single row of invaders
-(define (create-init-invader-move-event level)
-  (synchronized-event-thunk level
+(define (create-init-invader-move level)
+  (synchronized-thunk level
     (let* ((rows (get-all-invader-rows level))
            (walls (game-level-walls level))
            (wall-collision?
@@ -1077,65 +1080,66 @@
              rows)))
       (if (null? rows)
           ;; Regenerate invaders when they all died
-          (corout-thunk-continuation!
-           (lambda () (generate-invaders-event
-                       level (create-init-invader-move-event level))))
+          (continue-with-thunk!
+           (lambda () (generate-invaders
+                       level (create-init-invader-move level))))
           (let* ((old-dx (pos2d-x (game-object-speed (caar rows))))
                  (dt (get-invader-move-refresh-rate level))
                  (duration (* (length rows) dt)))
             (if wall-collision?
-                (corout-thunk-continuation!
+                (continue-with-thunk!
                   (compose-thunks
-                   (create-invader-row-move-event!
+                   (create-invader-row-move!
                     0 (- invader-y-movement-speed) level)
-                   (lambda (sleep-for dt))
-                   (create-invader-wall-movement-continuation-event
+                   (lambda () (sleep-for dt))
+                   (create-invader-wall-movement-continuation
                      old-dx level)
-                   (lambda (sleep-for dt))
+                   (lambda () (sleep-for dt))
                    ;; should this event creation be put after the sleep?
-                   (create-init-invader-move-event level)))
+                   (create-init-invader-move level)))
                 
-                (corout-thunk-continuation!
+                (continue-with-thunk!
                  (compose-thunks
-                  (create-invader-row-move-event! old-dx 0 level)
-                  (lambda (sleep-for dt))
-                  (create-init-invader-move-event level)))))))))
+                  (create-invader-row-move! old-dx 0 level)
+                  (lambda () (sleep-for dt))
+                  (create-init-invader-move level)))))))))
 
 ;; Animation continuation that will be used after a wall collision to
 ;; make the invader move in the opposite x direction.
-(define (create-invader-wall-movement-continuation-event old-dx level)
-  (synchronized-event-thunk level
+(define (create-invader-wall-movement-continuation old-dx level)
+  (synchronized-thunk level
     (let ((rows (get-all-invader-rows level)))
       (if (null? rows)
           ;; Regenerate invaders when they all died
-          (corout-thunk-continuation!
-           (compose-thunks (generate-invaders-event level)
-                           (create-init-invader-move-event level)))
-          (corout-thunk-continuation!
-           (create-invader-row-move-event! (- old-dx) 0 level))))))
+          (continue-with-thunk!
+           (compose-thunks (generate-invaders level)
+                           (create-init-invader-move level)))
+          (continue-with-thunk!
+           (create-invader-row-move! (- old-dx) 0 level))))))
 
 ;; Will move the invaders, one row at a time of dx and dy, then call
 ;; continuation event will be scheduled
-(define (create-invader-row-move-event! dx dy level continuation)
+(define (create-invader-row-move! dx dy level)
   (define rows (get-all-invader-rows level))
-  (synchronized-event-thunk level
-    (let loop ((row-index 0))
-      (if (< row-index invader-row-number)
-          (let ((current-row (get-invaders-from-row level row-index)))
-            (if (not (null? current-row))
-                (begin
-                  (for-each
-                   (lambda (inv) (let ((speed (make-pos2d dx dy)))
-                                   (game-object-speed-set! inv speed)))
-                   current-row)
-                  (move-ship-row! level row-index)
-                  (sleep-for dt))
-                (corout-yield))
-            (loop (+ row-index 1)))))))
+  (synchronized-thunk level
+    (let ((dt (get-invader-move-refresh-rate level)))
+     (let loop ((row-index 0))
+       (if (< row-index invader-row-number)
+           (let ((current-row (get-invaders-from-row level row-index)))
+             (if (not (null? current-row))
+                 (begin
+                   (for-each
+                    (lambda (inv) (let ((speed (make-pos2d dx dy)))
+                                    (game-object-speed-set! inv speed)))
+                    current-row)
+                   (move-ship-row! level row-index)
+                   (sleep-for dt))
+                 (yield))
+             (loop (+ row-index 1))))))))
 
 ;; Creates a new mothership and schedules its first move event.
-(define (create-new-mothership-event level)
-  (synchronized-event-thunk level
+(define (create-new-mothership level)
+  (synchronized-thunk level
     (let* ((dx-mult (list-ref '(1 -1) (random-integer 2)))
            (mothership
             (make-mothership 'mothership
@@ -1150,11 +1154,11 @@
                                         0))))
       (play-sound 'mothership-sfx)
       (level-add-object! level mothership)
-      (corout-thunk-continuation! (create-mothership-event level)))))
+      (continue-with-thunk! (create-mothership level)))))
 
 ;; Event that moves a mothership and handles its collisions.
- (define (create-mothership-event level)
-   (synchronized-event-thunk level
+ (define (create-mothership level)
+   (synchronized-thunk level
      (let loop ((mothership (level-mothership level)))
        (if mothership
            (let ((collision-occured? (move-object! level mothership)))
@@ -1171,7 +1175,7 @@
 ;; that is in front of the player).
 ;;
 ;; The current implementation is very innefficient (O(n^2)).
-(define (create-invader-laser-event level)
+(define (create-invader-laser level)
   (define (rect-inv-collision? rect)
     (lambda (inv)
       (let* ((pos (game-object-pos inv))
@@ -1192,7 +1196,7 @@
   (define (get-candidates)
     (filter bottom-invader? (level-invaders level)))
 
-  (synchronized-event-thunk level
+  (synchronized-thunk level
     (if (not (exists (lambda (obj)
                        (and (laser-obj? obj)
                             (not (eq? (object-type-id (game-object-type obj))
@@ -1211,7 +1215,7 @@
                             shooting-invader
                             (- invader-laser-speed)))))))
 
-;; Wrapper function over create-laser-event which will create a new
+;; Wrapper function over create-laser which will create a new
 ;; laser object instance of specifiex type and place it correctly next
 ;; to the shooting object.
 (define (shoot-laser! level laser-type shooter-obj dy)
@@ -1246,20 +1250,20 @@
                          (make-pos2d 0 dy))))
         (level-add-object! level laser-obj)
         ;; Fixme: unsure here...
-        (corout-spawn-brother-thunk (create-laser-event laser-obj level)))))
+        (spawn-brother-thunk 'laser-mov (create-laser laser-obj level)))))
         
 
 ;; Will generate the events associated with a laser object such that
 ;; it will be moved regularly dy pixels on the y axis. The game logic
 ;; of a laser is thus defined by the returned event.
-(define (create-laser-event laser-obj level)
+(define (create-laser laser-obj level)
   (define type (game-object-type laser-obj))
-  (synchronized-event-thunk level
-    (let loop (())
+  (synchronized-thunk level
+    (let loop ()
      ;; centered laser position (depending on the laser type...
       (let ((pos (let ((pos (game-object-pos laser-obj)))
-                   (pos2d-add pos
-                              (make-pos2d (floor (/ (type-width type) 2)) 0))))
+                   (pos2d-add pos (make-pos2d (floor (/ (type-width type) 2))
+                                              0))))
             (collision-occured? (move-object! level laser-obj)))
         (if (or (not collision-occured?)
                 (level-exists level (game-object-id laser-obj)))
@@ -1278,8 +1282,8 @@
   (game-object-type-set! inv (get-type 'invader_explosion))
   (game-object-state-set! inv 0)
   (sleep-for animation-duration)
-  (corout-thunk-continuation!
-   (create-explosion-end-event! level inv)))
+  (continue-with-thunk!
+   (create-explosion-end! level inv)))
 
 ;; dispalys the explosion of the mothership was and removes it from
 ;; the level. The points for killing that mothership will then be
@@ -1299,13 +1303,13 @@
   (level-remove-object! level mothership)
   (level-add-object! level expl-obj)
   (sleep-for animation-duration)
-  (corout-thunk-continuation!
+  (continue-with-thunk!
    (compose-thunks
-    (create-explosion-end-event! level expl-obj)
-    (show-points-event level pos score-val))))
+    (create-explosion-end! level expl-obj)
+    (show-points level pos score-val))))
 
 ;; Will display the points value of a mothership kill at pos
-(define (show-points-event level pos points)
+(define (show-points level pos points)
   (define duration 1)
   (define msg
     (let ((id (gensym 'mothership-points))
@@ -1315,7 +1319,7 @@
           (speed (make-pos2d 0 0))
           (text (number->string points)))
     (make-message-obj id type pos state color speed text)))
-  (synchronized-event-thunk
+  (synchronized-thunk
    level
    (level-add-object! level msg)
    (sleep-for duration)
@@ -1345,16 +1349,16 @@
              (if (2p-game-level? level)
                  (if (2p-game-level-other-finished? level)
                      (compose-thunks
-                      (game-over-2p-animation-event level)
-                      (game-over-animation-event level)
+                      (game-over-2p-animation level)
+                      (game-over-animation level)
                       (lambda () (game-over! level)))
                      (begin
                        (send-update-msg-to-other level #t)
                        (compose-thunks
-                        (game-over-2p-animation-event level)
+                        (game-over-2p-animation level)
                         (lambda () (game-over! level)))))
                  (compose-thunks
-                  (game-over-animation-event level)
+                  (game-over-animation level)
                   (lambda () (game-over! level))))
              (if (2p-game-level? level)
                  (lambda ()
@@ -1362,27 +1366,25 @@
                    (super-yield) ; return to super scheduler
                    (prioritized-thunk-continuation
                     (compose-thunks
-                     (start-of-game-animation-event level)
-                     (return-to-player-event level))))
+                     (start-of-game-animation level)
+                     (return-to-player level))))
                  (lambda ()
                    (super-yield) ; return to super scheduler
                    (sem-unlock! (level-mutex level))
                    (new-player! level))))))
     (sem-lock! (level-mutex level))
-    (corout-thunk-continuation!
-     (compose-thunks
-      (player-explosion-animation-event level (expl-obj animation-duration))
-      continuation))))
+    (continue-with-thunk!
+     (player-explosion-animation level expl-obj animation-duration))))
 
 ;; Event used in 2 player games, where the games returns to the
 ;; current game.
-(define (return-to-player-event level)
+(define (return-to-player level)
   (lambda ()
     (sem-unlock! (level-mutex level))
     (new-player! level)))
         
 ;; Animation of the player ship explosion
-(define (player-explosion-animation-event level expl-obj duration)
+(define (player-explosion-animation level expl-obj duration)
   (define frame-rate 0.1)
   (lambda ()
     (let loop ((dt 0))
@@ -1416,12 +1418,12 @@
                       (choose-color (game-object-pos laser-obj))
                       (make-pos2d 0 0)))
   (level-add-object! level obj)
-  (corout-thunk-continuation! (create-explosion-end-event! level obj)))
+  (continue-with-thunk! (create-explosion-end! level obj)))
 
 
 ;; Event that will stop an invader explosion animation
-(define (create-explosion-end-event! level inv)
-  (synchronized-event-thunk level
+(define (create-explosion-end! level inv)
+  (synchronized-thunk level
     (level-remove-object! level inv)))
 
 
@@ -1447,7 +1449,7 @@
             (loop (substring str 1 (string-length str))))))))
 
 ;; Flashing animation where the msg-obj will flash for a certain duration.
-(define (create-text-flash-animation-event level msg-obj duration)
+(define (create-text-flash-animation level msg-obj duration)
   (define animation-delay 0.2)
   (define original-color (game-object-color msg-obj))
   (define (cycle-msg-state! msg-obj)
@@ -1466,7 +1468,7 @@
             'finished)))))
 
 ;; Special animation that occur in the intro movie A (main intro)
-(define (create-animation-A-corout level)
+(define (create-animation-A level)
   (define msg-type (get-type 'message))
   (define speed (make-pos2d 0 0))
   (define state 'white)
@@ -1499,17 +1501,17 @@
       ;; add all the messages
       (for-each (lambda (m) (level-add-object! level m)) anim-messages )
       ;; schedule the animation
-      (corout-thunk-continuation!
+      (continue-with-thunk!
        (compose-thunks
         (animate-message play "PLAY")
         (animate-message space "SPACE   INVADERS")
-        (create-animate-score-adv-table-event level))))))
+        (create-animate-score-adv-table level))))))
 
 
 
 ;; Animation A follow-up, which will create a table showing the score
 ;; for killing each kind of invaders.
-(define (create-animate-score-adv-table-event level)
+(define (create-animate-score-adv-table level)
   (define speed (make-pos2d 0 0))
   (define (pos x y) (make-pos2d x (- screen-max-y y)))
   (lambda ()
@@ -1549,8 +1551,8 @@
       (message-obj-text-set! score-msg-obj "*SCORE ADVANCE TABLE*"))
 
     ;; and animate the other messages (where the msg-obj have been
-    ;; pre-allocated in the create-animation-A-event.
-    (corout-thunk-continuation!
+    ;; pre-allocated in the create-animation-A.
+    (continue-with-thunk!
      (compose-thunks
       (animate-message (level-get level 'mother) "=? MYSTERY")
       (animate-message (level-get level 'hard) "=30 POINTS")
@@ -1558,7 +1560,7 @@
       (animate-message (level-get level 'easy) "=10 POINTS")
       (lambda ()
         (sleep-for animation-end-wait-delay)
-        (corout-thunk-continuation!
+        (continue-with-thunk!
          (lambda ()
            (set! other-animations-index
                  (modulo (+ other-animations-index 1)
@@ -1569,7 +1571,7 @@
 
 ;; Similare to intro animation A, but more simple, where some very
 ;; basic game instruction get displayed on screen.
-(define (create-animation-B-event level)
+(define (create-animation-B level)
   (define msg-type (get-type 'message))
   (define speed (make-pos2d 0 0))
   (define state 'white)
@@ -1591,7 +1593,7 @@
            (anim-messages
             (list instruction press1 press2 score)))
       (for-each (lambda (m) (level-add-object! level m)) anim-messages )
-      (corout-thunk-continuation!
+      (continue-with-thunk!
        (compose-thunks
         (animate-message instruction "INSTRUCTIONS")
         (animate-message press1 "PRESS '1' FOR 1 PLAYER")
@@ -1600,7 +1602,7 @@
           (sleep-for animation-end-wait-delay)
           (kill-all! 'intro-A)))))))
 
-(define (create-animation-credit-event level)
+(define (create-animation-credit level)
   (define msg-type (get-type 'message))
   (define speed (make-pos2d 0 0))
   (define state 'white)
@@ -1626,7 +1628,7 @@
             (list producer dsth support support-chars you)))
       (for-each (lambda (m) (level-add-object! level m)) anim-messages )
       (play-sfx 'star-wars-op)
-      (corout-thunk-continuation!
+      (continue-with-thunk!
        (compose-thunks
         (animate-message producer "Game Producer:")
         (animate-message dsth "David St-Hilaire")
@@ -1642,7 +1644,7 @@
 ;; Ai reaction event. This thread-like event will simulate a player
 ;; behaviour, based on random "thoughts", where in fact a thought is
 ;; an animation either moving the player or make him shoot.
-(define (create-ai-player-event level)
+(define (create-ai-player level)
   (define ai-reaction-interval 0.01)
   (define ai-movement-duration-max 1)
   (define ai-movement-delay 0.02)
@@ -1655,70 +1657,68 @@
       (move-object! level player)))
 
   ;; will move left the ai player for a random amount of time
-  (define (create-move-left-animation-event)
+  (define (create-move-left-animation)
     (define duration (* (random-real) ai-movement-duration-max))
-    (lambda ()
-      (let loop ((dt 0))
-        (if (level-player level)
-            (let ((collision?
-                   (move-player! (- player-movement-speed))))
-              (if (and (< dt duration) (not collision?))
-                  (begin (sleep-for ai-movement-delay)
-                         (loop (+ dt ai-movement-delay)))))
-            (prioritized-thunk-continuation end-of-demo-event)))))
+    (let loop ((dt 0))
+      (if (level-player level)
+          (let ((collision?
+                 (move-player! (- player-movement-speed))))
+            (if (and (< dt duration) (not collision?))
+                (begin (sleep-for ai-movement-delay)
+                       (loop (+ dt ai-movement-delay)))))
+          (prioritized-thunk-continuation end-of-demo))))
 
   ;; will move right the ai player for a random amount of time
-  (define (create-move-right-animation-event)
+  (define (create-move-right-animation)
     (define duration (* (random-real) ai-movement-duration-max))
-    (lambda ()
-      (let loop ((dt 0))
-        (if (level-player level)
-            (let ((collision?
-                   (move-player! player-movement-speed)))
-              (if (and (< dt duration) (not collision?))
-                  (begin (sleep-for ai-movement-delay)
-                         (loop (+ dt ai-movement-delay)))))
-            (prioritized-thunk-continuation end-of-demo-event)))))
+    (let loop ((dt 0))
+      (if (level-player level)
+          (let ((collision?
+                 (move-player! player-movement-speed)))
+            (if (and (< dt duration) (not collision?))
+                (begin (sleep-for ai-movement-delay)
+                       (loop (+ dt ai-movement-delay)))))
+          (prioritized-thunk-continuation end-of-demo))))
 
   ;; Will make the ai player shoot a laser
-  (define (create-ai-laser-event)
-    (lambda ()
-      (if (level-player level)
-          (begin
-            (shoot-laser! level 'player_laser
-                          (level-player level)
-                          player-laser-speed))
-          (prioritized-thunk-continuation end-of-demo-event))))
+  (define (create-ai-laser)
+    (if (level-player level)
+        (begin
+          (shoot-laser! level 'player_laser
+                        (level-player level)
+                        player-laser-speed))
+        (prioritized-thunk-continuation end-of-demo)))
 
-  ;; This will end the demo. NOTE: here the synchronized-event-thunk
+  ;; This will end the demo. NOTE: here the synchronized-thunk
   ;; is very important, even if the demo cannot be paused. This is so
   ;; because the demo should end only when the player explosion is
   ;; finished.
-  (define end-of-demo-event
-    (synchronized-event-thunk level (kill-all! 'demo-over)))
+  (define end-of-demo
+    (synchronized-thunk level (kill-all! 'demo-over)))
 
   ;; If the player is dead, end the demo, elso randomly choose an
   ;; action. The action are determined using a cheap weighted
   ;; distribution.
-  (let ((actions (list create-move-left-animation-event
-                            create-move-right-animation-event
-                            create-ai-laser-event
-                            create-ai-laser-event
-                            create-ai-laser-event
-                            create-ai-laser-event
-                            create-ai-laser-event
-                            create-ai-laser-event)))
-    (let loop (())
-      (if (not (level-player level))
-          (end-of-demo-event)
-          (begin
-            ((list-ref actions (random-integer (length actions))))
-            (sleep-for ai-reaction-interval)
-            (loop))))))
+  (let ((actions (list create-move-left-animation
+                            create-move-right-animation
+                            create-ai-laser
+                            create-ai-laser
+                            create-ai-laser
+                            create-ai-laser
+                            create-ai-laser
+                            create-ai-laser)))
+    (lambda ()
+      (let loop ()
+        (if (not (level-player level))
+            (end-of-demo)
+            (begin
+              ((list-ref actions (random-integer (length actions))))
+              (sleep-for ai-reaction-interval)
+              (loop)))))))
 
 
 ;; Will display in the top screen the final game over message.
-(define (game-over-animation-event level continuation)
+(define (game-over-animation level continuation)
   (define continuation-delay 2)
   (lambda ()
     (let* ((type (get-type 'message))
@@ -1727,14 +1727,15 @@
            (msg-obj (make-message-obj 'game-over-msg type
                                       pos 'red 'red speed "")))
       (level-add-object! level msg-obj)
-      (in 0 (animate-message
-             msg-obj "GAME OVER"
-             (lambda () (in continuation-delay continuation)))))))
+      (continue-with-thunk!
+       (compose-thunks
+        (animate-message msg-obj "GAME OVER")
+        (lambda () (sleep-for continuation-delay)))))))
 
 ;; Will display in the lower scren the game over message for 1 player
 ;; in a 2 player game. A final game over message should be displayed
 ;; afterward if both player are game over.
-(define (game-over-2p-animation-event level continuation)
+(define (game-over-2p-animation level continuation)
   (define continuation-delay 1.2)
   (lambda ()
     (let* ((player-id (game-level-player-id level))
@@ -1747,9 +1748,9 @@
            (msg-obj (make-message-obj 'game-over-msg type
                                       pos 'green 'green speed "")))
       (level-add-object! level msg-obj)
-      (in 0 (animate-message
-             msg-obj text
-             (lambda () (in continuation-delay continuation)))))))
+      (continue-with-thunk!
+       (compose-thunks (animate-message msg-obj text)
+                       (lambda () (sleep-for continuation-delay)))))))
 
   
 
@@ -1765,66 +1766,65 @@
 ;; input by looking into the thread's mailbox. It is assumed that the
 ;; discrete event simulation is perfomed in it's own thread and that
 ;; user input is passed to the simulation via this mechanism.
-(define (create-main-manager-event level)
+(define (create-main-manager level)
   (define game-paused? #f)
   (define (player-can-move?) (and (level-player level) (not game-paused?)))
-  (define manager-event
-    (lambda ()
-      (let ((player (level-player level))
-            (msg (thread-receive 0 #f)))
-        (if msg
-            (case msg
-              ((space)
-               (if (player-can-move?)
-                   (shoot-laser! level 'player_laser
-                                 (level-player level)
-                                 player-laser-speed)))
-              ((right)
-               (if (player-can-move?)
-                   (let ((new-speed (make-pos2d player-movement-speed 0)))
-                     (game-object-speed-set! player new-speed)
-                     (move-object! level player))))
+  (lambda ()
+    (let loop ()
+     (let ((player (level-player level))
+           (msg (thread-receive 0 #f)))
+       (if msg
+           (case msg
+             ((space)
+              (if (player-can-move?)
+                  (shoot-laser! level 'player_laser
+                                (level-player level)
+                                player-laser-speed)))
+             ((right)
+              (if (player-can-move?)
+                  (let ((new-speed (make-pos2d player-movement-speed 0)))
+                    (game-object-speed-set! player new-speed)
+                    (move-object! level player))))
               
-              ((left)
-               (if (player-can-move?)
-                   (let ((new-speed (make-pos2d (- player-movement-speed) 0)))
-                     (game-object-speed-set! player new-speed)
-                     (move-object! level player))))
+             ((left)
+              (if (player-can-move?)
+                  (let ((new-speed (make-pos2d (- player-movement-speed) 0)))
+                    (game-object-speed-set! player new-speed)
+                    (move-object! level player))))
               
-              ((p)
-               (if game-paused?
-                   (sem-unlock! (level-mutex level))
-                   (sem-lock! (level-mutex level)))
-               (set! game-paused? (not game-paused?)))
+             ((p)
+              (if game-paused?
+                  (sem-unlock! (level-mutex level))
+                  (sem-lock! (level-mutex level)))
+              (set! game-paused? (not game-paused?)))
 
-              ((r)
-               (stop-sfx 'all)
-               (corout-kill-all!))
+             ((r)
+              (stop-sfx 'all)
+              (kill-all! 'reset))
 
-              ((d) (error "DEBUG"))))
-        (in manager-time-interfal manager-event))))
-  manager-event)
+             ((d) (error "DEBUG"))))
+       (sleep-for manager-time-interfal)
+       (loop)))))
 
 ;; Simple key manager that is used durint the intro/demo screens
-(define (create-intro-manager-corout level)
+(define (create-intro-manager level)
   (define game-paused? #f)
   (lambda ()
-    (let ((msg (thread-receive 0 #f)))
-      (let loop ()
-        (if msg
-            (case msg
-              ((1) (exit-simulation 'start-1p-game))
-              ((2) (exit-simulation 'start-2p-game))
-              ((c) (exit-simulation 'show-credits))
-              ((r)
-               (stop-sfx 'all)
-               (exit-simulation 'intro-A))
-              ((d) (error "DEBUG"))))
-        (sleep-for manager-time-interfal)
-        (loop)))))
+    (let loop ((msg (thread-receive 0 #f)))
+      (if msg
+          (case msg
+            ((1) (kill-all! 'start-1p-game))
+            ((2) (kill-all! 'start-2p-game))
+            ((c) (kill-all! 'show-credits))
+            ((r)
+             (stop-sfx 'all)
+             (kill-all! 'intro-A))
+            ((d) (error "DEBUG"))))
+      (sleep-for manager-time-interfal)
+      (loop (thread-receive 0 #f)))))
 
 ;; Event that will send a message to the ui asking for a redraw.
-(define (create-redraw-corout level)
+(define (create-redraw level)
   ;; will update the 2 top score messages if required.
   (define (update-score-msg! level)
     (if (game-level? level) 
@@ -1922,13 +1922,13 @@
                      'ai (lambda ()
                            (play-level
                             (new-animation-level-demo hi-score))))))
-            (inf-loop hi-score (corout-simple-boot ai))))
+            (inf-loop hi-score (simple-boot ai))))
          
          ((eq? result 'start-1p-game)
           (let ((p1 (new-corout 
                      'p1
                      (lambda () (play-level (new-level 0 hi-score 1 'p1))))))
-            (inf-loop hi-score (corout-simple-boot p1))))
+            (inf-loop hi-score (simple-boot p1))))
 
          ((eq? result 'start-2p-game)
           (let ((p1
@@ -1940,7 +1940,7 @@
 
             (parameterize ((p1-corout p1)
                            (p2-corout p2))
-              (inf-loop hi-score (corout-boot (lambda (acc v) (max acc v))
+              (inf-loop hi-score (boot (lambda (acc v) (max acc v))
                                               p1 p2)))))
          (else
           (inf-loop hi-score

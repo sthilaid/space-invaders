@@ -985,17 +985,38 @@
   (define mut (gensym 'mutex))
   `(lambda ()
      (let ((,mut (level-mutex ,level)))
-      (dynamic-wind
-          (lambda () (sem-lock! ,mut))
-          (lambda () ,action ,@actions)
-          (lambda () (sem-unlock! ,mut))))))
+       (sem-lock! sem)
+       (sem-unlock! sem)
+       ,action
+       ,@actions))
+
+  ;; Tought of defining yield and sleep operations with a dynamic
+  ;; scoping and maybe use a parameterize form to shape them as
+  ;; required, ex:
+  #;
+  (let ((old-yield (yield))
+        (old-sleep-until (sleep-until)))
+    (parameterize ((yield (lambda ()
+                            (sem-lock! mut)
+                            (old-yield)
+                            (sem-unlock! mut)))
+                   (sleep-until ...))
+                  (lambda () ,action ,@actions)))
+  
+  ;; Tought also of using but sem-lock! captures a condinuation inside
+  ;; the before thunk of the dynamic-wind which seems odd...
+         #;
+       (dynamic-wind
+           (lambda () (sem-lock! ,mut))
+           (lambda () ,action ,@actions)
+           (lambda () (sem-unlock! ,mut))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Start of game level animations
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; ;; Will animate a flashing PLAY PLAYER<X> in a black screen.
+;; Will animate a flashing PLAY PLAYER<X> in a black screen.
 (define (start-of-game-animation level)
   (define animation-duration 3)
   (define player-id (game-level-player-id level))

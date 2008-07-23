@@ -35,14 +35,14 @@
                        (lambda (,(gensym 'dummy-arg)) (,thunk-cont)))
      (prioritized-continuation (current-corout))))
 
-(define-macro (corout-continuation continuation-corout)
+
+(define-macro (continue-with continuation-corout)
   `(terminate-corout ,continuation-corout))
 
-(define-macro (corout-thunk-continuation! continuation-thunk)
-  `(begin
-     (corout-kont-set! (current-corout)
-                       (lambda (,(gensym 'dummy-arg)) (,continuation-thunk)))
-     (corout-continuation (current-corout))))
+(define-macro (continue-with-thunk! continuation-thunk)
+  `(begin (yield)
+          (,continuation-thunk)))
+
 
 
 (define-macro (compose-thunks . thunks)
@@ -53,13 +53,9 @@
                                  "contain at least 1 thunk")))
           ((and (pair? thunks)
                 (null? (cdr thunks)))
-           `(lambda (,(gensym 'dummy-arg))
-              (terminate-corout (,(car thunks)))))
-        
-          (else `(lambda (,(gensym 'dummy-arg))
-                   (,(car thunks))
-                   (corout-kont-set! (current-corout)
-                                     ,(composition (cdr thunks)))
-                   (corout-continuation (current-corout))))))
-
-    `(lambda () (,(composition thunks) 'dummy)))
+           (car thunks))
+          (else
+           `(lambda ()
+              (,(car thunks))
+              (continue-with-thunk! ,(composition (cdr thunks)))))))
+  (composition thunks))

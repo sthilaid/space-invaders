@@ -982,13 +982,20 @@
 ;; Macro used to synchronize certain game events, such that the game
 ;; may be paused.
 (define-macro (synchronized-thunk level action . actions)
-  (define mut (gensym 'mutex))
   `(lambda ()
-     (let ((,mut (level-mutex ,level)))
-       (sem-lock! ,mut)
-       (sem-unlock! ,mut)
-       ,action
-       ,@actions))
+     (dynamic-wind
+         (lambda () (sem-lock! (level-mutex ,level)))
+         (lambda () ,action ,@actions)
+         (lambda () (sem-unlock! (level-mutex ,level))))))
+
+;; (define-macro (synchronized-thunk level action . actions)
+;;   (define mut (gensym 'mutex))
+;;   `(lambda ()
+;;      (let ((,mut (level-mutex ,level)))
+;;        (sem-lock! ,mut)
+;;        (sem-unlock! ,mut)
+;;        ,action
+;;        ,@actions))
 
 
   ;; Tought of defining yield and sleep operations with a dynamic
@@ -997,23 +1004,23 @@
   ;;   note: that (yield) does not call yield, but would get
   ;;         its current dynamic value...)
   ;; ex: 
-  #; 
-  (let ((old-yield (yield))
-        (old-sleep-until (sleep-until)))
-    (parameterize ((yield (lambda ()
-                            (sem-lock! mut)
-                            (old-yield)
-                            (sem-unlock! mut)))
-                   (sleep-until ...))
-                  (lambda () ,action ,@actions)))
+
+;;   (let ((old-yield (yield))
+;;         (old-sleep-until (sleep-until)))
+;;     (parameterize ((yield (lambda ()
+;;                             (sem-lock! mut)
+;;                             (old-yield)
+;;                             (sem-unlock! mut)))
+;;                    (sleep-until ...))
+;;                   (lambda () ,action ,@actions)))
   
   ;; Tought also of using but sem-lock! captures a condinuation inside
   ;; the before thunk of the dynamic-wind which seems odd...
-         #;
-       (dynamic-wind
-           (lambda () (sem-lock! ,mut))
-           (lambda () ,action ,@actions)
-           (lambda () (sem-unlock! ,mut))))
+
+;;        (dynamic-wind
+;;            (lambda () (sem-lock! ,mut))
+;;            (lambda () ,action ,@actions)
+;;            (lambda () (sem-unlock! ,mut))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1502,27 +1509,27 @@
 
   (lambda ()
     ;; messages declaration
-    (let* ((play (let ((pos (make-pos2d 101 (- screen-max-y 88))))
-                   (make-message-obj
-                    'play msg-type pos state (choose-color pos) speed "")))
-           (space (let ((pos (make-pos2d 61 (- screen-max-y 112))))
-                    (make-message-obj
-                     'space msg-type pos state (choose-color pos) speed "")))
-           (score (let ((pos (make-pos2d 37 (- screen-max-y 144))))
-                    (make-message-obj
-                     'score msg-type pos state (choose-color pos) speed "")))
+    (let* ((play   (let ((pos (make-pos2d 101 (- screen-max-y 88))))
+                     (make-message-obj
+                      'play msg-type pos state (choose-color pos) speed "")))
+           (space  (let ((pos (make-pos2d 61 (- screen-max-y 112))))
+                     (make-message-obj
+                      'space msg-type pos state (choose-color pos) speed "")))
+           (score  (let ((pos (make-pos2d 37 (- screen-max-y 144))))
+                     (make-message-obj
+                      'score msg-type pos state (choose-color pos) speed "")))
            (mother (let ((pos (make-pos2d 85 (- screen-max-y 160))))
                      (make-message-obj
                       'mother msg-type pos state (choose-color pos) speed "")))
-           (hard (let ((pos (make-pos2d 85 (- screen-max-y 176))))
-                   (make-message-obj
-                    'hard msg-type pos state (choose-color pos) speed "")))
+           (hard   (let ((pos (make-pos2d 85 (- screen-max-y 176))))
+                     (make-message-obj
+                      'hard msg-type pos state (choose-color pos) speed "")))
            (medium (let ((pos (make-pos2d 85 (- screen-max-y 192))))
                      (make-message-obj
                       'medium msg-type pos state (choose-color pos) speed "")))
-           (easy (let ((pos (make-pos2d 85 (- screen-max-y 208))))
-                   (make-message-obj
-                    'easy msg-type pos state (choose-color pos) speed "")))
+           (easy   (let ((pos (make-pos2d 85 (- screen-max-y 208))))
+                     (make-message-obj
+                      'easy msg-type pos state (choose-color pos) speed "")))
            (anim-messages
             (list play space score mother hard medium easy)))
       ;; add all the messages

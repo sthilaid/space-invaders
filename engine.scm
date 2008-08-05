@@ -979,14 +979,51 @@
 ;;
 ;;*****************************************************************************
 
+;; (define (walk targets transf code)
+;;     (cond ((and (pair? code)
+;;                 (memq (car code) targets))
+;;            (transf (cons (car code) (walk targets transf (cdr code)))))
+;;           ((pair? code)
+;;            (cons (walk targets transf (car code))
+;;                  (walk targets transf (cdr code))))
+;;           (else code)))
+
 ;; Macro used to synchronize certain game events, such that the game
 ;; may be paused.
 (define-macro (synchronized-thunk level action . actions)
+  #;(define (walk from-to code)
+    (cond ((pair? code) (cons (walk from-to (car code))
+                              (walk from-to (cdr code))))
+          ((and (symbol? code) (assq code from-to)) (cadr (assq code from-to)))
+          (else code)))
+  (define (walk targets transf code)
+    (cond ((and (pair? code)
+                (pair? (car code))
+                (memq (caar code) targets))
+           (pp (cons (transf (cons (caar code)
+                                   (walk targets transf (cdar code))))
+                     (walk targets transf (cdr code))))
+           (cons (transf (cons (caar code) (walk targets transf (cdar code))))
+                 (walk targets transf (cdr code))))
+          ((pair? code)
+           (cons (walk targets transf (car code))
+                 (walk targets transf (cdr code))))
+          (else code)))
+  (define (fix code)
+    (walk '(terminate-corout
+            prioritized-thunk-continuation
+            prioritized-continuation continue-with-thunk! continue-with )
+          (lambda (c) `(begin (sem-unlock! (level-mutex ,level)) ,c))
+          (walk '(yield super-yield sleep-for sleep-until)
+                (lambda (c) `(begin (sem-unlock! (level-mutex ,level))
+                                    ,c
+                                    (sem-lock! (level-mutex ,level))))
+                code)))
   `(lambda ()
-     (dynamic-wind
-         (lambda () (sem-lock! (level-mutex ,level)))
-         (lambda () ,action ,@actions)
-         (lambda () (sem-unlock! (level-mutex ,level))))))
+     (sem-lock! (level-mutex ,level))
+     ,(fix `(begin ,action ,@actions))
+     (sem-unlock! (level-mutex ,level))))
+
 
 ;; (define-macro (synchronized-thunk level action . actions)
 ;;   (define mut (gensym 'mutex))
@@ -1008,9 +1045,9 @@
 ;;   (let ((old-yield (yield))
 ;;         (old-sleep-until (sleep-until)))
 ;;     (parameterize ((yield (lambda ()
-;;                             (sem-lock! mut)
+;;                             (sem-unlock! mut)
 ;;                             (old-yield)
-;;                             (sem-unlock! mut)))
+;;                             (sem-lock! mut)))
 ;;                    (sleep-until ...))
 ;;                   (lambda () ,action ,@actions)))
   

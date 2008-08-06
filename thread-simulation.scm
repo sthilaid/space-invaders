@@ -360,9 +360,10 @@
 ;; to take an unavailable semaphore, and the first enqueued (fifo)
 ;; event will be resumed when an unlock is performed.
 (define (sem-lock! sem)
-  (if (< (sem-value sem) 0)
-      (sleep-until (lambda ()(not (sem-locked? sem))))
-      (sem-decrease! sem)))
+  (while (sem-locked? sem)
+         (sleep-until (lambda ()(not (sem-locked? sem)))))
+  (sem-decrease! sem))
+
 (define (sem-unlock! sem)
   (sem-increase! sem))
 

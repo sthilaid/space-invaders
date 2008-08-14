@@ -1,6 +1,8 @@
 (include "test-macro.scm")
 (include "scm-lib-macro.scm")
 (include "thread-simulation-macro.scm")
+
+;; FIXME: Load calls should be removed in the final compiled version
 (load "scm-lib")
 (load "test")
 
@@ -13,7 +15,8 @@
 ;; Data type definitions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define-type corout id kont mailbox (state unprintable:) prioritize?)
+(define-type corout id kont mailbox (state unprintable:) prioritize?
+  on-entry on-exit)
 
 (define-type state
   current-corout q sleep-q root-k return-value-handler
@@ -232,7 +235,7 @@
                ;; here the terminate-corout call is added to ensure that
                ;; the thread will terminate cleanly.
                (lambda (dummy) (terminate-corout (thunk)))
-               (new-queue) #f #f))
+               (new-queue) #f #f (new-stack) (new-stack)))
 
 ;; Querry the current-coroutine's mailbox to see if its empty
 (define (empty-mailbox?)
@@ -255,16 +258,20 @@
 ;; Yields the current coroutine's calculation. The calculation will
 ;; resume where it left once the scheduler decides to resume it.
 (define (yield)
+  (for-each (lambda (f) (f)) (stack->list (corout-on-exit (current-corout))))
   (call/cc
    (lambda (k)
      (corout-kont-set! (current-corout) k)
-     (resume-scheduling))))
+     (resume-scheduling)))
+  (for-each (lambda (f) (f))
+            (reverse (stack->list (corout-on-entry (current-corout))))))
 
 
 ;; This will yield the work of the scheduler itselft, assuming that
 ;; the scheduler runs inside a coroutine too, i.e. that we are in a
 ;; child recursive coroutine.
 (define (super-yield)
+  (for-each (lambda (f) (f)) (stack->list (corout-on-exit (current-corout))))
   (call/cc
    (lambda (k)
      (if (parent-state)
@@ -275,11 +282,15 @@
            ;; system's coroutine.
            (corout-state-set! (current-corout) state)
            (corout-kont-set! (current-corout) k)
-           (resume-scheduling))))))
+           (resume-scheduling)))))
+  (for-each (lambda (f) (f))
+            (reverse (stack->list (corout-on-entry (current-corout))))))
 
 ;; Terminates early the calculation of the current coroutine and
 ;; returns with the givent ret-val.
 (define (terminate-corout exit-val)
+  ;; first do all the requester actions on exit
+  (for-each (lambda (f) (f)) (stack->list (corout-on-exit (current-corout))))
   (current-corout exit-val)
   (resume-scheduling))
 
@@ -316,6 +327,8 @@
 ;; only 1 level of scheduling, killing thus the currently executing
 ;; scheduler.
 (define (kill-all! exit-val)
+  ;; first do all the requester actions on exit
+  (for-each (lambda (f) (f)) (stack->list (corout-on-exit (current-corout))))
   (let ((finish-scheduling (root-k))
         #; (ret-val (return-value)))
     (restore-state (parent-state))
@@ -335,12 +348,20 @@
 ;; returns #t.
 (define (sleep-until condition-thunk)
   (if (not (condition-thunk))
-      (call/cc
-       (lambda (k)
-         (corout-kont-set! (current-corout) k)
-         (enqueue! (sleep-q) (make-sleep-q-el condition-thunk (current-corout)))
-         (current-corout sleeping)
-         ((return-to-sched) 'asleep)))))
+      (begin
+        (for-each (lambda (f) (f))
+                  (stack->list (corout-on-exit (current-corout))))
+        (call/cc
+         (lambda (k)
+           (corout-kont-set! (current-corout) k)
+           (enqueue! (sleep-q)
+                     (make-sleep-q-el condition-thunk (current-corout)))
+           (current-corout sleeping)
+           ((return-to-sched) 'asleep)))
+        (for-each (lambda (f) (f))
+                  (reverse
+                   (stack->list (corout-on-entry (current-corout))))))))
+
 
 ;; Will put the current-corout to sleep for about "secs" seconds
 (define (sleep-for secs)
@@ -570,3 +591,46 @@
                                      (yield)
                                      (display 'D)))))
     (simple-boot c3)))
+
+
+(define-test test-dynamic-corout-extent:yield "INOUT2IN1OUT" 'done
+  (let ((c1 (new-corout 'c1
+                        (dynamic-corout-extent
+                         (lambda () (display "IN"))
+                         (lambda () (yield) (display "1"))
+                         (lambda () (display "OUT")))))
+         (c2 (new-corout 'c2 (lambda () (display "2") (yield) 'done))))
+    (simple-boot c1 c2)))
+
+(define-test test-dynamic-corout-extent:sleep "INOUT2IN1OUT" 'done
+  (let* ((cond-var #f)
+         (c1 (new-corout 'c1
+                         (dynamic-corout-extent
+                          (lambda () (display "IN"))
+                          (lambda ()
+                            (sleep-for 0.1)
+                            (display "1")
+                            (set! cond-var #t))
+                          (lambda () (display "OUT")))))
+         (c2 (new-corout 'c2 (lambda ()
+                               (display "2")
+                               (sleep-until (lambda () cond-var))
+                               'done))))
+    (simple-boot c1 c2)))
+
+(define-test test-dynamic-corout-extent:term
+  "IN-00OUT-0IN-11OUT-1IN-22OUT-2" 'done
+  (let* ((cond-var #f)
+         (c0 (new-corout 'c0 (dynamic-corout-extent
+                              (lambda () (display "IN-0"))
+                              (lambda () (display "0") (terminate-corout 'fini))
+                              (lambda () (display "OUT-0")))))
+         (c1 (new-corout 'c1 (dynamic-corout-extent
+                              (lambda () (display "IN-1"))
+                              (lambda () (display "1") (terminate-corout 'fini))
+                              (lambda () (display "OUT-1")))))
+         (c2 (new-corout 'c2 (dynamic-corout-extent
+                              (lambda () (display "IN-2"))
+                              (lambda () (display "2") (kill-all! 'done))
+                              (lambda () (display "OUT-2"))))))
+    (simple-boot c0 c1 c2)))

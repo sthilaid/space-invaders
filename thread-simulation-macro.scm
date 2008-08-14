@@ -59,3 +59,16 @@
               (,(car thunks))
               (continue-with-thunk! ,(composition (cdr thunks)))))))
   (composition thunks))
+
+
+(define-macro (dynamic-corout-extent before-thunk body-thunk after-thunk)
+  (define result (gensym 'result))
+  `(lambda ()
+     (push! ,before-thunk (corout-on-entry (current-corout)))
+     (push! ,after-thunk (corout-on-exit (current-corout)))
+     (for-each (lambda (f) (f))
+               (reverse (stack->list (corout-on-entry (current-corout)))))
+     ;; Note: There is no need to add calls to the on-exit thunks
+     ;; because the body is supposed to be wrapped and exit with a
+     ;; terminate-corout call which calls the on-exit thunks.
+     (,body-thunk)))

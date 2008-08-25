@@ -29,11 +29,17 @@
                              (k ,arg))))
      (terminate-corout ,c)))
 
-(define-macro (prioritized-thunk-continuation thunk-cont)
+(define-macro (prioritized-thunk-continuation continuation-thunk)
   `(begin
-     (corout-kont-set! (current-corout)
-                       (lambda (,(gensym 'dummy-arg)) (,thunk-cont)))
-     (prioritized-continuation (current-corout))))
+     ;; here execute on-exit thunks because we are leaving the initial
+     ;; body to be reborn as a new thunk
+     (for-each (lambda (f) (f)) (stack->list (corout-on-exit (current-corout))))
+     (flush-entry-exit-thunks! (current-corout))
+     (prioritize! (current-corout))
+     (yield)
+     (unprioritize! (current-corout))
+     (,continuation-thunk)))
+
 
 
 (define-macro (continue-with continuation-corout)

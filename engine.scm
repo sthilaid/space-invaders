@@ -15,7 +15,7 @@
 ;;                        |
 ;;                        |
 ;;                        |
-;; Event sim:     (play-level intro-lvl)
+;; corout:     (play-level intro-lvl)
 ;;
 ;; Here is the global architecture of the game model when a game is
 ;; being played:
@@ -24,10 +24,10 @@
 ;;                    |        \
 ;;                    |         \ (optionnal for 2p games)
 ;;                    |          \
-;; Coroutines:    p1-corout <-> p2-corout
+;; Coroutines:    p1-corout     p2-corout
 ;;                    |              \
 ;;                    |               \
-;; Event sim:  (play-level lvl-p1) (play-level lvl-p2)
+;; Coroutines: (play-level lvl-p1) (play-level lvl-p2)
 ;;
 ;; The model was designed to be as loosely coupled with the user
 ;; interface as possible, but some coupling is necessary to be able to
@@ -142,23 +142,29 @@
 ;;
 ;;*****************************************************************************
 
-;; dynamically scoped coroutines pointers that should be available
-;; inside 2 players level simulations
-(define p1-corout (make-parameter #f))
-(define p2-corout (make-parameter #f))
+;; dynamically scoped coroutines level pointers that should be
+;; available inside 2 players level simulations
+(define p1-level (make-parameter #f))
+(define p2-level (make-parameter #f))
 
-(define (send-update-msg-to-other level finished?)
-  (let ((msg (cons (game-level-score level) finished?)))
-    (if (eq? (game-level-player-id level) 'p2)
-        (! (p1-corout) msg)
-        (! (p2-corout) msg))))
+(define player1 'p1)
+(define player2 'p2)
+(define (is-player1? level)
+  (eq? (game-level-player-id level) player1))
+(define (is-player2? level)
+  (eq? (game-level-player-id level) player2))
 
-(define (receive-update-msg-from-other! level)
-  (if (and (2p-game-level? level)
-           (not (empty-mailbox?)))
-      (let ((msg (?)))
-        (2p-game-level-other-score-set! level (car msg))
-        (2p-game-level-other-finished?-set! level (cdr msg)))))
+(define (other-player-level level)
+  (if (is-player2? level)
+      (p1-level)
+      (p2-level)))
+
+(define (update-other-player-state! level)
+  (if (2p-game-level? level)
+      (let ((other-level (other-player-level level)))
+        (2p-game-level-other-score-set! level (game-level-score other-level))
+        (2p-game-level-other-finished?-set!
+         level (2p-game-level-finished? other-level)))))
 
 
 
@@ -458,7 +464,7 @@
   extender: define-type-of-game-level)
 
 (define-type-of-game-level 2p-game-level
-  other-finished? other-score)
+  finished? other-finished? other-score)
 
 ;; Level utilitary functions
 (define (level-add-object! lvl obj)
@@ -582,8 +588,9 @@
          (init-corouts 'unbound)
          (lives 3)
          (draw-game-field? #t)
-         (other-finished? #f)  ;; only used for 2p games
-         (other-score 0)       ;; only used for 2p games
+         (finished? #f)        ; only used for 2p games
+         (other-finished? #f)  ; only used for 2p games
+         (other-score 0)       ; only used for 2p games
          (level (if (= number-of-players 2)
 
                     (make-2p-game-level
@@ -591,7 +598,7 @@
                      hi-score init-corouts (new-mutex)
                      player-id init-score lives 
                      walls wall-damage draw-game-field?
-                     other-finished? other-score)
+                     finished? other-finished? other-score)
                     
                     (make-game-level
                      screen-max-y screen-max-x (make-table)
@@ -909,7 +916,9 @@
            (destroy-laser! level inv-laser)))
         
         ((player-ship? collision-obj)
-         (explode-player! level collision-obj)
+         (spawn-brother-thunk 'player-explosion-anim
+                              (lambda ()
+                                (explode-player! level collision-obj)))
          (destroy-laser! level laser-obj))
 
         ((shield? collision-obj)
@@ -956,7 +965,8 @@
          (resolve-laser-collision! level collision-obj player))
         
         ((invader-ship? collision-obj)
-         (explode-player! level collision-obj)
+         (spawn-brother-thunk (lambda ()
+                                (explode-player! level collision-obj)))
          (explode-invader! level collision-obj))))
 
 (define (resolve-mothership-collision! level mothership collision-obj)
@@ -999,14 +1009,14 @@
            (type (get-type 'message))
            (state 'white)
            (speed (make-pos2d 0 0))
-           (text (if (eq? player-id 'p2)
+           (text (if (is-player2? level)
                      "PLAY  PLAYER<2>"
                      "PLAY  PLAYER<1>"))
            (msg (make-message-obj 'start-msg type pos
                                   state 'white speed text)))
       (game-level-draw-game-field?-set! level #f)
       (level-add-object! level msg)
-      (let ((score-msg-obj (if (eq? player-id 'p2)
+      (let ((score-msg-obj (if (is-player2? level)
                                'player2-score-msg
                                'player1-score-msg)))
         (continue-with-thunk!
@@ -1342,29 +1352,28 @@
   (let ((continuation
          (if (<= (game-level-lives level) 0)
              (if (2p-game-level? level)
-                 (if (2p-game-level-other-finished? level)
-                     (compose-thunks
-                      (game-over-2p-animation level)
-                      (game-over-animation level)
-                      (lambda () (game-over! level)))
-                     (begin
-                       (send-update-msg-to-other level #t)
+                 (begin
+                   (2p-game-level-finished?-set! level #t)
+                   (if (2p-game-level-other-finished? level)
                        (compose-thunks
                         (game-over-2p-animation level)
-                        (lambda () (game-over! level)))))
+                        (game-over-animation level)
+                        (lambda () (game-over! level)))
+                       (begin
+                         (compose-thunks
+                          (game-over-2p-animation level)
+                          (lambda () (game-over! level))))))
                  (compose-thunks
                   (game-over-animation level)
                   (lambda () (game-over! level))))
              (if (2p-game-level? level)
                  (lambda ()
-                   (send-update-msg-to-other level #f)
                    (super-yield) ; return to super scheduler
                    (prioritized-thunk-continuation
                     (compose-thunks
                      (start-of-game-animation level)
                      (return-to-player level))))
-                 (lambda ()
-                   (return-to-player level))))))
+                 (return-to-player level)))))
     (continue-with-thunk!
      (compose-thunks
       ;; mutex lock must be performed in a separate corout because it
@@ -1376,8 +1385,10 @@
 ;; Event used in 2 player games, where the games returns to the
 ;; current game.
 (define (return-to-player level)
-  (sem-unlock! (level-mutex level))
-  (new-player! level))
+  (lambda ()
+   (sem-unlock! (level-mutex level))
+   (new-player! level)))
+
         
 ;; Animation of the player ship explosion
 (define (player-explosion-animation level expl-obj duration)
@@ -1735,7 +1746,7 @@
   (define continuation-delay 1.2)
   (lambda ()
     (let* ((player-id (game-level-player-id level))
-           (text (if (eq? player-id 'p2)
+           (text (if (is-player2? level)
                      "GAME OVER PLAYER<2>"
                      "GAME OVER PLAYER<1>"))
            (type (get-type 'message))
@@ -1815,12 +1826,10 @@
     (let loop ((msg (thread-receive 0 #f)))
       (if msg
           (case msg
-            ((1) (kill-all! 'start-1p-game))
-            ((2) (kill-all! 'start-2p-game))
-            ((c) (kill-all! 'show-credits))
-            ((r)
-             (stop-sfx 'all)
-             (kill-all! 'intro-A))
+            ((1) (stop-sfx 'all) (kill-all! 'start-1p-game))
+            ((2) (stop-sfx 'all) (kill-all! 'start-2p-game))
+            ((c) (stop-sfx 'all) (kill-all! 'show-credits))
+            ((r) (stop-sfx 'all) (kill-all! 'intro-A))
             ((d) (error "DEBUG"))))
       (sleep-for manager-time-interfal)
       (loop (thread-receive 0 #f)))))
@@ -1830,16 +1839,16 @@
   ;; will update the 2 top score messages if required.
   (define (update-score-msg! level)
     (if (game-level? level) 
-        (let* ((is-player2? (eq? (game-level-player-id level) 'p2))
+        (let* ((is-p2? (is-player2? level))
                (score-obj
-                (level-get level (if is-player2?
+                (level-get level (if is-p2?
                                      'player2-score-msg
                                      'player1-score-msg)))
                (other-score-obj
-                (level-get level (if is-player2?
+                (level-get level (if is-p2?
                                      'player1-score-msg
                                      'player2-score-msg))))
-          (receive-update-msg-from-other! level)
+          (update-other-player-state! level)
           (message-obj-text-set!
            score-obj (get-score-string (game-level-score level)))
           (if (2p-game-level? level)
@@ -1928,22 +1937,24 @@
          
          ((eq? result 'start-1p-game)
           (let ((p1 (new-corout 
-                     'p1
-                     (lambda () (play-level (new-level 0 hi-score 1 'p1))))))
+                     player1
+                     (lambda ()
+                       (play-level (new-level 0 hi-score 1 player1))))))
             (inf-loop hi-score (simple-boot p1))))
 
          ((eq? result 'start-2p-game)
-          (let ((p1
-                 (new-corout
-                  'p1 (lambda () (play-level (new-level 0 hi-score 2 'p1)))))
-                (p2
-                 (new-corout 
-                  'p2 (lambda () (play-level (new-level 0 hi-score 2 'p2))))))
+          (parameterize ((p1-level (new-level 0 hi-score 2 player1))
+                         (p2-level (new-level 0 hi-score 2 player2)))
+           (let ((p1
+                  (new-corout
+                   player1
+                   (lambda () (play-level (p1-level)))))
+                 (p2
+                  (new-corout 
+                   player2
+                   (lambda () (play-level (p2-level))))))
+             (inf-loop hi-score (boot (lambda (acc v) (max acc v)) p1 p2)))))
 
-            (parameterize ((p1-corout p1)
-                           (p2-corout p2))
-              (inf-loop hi-score (boot (lambda (acc v) (max acc v))
-                                              p1 p2)))))
          (else
           (inf-loop hi-score
                     (play-level (new-animation-level-A hi-score))))))))

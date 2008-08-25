@@ -181,12 +181,13 @@
   (current-corout (dequeue!? (q)))
 
   ;; Usefull for debug:
-;;   (pp `(corout-scheduler cur: ,(if (corout? (current-corout))
-;;                                    (corout-id (current-corout))
-;;                                    (current-corout))
-;;                          q: ,(map corout-id (queue-list (q)))
-;;                          sleep-q: ,(map corout-id
-;;                                         (map cdr (queue-list (sleep-q))))))
+#;
+(pp `(corout-scheduler cur: ,(if (corout? (current-corout))
+                                   (corout-id (current-corout))
+                                   (current-corout))
+                         q: ,(map corout-id (queue-list (q)))
+                         sleep-q: ,(map corout-id
+                                        (map cdr (queue-list (sleep-q))))))
 
   ;; if there is one coroutine, run it, else stop the coroutine
   ;; scheduler.

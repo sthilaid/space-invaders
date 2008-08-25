@@ -40,8 +40,13 @@
   `(terminate-corout ,continuation-corout))
 
 (define-macro (continue-with-thunk! continuation-thunk)
-  `(begin (yield)
-          (,continuation-thunk)))
+  `(begin
+     ;; here execute on-exit thunks because we are leaving the initial
+     ;; body to be reborn as a new thunk
+     (for-each (lambda (f) (f)) (stack->list (corout-on-exit (current-corout))))
+     (flush-entry-exit-thunks! (current-corout))
+     (yield)
+     (,continuation-thunk)))
 
 
 

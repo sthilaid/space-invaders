@@ -979,85 +979,11 @@
 ;;
 ;;*****************************************************************************
 
-;; (define (walk targets transf code)
-;;     (cond ((and (pair? code)
-;;                 (memq (car code) targets))
-;;            (transf (cons (car code) (walk targets transf (cdr code)))))
-;;           ((pair? code)
-;;            (cons (walk targets transf (car code))
-;;                  (walk targets transf (cdr code))))
-;;           (else code)))
-
-;; Macro used to synchronize certain game events, such that the game
-;; may be paused.
 (define-macro (synchronized-thunk level action . actions)
-  #;(define (walk from-to code)
-    (cond ((pair? code) (cons (walk from-to (car code))
-                              (walk from-to (cdr code))))
-          ((and (symbol? code) (assq code from-to)) (cadr (assq code from-to)))
-          (else code)))
-  (define (walk targets transf code)
-    (cond ((and (pair? code)
-                (pair? (car code))
-                (memq (caar code) targets))
-           (pp (cons (transf (cons (caar code)
-                                   (walk targets transf (cdar code))))
-                     (walk targets transf (cdr code))))
-           (cons (transf (cons (caar code) (walk targets transf (cdar code))))
-                 (walk targets transf (cdr code))))
-          ((pair? code)
-           (cons (walk targets transf (car code))
-                 (walk targets transf (cdr code))))
-          (else code)))
-  (define (fix code)
-    (walk '(terminate-corout
-            prioritized-thunk-continuation
-            prioritized-continuation continue-with-thunk! continue-with )
-          (lambda (c) `(begin (sem-unlock! (level-mutex ,level)) ,c))
-          (walk '(yield super-yield sleep-for sleep-until)
-                (lambda (c) `(begin (sem-unlock! (level-mutex ,level))
-                                    ,c
-                                    (sem-lock! (level-mutex ,level))))
-                code)))
-  `(lambda ()
-     (sem-lock! (level-mutex ,level))
-     ,(fix `(begin ,action ,@actions))
-     (sem-unlock! (level-mutex ,level))))
-
-
-;; (define-macro (synchronized-thunk level action . actions)
-;;   (define mut (gensym 'mutex))
-;;   `(lambda ()
-;;      (let ((,mut (level-mutex ,level)))
-;;        (sem-lock! ,mut)
-;;        (sem-unlock! ,mut)
-;;        ,action
-;;        ,@actions))
-
-
-  ;; Tought of defining yield and sleep operations with a dynamic
-  ;; scoping and maybe use a parameterize form to shape them as
-  ;; required, 
-  ;;   note: that (yield) does not call yield, but would get
-  ;;         its current dynamic value...)
-  ;; ex: 
-
-;;   (let ((old-yield (yield))
-;;         (old-sleep-until (sleep-until)))
-;;     (parameterize ((yield (lambda ()
-;;                             (sem-unlock! mut)
-;;                             (old-yield)
-;;                             (sem-lock! mut)))
-;;                    (sleep-until ...))
-;;                   (lambda () ,action ,@actions)))
-  
-  ;; Tought also of using but sem-lock! captures a condinuation inside
-  ;; the before thunk of the dynamic-wind which seems odd...
-
-;;        (dynamic-wind
-;;            (lambda () (sem-lock! ,mut))
-;;            (lambda () ,action ,@actions)
-;;            (lambda () (sem-unlock! ,mut))))
+  `(dynamic-corout-extent
+    (lambda () (sem-lock! (level-mutex ,level)))
+    (lambda () ,action ,@actions)
+    (lambda () (sem-unlock! (level-mutex ,level)))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1438,21 +1364,20 @@
                      (start-of-game-animation level)
                      (return-to-player level))))
                  (lambda ()
-                   (super-yield) ; return to super scheduler
-                   (sem-unlock! (level-mutex level))
-                   (new-player! level))))))
-    (sem-lock! (level-mutex level))
+                   (return-to-player level))))))
     (continue-with-thunk!
      (compose-thunks
+      ;; mutex lock must be performed in a separate corout because it
+      ;; must be out of the synchronized-thunk's extent!
+      (lambda () (sem-lock! (level-mutex level)))
       (player-explosion-animation level expl-obj animation-duration)
       continuation))))
 
 ;; Event used in 2 player games, where the games returns to the
 ;; current game.
 (define (return-to-player level)
-  (lambda ()
-    (sem-unlock! (level-mutex level))
-    (new-player! level)))
+  (sem-unlock! (level-mutex level))
+  (new-player! level))
         
 ;; Animation of the player ship explosion
 (define (player-explosion-animation level expl-obj duration)
@@ -1864,9 +1789,15 @@
                     (move-object! level player))))
               
              ((p)
+              (if (sem-locked? (level-mutex level)) (pp 'mutex-was-locked))
               (if game-paused?
-                  (sem-unlock! (level-mutex level))
-                  (sem-lock! (level-mutex level)))
+                  (begin
+                    (sem-unlock! (level-mutex level))
+                    (pp 'game-unpaused))
+                  (begin
+                   (sem-lock! (level-mutex level))
+                   (pp `(game-paused semval:
+                                     ,(sem-value (level-mutex level))))))
               (set! game-paused? (not game-paused?)))
 
              ((r)

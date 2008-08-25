@@ -18,6 +18,10 @@
 (define-type corout id kont mailbox (state unprintable:) prioritize?
   on-entry on-exit)
 
+(define (flush-entry-exit-thunks! corout)
+  (corout-on-entry-set! corout (new-stack))
+  (corout-on-exit-set! corout (new-stack)))
+
 (define-type state
   current-corout q sleep-q root-k return-value-handler
   return-value return-to-sched
@@ -166,11 +170,6 @@
 ;; it's super scheduer (if there is one) when all the coroutines
 ;; finishes.
 (define (corout-scheduler)
-  #;
-  (pp `(corout-scheduler cur: ,(if (corout? (current-corout))
-                                   (corout-id (current-corout))
-                                   (current-corout))
-                         q: ,(map corout-id (queue-list (q)))))
   
   ;; Verify for a return value
   (manage-return-value)
@@ -181,12 +180,13 @@
   ;; Get the next coroutine, if one is available
   (current-corout (dequeue!? (q)))
 
-  #;
-  (pp `(now booting on ,(if (corout? current-corout)
-                            (corout-id current-corout)
-                            current-corout)
-            q: ,(map corout-id (queue-list q))
-            sleep-q: ,(map corout-id (queue-list sleep-q))))
+  ;; Usefull for debug:
+;;   (pp `(corout-scheduler cur: ,(if (corout? (current-corout))
+;;                                    (corout-id (current-corout))
+;;                                    (current-corout))
+;;                          q: ,(map corout-id (queue-list (q)))
+;;                          sleep-q: ,(map corout-id
+;;                                         (map cdr (queue-list (sleep-q))))))
 
   ;; if there is one coroutine, run it, else stop the coroutine
   ;; scheduler.
@@ -200,7 +200,7 @@
    ;; If only sleeping coroutines are left, sleep for a while
    ((not (empty-queue? (sleep-q)))
     (begin
-      (thread-sleep! 0.0001) ; TODO: change this?
+      (thread-sleep! 0.001) ; TODO: change this?
       (current-corout sleeping)
       (corout-scheduler)))
       
@@ -222,6 +222,24 @@
 (define (sem-decrease! sem) (sem-value-set! sem (- (sem-value sem) 1)))
 
 
+;; These internal funcitons by-pass the on-entry/exit process for
+;; internal usange only...
+(define (internal-yield)
+  (call/cc
+   (lambda (k)
+     (corout-kont-set! (current-corout) k)
+     (resume-scheduling))))
+
+(define (internal-sleep-until condition-thunk)
+  (if (not (condition-thunk))
+      (begin
+        (call/cc
+         (lambda (k)
+           (corout-kont-set! (current-corout) k)
+           (enqueue! (sleep-q)
+                     (make-sleep-q-el condition-thunk (current-corout)))
+           (current-corout sleeping)
+           ((return-to-sched) 'asleep))))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -259,13 +277,9 @@
 ;; resume where it left once the scheduler decides to resume it.
 (define (yield)
   (for-each (lambda (f) (f)) (stack->list (corout-on-exit (current-corout))))
-  (call/cc
-   (lambda (k)
-     (corout-kont-set! (current-corout) k)
-     (resume-scheduling)))
+  (internal-yield)
   (for-each (lambda (f) (f))
             (reverse (stack->list (corout-on-entry (current-corout))))))
-
 
 ;; This will yield the work of the scheduler itselft, assuming that
 ;; the scheduler runs inside a coroutine too, i.e. that we are in a
@@ -382,11 +396,15 @@
 ;; event will be resumed when an unlock is performed.
 (define (sem-lock! sem)
   (while (sem-locked? sem)
-         (sleep-until (lambda ()(not (sem-locked? sem)))))
-  (sem-decrease! sem))
+         (internal-sleep-until (lambda ()(not (sem-locked? sem)))))
+  (sem-decrease! sem)
+  #;
+  (pp `(mutex-locked val: ,(sem-value sem))))
 
 (define (sem-unlock! sem)
-  (sem-increase! sem))
+  (sem-increase! sem)
+  #;
+  (pp `(mutex-unlocked val: ,(sem-value sem))))
 
 
 
@@ -634,3 +652,16 @@
                               (lambda () (display "2") (kill-all! 'done))
                               (lambda () (display "OUT-2"))))))
     (simple-boot c0 c1 c2)))
+
+(define-test test-dynamic-corout-extent:cont
+  "IN-00OUT-012" 'done
+  (let* ((t2 (compose-thunks
+              (lambda () (display "2"))
+              (lambda () 'done)))
+         (c0 (new-corout 'c0 (dynamic-corout-extent
+                              (lambda () (display "IN-0"))
+                              (lambda () (display "0")
+                                      (continue-with-thunk! t2))
+                              (lambda () (display "OUT-0")))))
+         (c1 (new-corout 'c1 (lambda () (display "1")))))
+    (simple-boot c0 c1)))

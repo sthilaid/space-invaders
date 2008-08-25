@@ -253,16 +253,33 @@
 ;;;;;;;;;;;;;;;;;;;;;;;; Data Structures ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
-;; (push element stack) -> new stack
+(define (new-stack) (cons '() #f))
+(define stack->list car)
+(define (empty-stack? stack) (null? (stack->list stack)))
+
+;; (push! element stack) -> new stack
+(define (push! el stack)
+  (set-car! stack (cons el (stack->list stack))))
+
 ;; (peek stack)         -> top stack element
-;; (pop stack)          -> new stack
-;; (define make-stack '())
-;; (define push cons)   
-;; (define peek car)    
-;; (define (pop stack)  
-;;   (if (null? stack)
-;;       (error "cannot pop from empty stack")
-;;       (cdr stack)))
+(define (peek stack) (car (stack->list stack)))
+
+;; (pop! stack)          -> Top stack element and modifies the stack data
+(define (pop! stack)
+  (if (empty-stack? stack)
+      (raise 'empty-stack-exception)
+      (let ((top (peek stack)))
+        (set-car! stack (cdr (stack->list stack)))
+        top)))
+
+;; (pop!? stack          -> Top stack element and modifies the stack data
+(define (pop!? stack)
+  (with-exception-catcher
+   (lambda (e) (case e ((empty-stack-exception) #f) (else (raise e))))
+   (lambda () (pop! stack))))
+
+
+
 
 
 ;; Queue implementation

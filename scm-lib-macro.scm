@@ -17,6 +17,13 @@
               ,(if (not (null? false))
                    false)))))
 
+(define-macro (while cond action . actions)
+  (define loop (gensym 'loop))
+  (define condvar (gensym 'condvar))
+  `(let ,loop ((,condvar ,cond))
+        (if ,condvar
+            (begin ,action ,@actions (,loop ,cond)))))
+
 (define-macro (to-string e1 . es)
   `(with-output-to-string "" (lambda () ,e1 ,@es)))
 

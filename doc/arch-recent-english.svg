@@ -1,0 +1,381 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="744.09448819"
+   height="1052.3622047"
+   id="svg2"
+   sodipodi:version="0.32"
+   inkscape:version="0.46"
+   sodipodi:docname="arch-recent-english.svg"
+   inkscape:output_extension="org.inkscape.output.svg.inkscape">
+  <defs
+     id="defs4">
+    <marker
+       inkscape:stockid="Arrow2Lend"
+       orient="auto"
+       refY="0.0"
+       refX="0.0"
+       id="Arrow2Lend"
+       style="overflow:visible;">
+      <path
+         id="path3830"
+         style="font-size:12.0;fill-rule:evenodd;stroke-width:0.62500000;stroke-linejoin:round;"
+         d="M 8.7185878,4.0337352 L -2.2072895,0.016013256 L 8.7185884,-4.0017078 C 6.9730900,-1.6296469 6.9831476,1.6157441 8.7185878,4.0337352 z "
+         transform="scale(1.1) rotate(180) translate(1,0)" />
+    </marker>
+    <marker
+       inkscape:stockid="Arrow2Lstart"
+       orient="auto"
+       refY="0.0"
+       refX="0.0"
+       id="Arrow2Lstart"
+       style="overflow:visible">
+      <path
+         id="path3827"
+         style="font-size:12.0;fill-rule:evenodd;stroke-width:0.62500000;stroke-linejoin:round"
+         d="M 8.7185878,4.0337352 L -2.2072895,0.016013256 L 8.7185884,-4.0017078 C 6.9730900,-1.6296469 6.9831476,1.6157441 8.7185878,4.0337352 z "
+         transform="scale(1.1) translate(1,0)" />
+    </marker>
+    <inkscape:perspective
+       sodipodi:type="inkscape:persp3d"
+       inkscape:vp_x="0 : 526.18109 : 1"
+       inkscape:vp_y="6.1230318e-14 : 1000 : 0"
+       inkscape:vp_z="744.09448 : 526.18109 : 1"
+       inkscape:persp3d-origin="372.04724 : 350.78739 : 1"
+       id="perspective10" />
+  </defs>
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     gridtolerance="10000"
+     guidetolerance="10"
+     objecttolerance="10"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="1"
+     inkscape:cx="273.55306"
+     inkscape:cy="726.50765"
+     inkscape:document-units="px"
+     inkscape:current-layer="layer1"
+     showgrid="false"
+     inkscape:window-width="1280"
+     inkscape:window-height="972"
+     inkscape:window-x="0"
+     inkscape:window-y="26" />
+  <metadata
+     id="metadata7">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <rect
+       style="opacity:1;fill:#ffffd8;fill-opacity:1;fill-rule:nonzero;stroke:#000000;stroke-width:1;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect3211"
+       width="163.34166"
+       height="154.85638"
+       x="136.51498"
+       y="558.29163"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch-recent-2p.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658" />
+    <rect
+       style="opacity:1;fill:#ffffd8;fill-opacity:1;fill-rule:nonzero;stroke:#000000;stroke-width:0.90514201;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect3213"
+       width="273.07361"
+       height="237.55028"
+       x="392.76941"
+       y="516.9447"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch-recent-2p.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658" />
+    <g
+       id="g7714"
+       transform="translate(8.5,329.75004)"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch-recent-2p.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658">
+      <text
+         id="text3219"
+         y="217.66379"
+         x="449.36636"
+         style="font-size:16px;font-style:normal;font-weight:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:Courier"
+         xml:space="preserve"><tspan
+           y="217.66379"
+           x="449.36636"
+           id="tspan3221"
+           sodipodi:role="line">Coroutine-P1</tspan></text>
+    </g>
+    <rect
+       style="fill:#d3ffd3;fill-opacity:1;fill-rule:nonzero;stroke:#000000;stroke-width:1.3289274;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect3215"
+       width="104.23783"
+       height="179.99698"
+       x="406.02844"
+       y="555.52063"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch-recent-2p.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658" />
+    <rect
+       style="fill:#e1eeff;fill-opacity:1;fill-rule:nonzero;stroke:#000000;stroke-width:1.03178823;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect3251"
+       width="87.649452"
+       height="138.56114"
+       x="414.32263"
+       y="584.71838"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch-recent-2p.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658" />
+    <text
+       xml:space="preserve"
+       style="font-size:16px;font-style:normal;font-weight:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:Courier"
+       x="457.0867"
+       y="579.39917"
+       id="text3253"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch-recent-2p.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658"><tspan
+         sodipodi:role="line"
+         id="tspan3255"
+         x="457.0867"
+         y="579.39917">Scheduler</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:16px;font-style:normal;font-weight:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:Courier"
+       x="529.76715"
+       y="506.25256"
+       id="text3287"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch-recent-2p.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658"><tspan
+         sodipodi:role="line"
+         id="tspan3289"
+         x="529.76715"
+         y="506.25256">Thread Gambit: game-loop/scheduler</tspan></text>
+    <path
+       style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;marker-start:url(#Arrow2Lstart);marker-end:url(#Arrow2Lend);stroke-opacity:1"
+       d="M 300.35664,635.71982 L 392.31684,635.71983"
+       id="path3295"
+       inkscape:connector-type="polyline"
+       inkscape:connection-start="#rect3211"
+       inkscape:connection-end="#rect3213"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch-recent-2p.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658" />
+    <path
+       style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;marker-start:url(#Arrow2Lstart);marker-end:url(#Arrow2Lend);stroke-opacity:1"
+       d="M 510.93074,635.71984 L 549.27639,635.71984"
+       id="path7739"
+       inkscape:connector-type="polyline"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch-recent-2p.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658" />
+    <text
+       xml:space="preserve"
+       style="font-size:16px;font-style:normal;font-weight:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:Courier"
+       x="458.35043"
+       y="649.40527"
+       id="text8793"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch-recent-2p.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658"><tspan
+         sodipodi:role="line"
+         id="tspan8795"
+         x="458.35043"
+         y="649.40527">P1 level</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:16px;font-style:normal;font-weight:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:Courier"
+       x="218.12723"
+       y="630.13391"
+       id="text8797"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch-recent-2p.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658"><tspan
+         sodipodi:role="line"
+         id="tspan8799"
+         x="218.12723"
+         y="630.13391">Graphical</tspan><tspan
+         sodipodi:role="line"
+         x="218.12723"
+         y="650.13391"
+         id="tspan2446">Rendering</tspan></text>
+    <g
+       id="g2465"
+       transform="translate(154.35264,330.39238)"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch-recent-2p.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658">
+      <text
+         id="text2467"
+         y="217.66379"
+         x="449.36636"
+         style="font-size:16px;font-style:normal;font-weight:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:Courier"
+         xml:space="preserve"><tspan
+           y="217.66379"
+           x="449.36636"
+           id="tspan2469"
+           sodipodi:role="line">Coroutine-P2</tspan></text>
+    </g>
+    <rect
+       style="fill:#d3ffd3;fill-opacity:1;fill-rule:nonzero;stroke:#000000;stroke-width:1.3289274;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect2471"
+       width="104.23783"
+       height="179.99698"
+       x="551.8811"
+       y="556.16302"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch-recent-2p.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658" />
+    <rect
+       style="fill:#e1eeff;fill-opacity:1;fill-rule:nonzero;stroke:#000000;stroke-width:1.03178823;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect2473"
+       width="87.649452"
+       height="138.56114"
+       x="560.17529"
+       y="585.36072"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch-recent-2p.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658" />
+    <text
+       xml:space="preserve"
+       style="font-size:16px;font-style:normal;font-weight:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:Courier"
+       x="602.93933"
+       y="580.0415"
+       id="text2475"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch-recent-2p.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658"><tspan
+         sodipodi:role="line"
+         id="tspan2477"
+         x="602.93933"
+         y="580.0415">Scheduler</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:16px;font-style:normal;font-weight:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:Courier"
+       x="604.20306"
+       y="650.04761"
+       id="text2479"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch-recent-2p.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658"><tspan
+         sodipodi:role="line"
+         id="tspan2481"
+         x="604.20306"
+         y="650.04761">P2 level</tspan></text>
+    <rect
+       style="opacity:1;fill:#ffffd8;fill-opacity:1;fill-rule:nonzero;stroke:#000000;stroke-width:1;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect2503"
+       width="163.34166"
+       height="154.85638"
+       x="124.96429"
+       y="150.1319"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch-recent-1p.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658" />
+    <rect
+       style="opacity:1;fill:#ffffd8;fill-opacity:1;fill-rule:nonzero;stroke:#000000;stroke-width:0.48533639;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect2505"
+       width="219.49341"
+       height="84.970085"
+       x="382.00879"
+       y="184.57506"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch-recent-1p.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658" />
+    <text
+       xml:space="preserve"
+       style="font-size:16px;font-style:normal;font-weight:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:Courier"
+       x="494.21643"
+       y="162.09282"
+       id="text2521"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch-recent-1p.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658"><tspan
+         sodipodi:role="line"
+         id="tspan2523"
+         x="494.21643"
+         y="162.09282">Thread Gambit: game-loop/scheduler</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:16px;font-style:normal;font-weight:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:Courier"
+       x="206.09607"
+       y="132.09282"
+       id="text2525"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch-recent-1p.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658"><tspan
+         sodipodi:role="line"
+         id="tspan2527"
+         x="206.09607"
+         y="132.09282">Thread Gambit: SDL poll loop</tspan></text>
+    <path
+       style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;marker-start:url(#Arrow2Lstart);marker-end:url(#Arrow2Lend);stroke-opacity:1"
+       d="M 288.80595,227.5601 L 380.76614,227.56009"
+       id="path2529"
+       inkscape:connector-type="polyline"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch-recent-1p.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658" />
+    <text
+       xml:space="preserve"
+       style="font-size:16px;font-style:normal;font-weight:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:Courier"
+       x="484.79974"
+       y="229.24551"
+       id="text2533"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch-recent-1p.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658"><tspan
+         sodipodi:role="line"
+         id="tspan2535"
+         x="484.79974"
+         y="229.24551">P1 level</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:16px;font-style:normal;font-weight:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:Courier"
+       x="206.57654"
+       y="221.97415"
+       id="text2537"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch-recent-1p.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658"><tspan
+         sodipodi:role="line"
+         id="tspan2539"
+         x="206.57654"
+         y="221.97415">Graphical</tspan><tspan
+         sodipodi:role="line"
+         x="206.57654"
+         y="241.97415"
+         id="tspan2541">Rendering</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:16px;font-style:normal;font-weight:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:Courier"
+       x="218.64676"
+       y="506.25256"
+       id="text2565"
+       inkscape:export-filename="/home/dave/projet/maitrise/space-invaders/doc/arch-recent-2p.png"
+       inkscape:export-xdpi="317.6658"
+       inkscape:export-ydpi="317.6658"><tspan
+         sodipodi:role="line"
+         id="tspan2567"
+         x="218.64676"
+         y="506.25256">Thread Gambit: SDL poll loop</tspan></text>
+  </g>
+</svg>

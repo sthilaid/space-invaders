@@ -58,14 +58,13 @@
 \section{Introduction}
 
 \begin{frame}
-  \frametitle{Video games in scheme?}
-  Why would I want to create video games in scheme?
+  \frametitle{Video games in Scheme?}
   \begin{itemize}
   \item Demonstrate the expressiveness of high level languages
-  \item Demonstrate a short development cycle
+  \item Exhibit a short development cycle
   \item Easily \alert{understandable} and \alert{readable} code
-  \item Less bugs
-  \item Expermient video game creation with GC
+  \item Fewer bugs
+  \item Experiment video game creation with GC
   \end{itemize}
 \end{frame}
 
@@ -74,12 +73,12 @@
 
   \begin{columns}[c]
     \begin{column}{7cm} 
-      It's a very simple game but it requires:
+      Very simple game but requires:
       \begin{itemize}
       \item real time user interaction
       \item approx. constant screen refresh rate
-      \item level development
-      \item multiplayer games
+      \item levels
+      \item multiplayer
       \end{itemize}
     \end{column}
     \begin{column}{5cm} \includegraphics[scale=0.5]{medium} \end{column}
@@ -87,13 +86,13 @@
 \end{frame}
 
 \begin{frame}
-  \frametitle{Some mertrics}
+  \frametitle{Some metrics}
 
   \begin{block}{initial development time}
     8 weeks
   \end{block}
 
-  \begin{block}{code size (\# of lines)}
+  \begin{block}{code size (loc)}
     \begin{itemize}
     \item image reader (ppm): 80
     \item coroutines: 200
@@ -122,13 +121,13 @@
 
   \begin{block}{}
   \begin{itemize}
-    \item Usage of gambit's (define-tye ...)
+    \item Use of gambit's (define-type ...)
     \item limited object hierarchy
     \item typechecking and dispatch is \alert{hardcoded} :(
   \end{itemize}
   \end{block}
 
-  \begin{block}{exemple}
+  \begin{block}{example}
     \begin{lstlisting}[basicstyle=\footnotesize]
 (define-type game-object id type pos state color speed 
   extender: define-type-of-game-object)
@@ -152,15 +151,15 @@
   \begin{block}{Discrete event simulation}
     \begin{itemize}
     \item High level expressiveness
-    \item Close to human reasonning
-    \item Readily implemented
+    \item Close to human reasoning
+    \item Quickly implemented
     \end{itemize}
   \end{block}
 \end{frame}
 
 \begin{frame}[fragile]
   \frametitle{Control flow}
-  \begin{block}{Exemple}
+  \begin{block}{Example}
     \begin{lstlisting}[basicstyle=\footnotesize]
 (define (create-mothership-event level)
  (define mothership-event
@@ -181,10 +180,10 @@
 \begin{frame}
   \frametitle{UI and Engine decoupling}
 
-  Both UI and the engine are ran seperatly in gambit threads
+  Both the UI and the engine are run separatly in Gambit threads
   \begin{block}{User Interface}
     \begin{itemize}
-    \item Passive waiting of \texttt{redraw} commands
+    \item Passive waiting on \texttt{redraw} commands
     \item User input callbacks redirected to the engine
     \end{itemize}
   \end{block}
@@ -192,8 +191,8 @@
   \begin{block}{Engine}
     \begin{itemize}
     \item frequently polls the UI for user inputs
-    \item periodically sends \texttt{redraw} commands to UI
-    \item Completely independant of the UI
+    \item periodically sends \texttt{redraw} commands to the UI
+    \item Completely independent from the UI
     \end{itemize}
   \end{block}
 \end{frame}
@@ -203,14 +202,14 @@
 
   \begin{block}{Discrete event simulation semaphores }
     \begin{itemize}
-      \item Event's continuation stored in a waiting queue
+      \item Event's continuation stored in a wait queue
     \end{itemize}
   \end{block}
 
   \begin{block}{\texttt{synchronized-event-thunk} macro}
     \begin{itemize}
-      \item Runs an event inside a fake critical sections
-      \item Makes easy the seperation of what will get paused
+      \item Runs an event inside a ``critical section''
+      \item Allows to easily determine what gets paused
     \end{itemize}
   \end{block}
 
@@ -226,14 +225,14 @@
   \frametitle{Animations}
   \begin{itemize}
   \item Easily represented as recursive events
-  \item Usage of an extra parameter: \alert{continuation} event!
+  \item Extra parameter: \alert{continuation} event!
   \item Good modularity of animation events
   \end{itemize}
 \end{frame}
 
 \begin{frame}[fragile]
   \frametitle{Animations}
-  \begin{block}{Exemple}
+  \begin{block}{Example}
     \begin{lstlisting}[basicstyle=\footnotesize]
 (in 0 (animate-message
            (level-get level 'mother) "=? MYSTERY"
@@ -252,12 +251,12 @@
 \begin{frame}
   \frametitle{Collision detection and response}
 
-  Collision detection and response is integrated into object movement.
+  Integrated into object movement.
 
   \begin{block}{Detection}
     \begin{itemize}
-    \item Rectangle to Rectangle (\textit{bounding-box})
-    \item Point to Rectangle
+    \item Rectangle - Rectangle (\textit{bounding-box})
+    \item Point - Rectangle
     \end{itemize}
   \end{block}
 
@@ -265,7 +264,7 @@
     \begin{itemize}
     \item Based on the colliding object's \alert{type}
     \item Manual dispatch of collision response :(
-    \item Multiple models are used: (objets, point clouds)
+    \item Multiple models are used: (objects, point clouds)
     \end{itemize}
   \end{block}
 \end{frame}
@@ -282,22 +281,21 @@
     \end{itemize}
   \end{block}
 
-  \begin{block}{Usage}
+  \begin{block}{Use}
     \begin{itemize}
     \item Each player runs in its own coroutine
-    \item The \texttt{yield} operation enables to switch between players
+    \item The \texttt{yield} operation enables switching between players
     \item Some events must be pre-scheduled 
     \end{itemize}
   \end{block}
 \end{frame}
 
 \begin{frame}
-  \frametitle{Graphical rendering}
+  \frametitle{Rendering}
   
   \begin{itemize}
-  \item Need to easily render sprites
-  \item Must be able to read and load image files
-  \item Must efficiently render sprites
+  \item Easily and efficiently render sprites
+  \item Read and load image files
   \end{itemize}
 
   \begin{block}{}
@@ -314,27 +312,27 @@
 \end{frame}
 
 \begin{frame}
-  \frametitle{Graphical rendering}
+  \frametitle{Rendering}
   \begin{block}{Idea}
     \begin{itemize}
     \item Combination of smaller semantically related images
     \item Runtime image loading
-    \item Optionnal compile-time image loading
-    \item Usage of opengl textures
+    \item Optional compile-time image loading
+    \item Usage of OpenGL textures
     \end{itemize}
   \end{block}
   
   \begin{block}{Problem}
     \begin{itemize}
-    \item Texture resize is expansive
+    \item Texture resize is expensive
     \end{itemize}
   \end{block}
 \end{frame}
 
 \begin{frame}[fragile]
-  \frametitle{Graphical rendering}
+  \frametitle{Rendering}
 
-  \begin{block}{Exemple}
+  \begin{block}{Example}
     \begin{center}
       \includegraphics[scale=0.2]{font-exemple}
     \end{center}
@@ -353,18 +351,18 @@
 
 \begin{frame}
   \frametitle{Portability}
-  \begin{block}{mac-os portability}
+  \begin{block}{Mac OS X portability}
     \begin{itemize}
-    \item Readily achieved throught the framework system
-    \item Only small makefile tweeks were required
+    \item Readily achieved through the framework system
+    \item Only small makefile tweaks were required
     \end{itemize}
   \end{block}
 
-  \begin{block}{window portability}
+  \begin{block}{Windows portability}
     \begin{itemize}
-    \item Very troublesome! Glut never worked under windows...
-    \item Switched the UI to SDL
-    \item Finally compiled under mingw
+    \item Glut does not work on Windows...
+    \item Migrated the UI to SDL
+    \item Compiled with MinGW
     \end{itemize}
   \end{block}
 \end{frame}
@@ -372,13 +370,13 @@
 \begin{frame}
   \frametitle{Object system and automatic dispatch}
 
-  \begin{block}{Requirements}
+  \begin{block}{Needs}
     \begin{itemize}
+    \item class-wide members
     \item fast member access
-    \item class members
-    \item virtual classes?
     \item multiple dispatch (polymorphism)
-    \item multiple inheritane
+    \item multiple inheritance
+    \item virtual classes?
     \end{itemize}
   \end{block}
 
@@ -389,10 +387,10 @@
 
   \begin{block}{OOPS}
     \begin{itemize}
-    \item Nice and very vast clos-like object system
-    \item Fullfills most of the requirements
+    \item CLOS-like
+    \item Meets most of our needs
     \item Leads to very nice code
-    \item Runs very \alert{slowly} (approx 1-2 FPS)... :(
+    \item \alert{Very slow} (approx 1-2 FPS)... :(
     \end{itemize}
   \end{block}
 
@@ -401,7 +399,7 @@
 \begin{frame}[fragile]
   \frametitle{Object system and automatic dispatch: OOPS}
 
-  \begin{block}{Exemple: Class declarations}
+  \begin{block}{Example: Class declarations}
     \begin{lstlisting}[basicstyle=\tiny]
 (define-class <game-object>      () ( (:id) (:pos) ))
 (define-class <statefull-object> () (:state))
@@ -433,7 +431,7 @@
 \begin{frame}[fragile]
   \frametitle{Object system and automatic dispatch: OOPS}
 
-  \begin{block}{Exemple: Multiple dispatch}
+  \begin{block}{Example: Multiple dispatch}
     \begin{lstlisting}[basicstyle=\scriptsize]
 (define-method (resolve-collision! level (laser <laser>) (player <player>))
   (explode-player! level player)
@@ -459,11 +457,11 @@
 \begin{frame}
   \frametitle{Thread simulation}
 
-  \begin{block}{idea}
+  \begin{block}{Idea}
     \begin{itemize}
     \item Simplify the architecture: Only use coroutines
     \item Must support scheduler \alert{nesting}
-    \item Will hopefully simplify the way events were previously written
+    \item Will hopefully simplify the way events are written
     \end{itemize}
   \end{block}
 \end{frame}
@@ -535,8 +533,8 @@
 
 
 \begin{frame}[fragile]
-  \frametitle{Thread simulation: Usage exemple}
-  \begin{block}{Exemple 1: Animation coroutine}
+  \frametitle{Thread simulation: Usage example}
+  \begin{block}{Example 1: Animation coroutine}
     \begin{lstlisting}[basicstyle=\footnotesize]
 (define (player-explosion-animation level expl-obj duration)
   (define frame-rate 0.1)
@@ -552,8 +550,8 @@
 \end{frame}
 
 \begin{frame}[fragile]
-  \frametitle{Thread simulation: Usage exemple}
-  \begin{block}{Exemple 2: Animation enhanced modularity}
+  \frametitle{Thread simulation: Usage example}
+  \begin{block}{Example 2: Modular animation}
     \begin{lstlisting}[basicstyle=\footnotesize]
 (define (create-animate-score-adv-table level)
   ... some objects creation ...
@@ -596,16 +594,16 @@
 \begin{frame}
   \frametitle{Object system module}
 
-  \begin{block}{Differences}
+  \begin{block}{Wishlist}
     \begin{itemize}
     \item Must be \alert{fast}
-    \item Must support multiple dispatch over generic functions
+    \item Must support multiple dispatch with generic functions
     \item Must lead to better code (multiple inheritance, class
       members and virtual classes would help!)
     \end{itemize}
   \end{block}
 
-  \begin{block}{Schemer's philosophy}
+  \begin{block}{Scheme philosophy}
     \begin{itemize}
     \item If you need something specific and no one else did it
       before, then just do it yourself!
@@ -618,7 +616,7 @@
   \begin{center}
     \includegraphics[scale=0.4]{intro-movie2}
   \end{center}
-  Thank you for listening! I hope you enjoy the game! :D
+  I hope you enjoy the game! :D
 \end{frame}
 
 

@@ -8,8 +8,8 @@
 \usepackage{color, fancyvrb, relsize}
 \usepackage{url, hyperref}
 \usepackage{algorithm, algorithmic, listings}
-\usepackage[francais]{babel}
-\selectlanguage{francais}
+%% \usepackage[francais]{babel}
+%% \selectlanguage{francais}
 
 \newcommand{\<}[1]{\`#1}
 
@@ -32,7 +32,7 @@
 \author{David St-Hilaire}
 \titlegraphic{\includegraphics[scale=0.7]{medium-intro}}
 
-\date{Juin 2008}
+\date{August 27, 2008}
 
 % note: do NOT include a \maketitle line; also note that this title
 % material goes BEFORE the \begin{document}
@@ -58,7 +58,7 @@
 \section{Introduction}
 
 \begin{frame}
-  \frametitle{video games in scheme?}
+  \frametitle{Video games in scheme?}
   Why would I want to create video games in scheme?
   \begin{itemize}
   \item Demonstrate the expressiveness of high level languages
@@ -74,7 +74,7 @@
 
   \begin{columns}[c]
     \begin{column}{7cm} 
-      It's a very simple game but it requires,
+      It's a very simple game but it requires:
       \begin{itemize}
       \item real time user interaction
       \item approx. constant screen refresh rate
@@ -285,7 +285,7 @@
   \begin{block}{Usage}
     \begin{itemize}
     \item Each player runs in its own coroutine
-    \item Use the \texttt{yield} operation to switch between players
+    \item The \texttt{yield} operation enables to switch between players
     \item Some events must be pre-scheduled 
     \end{itemize}
   \end{block}
@@ -362,7 +362,7 @@
 
   \begin{block}{window portability}
     \begin{itemize}
-    \item Very troublesome! Glut never worked on windows...
+    \item Very troublesome! Glut never worked under windows...
     \item Switched the UI to SDL
     \item Finally compiled under mingw
     \end{itemize}
@@ -391,7 +391,7 @@
     \begin{itemize}
     \item Nice and very vast clos-like object system
     \item Fullfills most of the requirements
-    \item Lead to very nice code
+    \item Leads to very nice code
     \item Runs very \alert{slowly} (approx 1-2 FPS)... :(
     \end{itemize}
   \end{block}

@@ -1425,6 +1425,7 @@
                       (choose-color (game-object-pos laser-obj))
                       (make-pos2d 0 0)))
   (level-add-object! level obj)
+  (sleep-for animation-duration)
   (continue-with-thunk! (create-explosion-end! level obj)))
 
 

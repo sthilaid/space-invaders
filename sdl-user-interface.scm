@@ -64,7 +64,8 @@
               (loop (+ i 1) (cdr chars)))))))
 
 (define (render-fontified-sprite sprite-name x y state color)
-  (draw-char (symbol->string sprite-name) color state x y 0))
+  (if (not (eq? color 'black))
+   (draw-char (symbol->string sprite-name) color state x y 0)))
 
 (define (render-message msg-obj)
   (glBlendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA)

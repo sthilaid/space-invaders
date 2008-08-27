@@ -1424,6 +1424,7 @@
                       0
                       (choose-color (game-object-pos laser-obj))
                       (make-pos2d 0 0)))
+  (level-remove-object! level laser-obj)
   (level-add-object! level obj)
   (sleep-for animation-duration)
   (continue-with-thunk! (create-explosion-end! level obj)))
@@ -1801,20 +1802,14 @@
                     (move-object! level player))))
               
              ((p)
-              (if (sem-locked? (level-mutex level)) (pp 'mutex-was-locked))
               (if game-paused?
-                  (begin
-                    (sem-unlock! (level-mutex level))
-                    (pp 'game-unpaused))
-                  (begin
-                   (sem-lock! (level-mutex level))
-                   (pp `(game-paused semval:
-                                     ,(sem-value (level-mutex level))))))
+                  (sem-unlock! (level-mutex level))
+                  (sem-lock! (level-mutex level)))
               (set! game-paused? (not game-paused?)))
 
              ((r)
               (stop-sfx 'all)
-              (kill-all! 'reset))
+              (super-kill-all! 'reset))
 
              ((d) (error "DEBUG"))))
        (sleep-for manager-time-interfal)

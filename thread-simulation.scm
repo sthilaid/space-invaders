@@ -349,6 +349,16 @@
     (restore-state (parent-state))
     (finish-scheduling exit-val)))
 
+;; Kills all schedulers in the currently running scheduler tree and
+;; return exit-val as the exit value of the primordial scheduler.
+(define (super-kill-all! exit-val)
+  ;; first do all the requester actions on exit
+  (while (parent-state)
+    (restore-state (parent-state)))
+  (kill-all! exit-val))
+
+
+
 ;; Will spawn the brother coroutine into the scheduler of the
 ;; currently executing coroutine
 (define (spawn-brother corout)

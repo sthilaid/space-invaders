@@ -1,10 +1,9 @@
 
 (define-macro (init)
-  (eval '(define index 1))
+  (eval '(define desc-index -1))
   (eval '(define class-table (make-table)))
-  (eval '(define (next-index) (set! index (+ index 1)) index))
-  (eval '(define (make-class-descriptor super fields-indices)
-           (cons super fields-indices)))
+  (eval '(define (next-desc-index)
+           (set! desc-index (+ desc-index 1)) desc-index))
   `(begin
      (define runtime-class-table (make-table))))
 
@@ -38,6 +37,8 @@
                                 ,val))
                (gen-setters (cdr field-indices))))))
 
+  ;; field-indices are expected to be sorted from lower index to
+  ;; highest index
   (define (gen-descriptor field-indices)
     (define-macro (instance-index++)
       (define i (gensym 'i))
@@ -46,45 +47,33 @@
          ,i))
     (let ((instance-index 1)
           (desc (make-vector
-                 (+ (cdar (take-right ordered-lst 1)) 1)
+                 (+ (cdar (take-right field-indices 1)) 1)
                  'absent-field)))
       (for-each (lambda (i) (vector-set! desc i (instance-index++)))
-                (map cdr ordered-lst))
+                (map cdr field-indices))
       desc))
-  
+
+  ;; field-indices are expected to be sorted from lower index to
+  ;; highest index
   (define (gen-instantiator field-indices)
     (define obj (gensym 'obj))
-    `(define (,(symbol-append 'make- name) ,@(map car ordered-lst))
-       #;
-       (let ((,obj (make-vector
-       ,(let ((class-desc (table-ref class-table name)))
-       ;; must add one pointer in the instance to
-       ;; point on the runtime class descriptor
-       (+ (vector-ref class-desc
-       (- (vector-length class-desc) 1))
-       1))
-       'unbound)))
-       ;; setup the class-desc pointer into the instance
-       (vector-set! ,obj 0 ',(table-ref class-table name))
-       ,@(map (lambda (var) `(,(gen-setter-name name var) ,obj ,var))
-       (map car field-indices))
-       ,obj)
+    `(define (,(symbol-append 'make- name) ,@(map car field-indices))
        (vector ',(table-ref class-table name)
-               'TODOOOOOOOOOOOOOOOO))))
-
-  (define-macro (indice-comp op)
-      (let ((x (gensym 'x)) (y (gensym 'y)))
-        `(lambda (,x ,y) (,op (cdr ,x) (cdr ,y)))))
+               ,@(map car field-indices))))
 
   (define (sort-field-indices field-indices)
+    (define-macro (indice-comp op)
+      (let ((x (gensym 'x)) (y (gensym 'y)))
+        `(lambda (,x ,y) (,op (cdr ,x) (cdr ,y)))))
     (quick-sort (indice-comp <) (indice-comp =) (indice-comp >)
                 field-indices))
   
   (include "scm-lib.scm")
 
   (let* ((field-indices
-          (sort-field-indices (map (lambda (field) (cons field (next-index)))
-                                   fields)))
+          (sort-field-indices
+           (map (lambda (field) (cons field (next-desc-index)))
+                fields)))
          (class-desc (gen-descriptor field-indices)))
     (table-set! class-table name class-desc)
     `(begin ,@(gen-accessors field-indices)
@@ -93,4 +82,5 @@
             (table-set! runtime-class-table ',class-desc))))
 
 (init)
-(pp (lambda () (define-class A (B C) (x y z)) 'toto))
+(pp (lambda () (define-class A () (a))))
+(pp (lambda () (define-class B (A) (b))))

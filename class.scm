@@ -1,5 +1,3 @@
-(include "scm-lib-macro.scm")
-
 (define-macro (init)
   (eval
    '(begin (define desc-index -1)
@@ -12,7 +10,9 @@
            (define (class-info-fi info) (vector-ref info 0))
            (define (class-info-desc info) (vector-ref info 1)))))
 
-(define-macro (define-class name supers fields)
+(define-macro (define-class name supers fields) 
+  (define temp-field-table (make-table test: eq?))
+  
   (define obj (gensym 'obj))
   (define val (gensym 'val))
   (define (gen-accessor-name class-name var)
@@ -20,6 +20,27 @@
   (define (gen-setter-name class-name var)
     (symbol-append class-name '- var '-set!))
 
+  ;; todo
+;;   ;; puts the fields into the temp table. The class fields MUST be
+;;   ;; processed AFTER that the super class's fields where processed.
+;;   (define (process-fields! fields)
+;;     (let loop ((fields fields) (acc '()))
+;;       (if (not (pair? fields))
+;;           (cond
+;;            ((and (list field)
+;;                  (= (length field) 2)
+;;                  (eq? (car field) slot:))
+;;             (let ((slot-name (cadr field)))
+;;               (if (not (table-ref temp-field-table slot-name #f))
+;;                   (table-set! temp-field-table slot-name (next-desc-index))))
+;;             )
+;;            ((and (list field)
+;;                  (= (length field) 2)
+;;                  (eq? (car field) class-slot:))
+;;             (let ((slot-name (cadr field)))
+;;               (if (not (table-ref temp-field-table slot-name #f))
+;;                   (table-set! temp-field-table slot-name class:)))
+;;             )))))
 
   (define (gen-accessors field-indices)
     (if (not (pair? field-indices))
@@ -72,7 +93,7 @@
         `(lambda (,x ,y) (,op (cdr ,x) (cdr ,y)))))
     (quick-sort (indice-comp <) (indice-comp =) (indice-comp >)
                 field-indices))
-  
+  (include "scm-lib-macro.scm")
   (include "scm-lib.scm")
 
   (let ((temp-field-table (make-table test: eq?)))
@@ -82,8 +103,9 @@
               (cond
                ((table-ref class-table super #f) =>
                 (lambda (i) (class-info-fi i)))
-               (else (error (to-string
-                             (show "Inexistant super class: " super)))))))
+               (else (error
+                      (to-string
+                       (show "Inexistant super class: " super)))))))
          (for-each
           (lambda (field-index)
             (if (not (table-ref temp-field-table (car field-index) #f))
@@ -121,16 +143,19 @@
 
 (let ((obj (make-E 1 2 3 4 5)))
   (pp (A-a obj))
+  (pp (B-a obj))
   (pp (E-a obj))
   (pp (E-e obj)))
 
-(define-class A () (a))
-(define-class B (A) (b))
-(define-class C () (c))
-(define-class D (B C) (a))
+;; (define-class A (B) (a))
+;; ;; (define-class B (A) (b))
+;; ;; (define-class C () (c))
+;; ;; (define-class D (B C) (a))
 
 
-(let ((obj (make-D 1 2 3)))
-  (pp (A-a obj))
-  (pp (D-a obj))
-  (pp (B-a obj)))
+;; (let ((obj (make-A 1)))
+;;   (pp (A-a obj)))
+
+
+;; Idee de syntaxe:
+;; (define-class A (B C) (slot: x) (slot: y) (class-slot: orig))

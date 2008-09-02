@@ -1,3 +1,6 @@
+
+;; Initializes the global define-class macro-expension-time
+;; environnment. This macro must be called
 (define-macro (init)
   (eval
    '(begin (define desc-index -1)
@@ -22,20 +25,15 @@
   (define (class-desc-name)
     (symbol-append name '-class-descriptor))
 
-  (define (make-class-slot index) (cons class: index))
-  (define class-slot-index cdr)
+  (define (make-slot type index) (cons type index))
   (define (is-class-slot? slot-info)
     (and (pair? slot-info)
-         (eq? (car slot-info) class:)
-         (number? (cdr slot-info))))
+         (eq? (car slot-info) class:)))
   (define (is-instance-slot? slot-info)
-    (number? slot-info))
-
-  ;; FIXME: manual dispatch :(
+    (and (pair? slot-info)
+         (eq? (car slot-info) instance:)))
   (define (slot-index slot-info)
-    (cond ((is-class-slot? slot-info) (cdr slot-info))
-          ((is-instance-slot? slot-info) slot-info)
-          (else (error 'invalid-slot-info))))
+    (cdr slot-info))
 
   ;; todo
   ;; puts the fields into the temp table. The class fields MUST be
@@ -49,7 +47,9 @@
         ;; If a field is already provided by a super class
         ;; then the super class's is used ...
         (if (not (table-ref temp-field-table slot-name #f))
-            (table-set! temp-field-table slot-name (next-desc-index)))))
+            (table-set! temp-field-table
+                        slot-name
+                        (make-slot instance: (next-desc-index))))))
      ((and (list? field)         ; FIXME: should this test be removed?
            (= (length field) 2)
            (eq? (car field) class-slot:))
@@ -57,18 +57,18 @@
         (if (not (table-ref temp-field-table slot-name #f))
             (table-set! temp-field-table
                         slot-name
-                        (make-class-slot (next-desc-index))))))))
+                        (make-slot class: (next-desc-index))))))))
 
   (define (gen-accessors field-indices)
     (define (gen-accessor field slot-info)
       (cond
        ((is-class-slot? slot-info)
-        (let ((index (class-slot-index slot-info)))
+        (let ((index (slot-index slot-info)))
           `(define (,(gen-accessor-name name field))
              (vector-ref ,(class-desc-name) ,index))))
 
        ((is-instance-slot? slot-info)
-        (let ((index slot-info))
+        (let ((index (slot-index slot-info)))
           `(define (,(gen-accessor-name name field) ,obj)
              (vector-ref ,obj
                          (vector-ref (vector-ref ,obj 0) ,index)))))))
@@ -84,12 +84,12 @@
     (define (gen-setter field slot-info)
       (cond
        ((is-class-slot? slot-info)
-        (let ((index (class-slot-index slot-info)))
+        (let ((index (slot-index slot-info)))
           `(define (,(gen-setter-name name field) ,val)
              (vector-set! ,(class-desc-name) ,index ,val))))
        
        ((is-instance-slot? slot-info)
-        (let ((index slot-info))
+        (let ((index (slot-index slot-info)))
           `(define (,(gen-setter-name name field) ,obj ,val)
              (vector-set! ,obj
                           (vector-ref (vector-ref ,obj 0) ,index)
@@ -222,3 +222,5 @@
     (display (A-b))
     (display (A-b)))
   'ok)
+
+;; (pp (lambda () (define-class A () (slot: a) (class-slot: b)) 'blu))

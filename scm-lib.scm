@@ -152,6 +152,19 @@
              (else
               (,loop-sym (cdr ,lst-sym) ,extremum-sym)))))))
 
+;; Will return lists of the values resulting in the application of f
+;; to each of the lists members
+;; eg: (map-values (lambda (x y) (values (+ x y) (* x y))) '(1 2 3) '(4 5 6))
+(define (map-values f l . ls)
+    (if (not (pair? l))
+        'dummy
+        (receive (v1 . vs) (apply f (map car (cons l ls)))
+          (receive (v1s . vss) (apply map-values f (map cdr (cons l ls)))
+            (apply values (map cons (cons v1 vs)
+                               (if (pair? (cdr l))
+                                   (cons v1s vss)
+                                   (map (lambda (x) '()) (cons v1 vs)))))))))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;; Math stuff ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -5,13 +5,24 @@
   (eval
    '(begin (define desc-index -1)
            (define class-table (make-table test: eq?))
+           (define meth-table (make-table test: eq?))
            (define (next-desc-index)
              (set! desc-index (+ desc-index 1))
              desc-index)
            (define (make-class-info field-indices descriptor)
              (vector field-indices descriptor))
            (define (class-info-fi info) (vector-ref info 0))
-           (define (class-info-desc info) (vector-ref info 1)))))
+           (define (class-info-desc info) (vector-ref info 1))
+           (define (meth-name sign) (if (not (list? sign))
+                                        (error 'bad-signature-syntax)
+                                        (car sign)))
+           (define any-type 'any-type)
+           (define (gen-method-desc-name sign)
+             (define (symbol-append s1 . ss)
+               (string->symbol (apply string-append
+                                      (symbol->string s1)
+                                      (map symbol->string ss))))
+             (symbol-append (meth-name sign) '-meth-desc)))))
 
 (define-macro (define-class name supers . fields) 
   (define temp-field-table (make-table test: eq?))
@@ -142,6 +153,7 @@
                               (slot-index (cdr ,y))))))
     (quick-sort (indice-comp <) (indice-comp =) (indice-comp >)
                 field-indices))
+
   (include "scm-lib-macro.scm")
   (include "scm-lib.scm")
 
@@ -180,6 +192,54 @@
             ,@(gen-setters field-indices)
             ,(gen-instantiator field-indices))))
 
+(define-macro (define-generic signature)
+  (define name (gen-method-desc-name signature))
+  (table-set! meth-table name #t)
+  `(define ,name (make-table test: equal?)))
+
+;; FIXME: VERY BAD object verification..
+(define-macro (get-class obj)
+  `(if (and (vector? obj) (vector? (vector-ref obj 0)))
+       (vector-ref obj 0)
+       any-type))
+
+(define-macro (define-method signature bod . bods)
+  (define (name) (meth-name signature))
+  (define (method-descriptor-name) (gen-method-desc-name signature))
+  (define unknown-meth-error 'unknown-meth)
+  (define (parse-arg arg)
+    (cond ((and (list? arg) (symbol? (car arg)) (symbol? (cadr arg)))
+           (let ((var (car arg))
+                 (class (table-ref class-table (cadr arg))))
+            (values var class)))
+          (else (values arg any-type))))
+  ;; Returns 2 values: the ordrered list of arguments and the ordered
+  ;; list of their types.
+  (define (parse-args args) (map-values parse-arg args))
+  (include "scm-lib-macro.scm")
+  (include "scm-lib.scm")
+  
+  (with-exception-catcher
+   (lambda (e)
+     (pp `(received error: ,e))
+     (if (eq? e unknown-meth-error)
+         (error (to-string (show "Generic method was not defined: " (name))))
+         (raise e)))
+   (lambda ()
+     (if (not (table-ref meth-table (method-descriptor-name) #f))
+         (raise unknown-meth-error)
+         `(begin
+            ,@(receive (args types) (parse-args (cdr signature))
+                (list `(define (,(name) ,@args)
+                         ((table-ref ,(method-descriptor-name)
+                                     ,types)
+                          ,@args))
+                      `(table-set! ,(method-descriptor-name)
+                                   ,types
+                                   (lambda ,args ,bod ,@bods)))))))))
+
+(init)
+
 
 
 ;;; Runtime stuff ;;;
@@ -188,7 +248,7 @@
 (load "scm-lib.scm")
 (load "test.scm")
 
-(init)
+
 
 (define-test simple-instance-slots "aaabbccdde" 'ok
   (define-class A ()      (slot: a))
@@ -221,6 +281,17 @@
     (A-b-set! 4)
     (display (A-b))
     (display (A-b)))
+  'ok)
+
+(define-test test-generic "10dix" 'ok
+  (define-class A () (slot: a))
+  (define-class B () (slot: b))
+  (define-generic (test obj))
+  (define-method (test (a A)) (number->string (A-a a)))
+  (define-method (test (b B)) (symbol->string (B-b b)))
+
+  (display (test (make-A 10)))
+  (display (test (make-B 'dix)))
   'ok)
 
 ;; (pp (lambda () (define-class A () (slot: a) (class-slot: b)) 'blu))

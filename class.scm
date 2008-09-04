@@ -3,31 +3,37 @@
 ;; environnment. This macro must be called
 (define-macro (init)
   (eval
-   '(begin (define desc-index -1)
-           (define class-table (make-table test: eq?))
-           (define meth-table (make-table test: eq?))
-           (define (next-desc-index)
-             (set! desc-index (+ desc-index 1))
-             desc-index)
-           (define (make-class-info field-indices descriptor)
-             (vector field-indices descriptor))
-           (define (class-info-fi info) (vector-ref info 0))
-           (define (class-info-desc info) (vector-ref info 1))
-           (define (meth-name sign) (if (not (list? sign))
-                                        (error 'bad-signature-syntax)
-                                        (car sign)))
-           (define any-type 'any-type)
-           (define (gen-method-desc-name sign)
-             (define (symbol-append s1 . ss)
-               (string->symbol (apply string-append
-                                      (symbol->string s1)
-                                      (map symbol->string ss))))
-             (symbol-append (meth-name sign) '-meth-desc))
+   '(begin
+      ;; starts to 2 because 0/1 are reserved for the class id and supers
+      (define desc-index 1) 
+      (define class-table (make-table test: eq?))
+      (define meth-table (make-table test: eq?))
+      (define (next-desc-index)
+        (set! desc-index (+ desc-index 1))
+        desc-index)
+      (define (make-class-info field-indices descriptor)
+        (vector field-indices descriptor))
+      (define (class-info-fi info) (vector-ref info 0))
+      (define (class-info-desc info) (vector-ref info 1))
+      (define (meth-name sign) (if (not (list? sign))
+                                   (error 'bad-signature-syntax)
+                                   (car sign)))
+      (define any-type 'any-type)
+      (define (gen-method-desc-name sign)
+        (define (symbol-append s1 . ss)
+          (string->symbol (apply string-append
+                                 (symbol->string s1)
+                                 (map symbol->string ss))))
+        (symbol-append (meth-name sign) '-meth-desc))
 
-           (define make-class-desc vector)
-           (define (class-desc-id desc) (vector-ref desc 0))
-           (define (class-desc-supers desc) (vector-ref desc 1))
-           (define (class-desc-indices-vect desc) (vector-ref desc 2)))))
+      (define (make-class-desc id supers num-fields)
+        (let ((desc (make-vector (+ num-fields 2) 'unknown-slot)))
+          (vector-set! desc 0 id)
+          (vector-set! desc 1 supers)
+          desc))
+      (define (class-desc-id desc) (vector-ref desc 0))
+      (define (class-desc-supers desc) (vector-ref desc 1))
+      (define (class-desc-indices-vect desc) (vector-ref desc 2)))))
 
 (define-macro (define-class name supers . fields) 
   (define temp-field-table (make-table test: eq?))
@@ -81,15 +87,13 @@
        ((is-class-slot? slot-info)
         (let ((index (slot-index slot-info)))
           `(define (,(gen-accessor-name name field))
-             (vector-ref (class-desc-indices-vect
-                          ,(class-desc-name)) ,index))))
+             (vector-ref ,(class-desc-name) ,index))))
 
        ((is-instance-slot? slot-info)
         (let ((index (slot-index slot-info)))
           `(define (,(gen-accessor-name name field) ,obj)
              (vector-ref ,obj
-                         (vector-ref (class-desc-indices-vect
-                                      (vector-ref ,obj 0)) ,index)))))))
+                         (vector-ref (vector-ref ,obj 0) ,index)))))))
     ;; Generate a list of all the accesssors
     (if (not (pair? field-indices))
         '()
@@ -104,15 +108,13 @@
        ((is-class-slot? slot-info)
         (let ((index (slot-index slot-info)))
           `(define (,(gen-setter-name name field) ,val)
-             (vector-set! (class-desc-indices-vect
-                           ,(class-desc-name)) ,index ,val))))
+             (vector-set! ,(class-desc-name) ,index ,val))))
        
        ((is-instance-slot? slot-info)
         (let ((index (slot-index slot-info)))
           `(define (,(gen-setter-name name field) ,obj ,val)
              (vector-set! ,obj
-                          (vector-ref (class-desc-indices-vect
-                                       (vector-ref ,obj 0)) ,index)
+                          (vector-ref (vector-ref ,obj 0) ,index)
                           ,val))))))
     ;; Generate a list of all the setters
     (if (not (pair? field-indices))
@@ -131,12 +133,11 @@
          (set! instance-index (+ instance-index 1))
          ,i))
     (let* ((instance-index 1)
-           (indice-vect
-            (make-vector
-             (+ (slot-index (cdar (take-right field-indices 1))) 1)
-             'absent-field))
-           (desc (make-class-desc (gensym name) supers indice-vect)))
-      (for-each (lambda (i) (vector-set! indice-vect i (instance-index++)))
+           (desc (make-class-desc (gensym name) supers
+                                  (+ (slot-index
+                                      (cdar (take-right field-indices 1)))
+                                     1))))
+      (for-each (lambda (i) (vector-set! desc i (instance-index++)))
                 (map (lambda (field-index) (slot-index (cdr field-index)))
                      field-indices))
       desc))

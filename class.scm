@@ -22,7 +22,9 @@
                (string->symbol (apply string-append
                                       (symbol->string s1)
                                       (map symbol->string ss))))
-             (symbol-append (meth-name sign) '-meth-desc)))))
+             (symbol-append (meth-name sign) '-meth-desc))
+
+           (define-type class-desc id supers indices-table))))
 
 (define-macro (define-class name supers . fields) 
   (define temp-field-table (make-table test: eq?))
@@ -230,13 +232,13 @@
          (raise unknown-meth-error)
          `(begin
             ,@(receive (args types) (parse-args (cdr signature))
-                (list `(define (,(name) ,@args)
-                         ((table-ref ,(method-descriptor-name)
-                                     ,types)
-                          ,@args))
-                      `(table-set! ,(method-descriptor-name)
-                                   ,types
-                                   (lambda ,args ,bod ,@bods)))))))))
+                       (list `(define (,(name) ,@args)
+                                ((table-ref ,(method-descriptor-name)
+                                            ',types)
+                                 ,@args))
+                             `(table-set! ,(method-descriptor-name)
+                                          ',types
+                                          (lambda ,args ,bod ,@bods)))))))))
 
 (init)
 
@@ -287,11 +289,11 @@
   (define-class A () (slot: a))
   (define-class B () (slot: b))
   (define-generic (test obj))
-  (define-method (test (a A)) (number->string (A-a a)))
-  (define-method (test (b B)) (symbol->string (B-b b)))
+;;   (define-method (test (a A)) (number->string (A-a a)))
+;;   (define-method (test (b B)) (symbol->string (B-b b)))
 
-  (display (test (make-A 10)))
-  (display (test (make-B 'dix)))
+;;   (display (test (make-A 10)))
+;;   (display (test (make-B 'dix)))
   'ok)
 
 ;; (pp (lambda () (define-class A () (slot: a) (class-slot: b)) 'blu))

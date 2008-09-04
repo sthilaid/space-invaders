@@ -19,12 +19,16 @@
                                    (error 'bad-signature-syntax)
                                    (car sign)))
       (define any-type 'any-type)
-      (define (gen-method-desc-name sign)
-        (define (symbol-append s1 . ss)
+
+      (define (symbol-append s1 . ss)
           (string->symbol (apply string-append
                                  (symbol->string s1)
                                  (map symbol->string ss))))
+      (define (gen-method-desc-name sign)
         (symbol-append (meth-name sign) '-meth-desc))
+
+      (define (gen-method-table-name name)
+        (symbol-append name '-meth-table))
 
       (define (make-class-desc id supers num-fields)
         (let ((desc (make-vector (+ num-fields 2) 'unknown-slot)))
@@ -205,9 +209,21 @@
             ,(gen-instantiator field-indices))))
 
 (define-macro (define-generic signature)
-  (define name (gen-method-desc-name signature))
+  (define name (meth-name signature))
+  (define (parse-arg arg)
+    (cond ((and (list? arg) (symbol? (car arg)) (symbol? (cadr arg)))
+           (car arg))
+          (else arg)))
+  (define (args) (map parse-arg (cdr signature)))
   (table-set! meth-table name #t)
-  `(define ,name (make-table test: equal?)))
+  `(begin
+     (define ,(gen-method-table-name name) (make-table test: equal?))
+     (define (,name ,@(args))
+       (define (get-types arg)
+         (class-desc-id (vector-ref arg 0)))
+       (let ((types (map get-types (list ,@(args)))))
+         ((table-ref ,(gen-method-table-name name) types)
+          ,@(args))))))
 
 ;; FIXME: VERY BAD object verification..
 (define-macro (get-class obj)
@@ -217,7 +233,6 @@
 
 (define-macro (define-method signature bod . bods)
   (define (name) (meth-name signature))
-  (define (method-descriptor-name) (gen-method-desc-name signature))
   (define unknown-meth-error 'unknown-meth)
   (define (parse-arg arg)
     (cond ((and (list? arg) (symbol? (car arg)) (symbol? (cadr arg)))
@@ -240,17 +255,14 @@
          (error (to-string (show "Generic method was not defined: " (name))))
          (raise e)))
    (lambda ()
-     (if (not (table-ref meth-table (method-descriptor-name) #f))
+     (if (not (table-ref meth-table (name) #f))
          (raise unknown-meth-error)
          `(begin
-            ,@(receive (args types) (parse-args (cdr signature))
-                       (list `(define (,(name) ,@args)
-                                ((table-ref ,(method-descriptor-name)
-                                            ',types)
-                                 ,@args))
-                             `(table-set! ,(method-descriptor-name)
-                                          ',types
-                                          (lambda ,args ,bod ,@bods)))))))))
+            ,(receive (args types) (parse-args (cdr signature))
+                      `(table-set! ,(gen-method-table-name
+                                     (name))
+                                   ',types
+                                   (lambda ,args ,bod ,@bods))))))))
 
 (init)
 

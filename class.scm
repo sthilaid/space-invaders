@@ -37,7 +37,12 @@
           desc))
       (define (class-desc-id desc) (vector-ref desc 0))
       (define (class-desc-supers desc) (vector-ref desc 1))
-      (define (class-desc-indices-vect desc) (vector-ref desc 2)))))
+      (define (class-desc-indices-vect desc) (vector-ref desc 2))
+
+      (define make-method vector) ; (make-method id types body)
+      (define (method-id meth) (vector-ref meth 0))
+      (define (method-types meth) (vector-ref meth 1))
+      (define (method-body meth) (vector-ref meth 2)))))
 
 (define-macro (define-class name supers . fields) 
   (define temp-field-table (make-table test: eq?))
@@ -215,7 +220,7 @@
            (car arg))
           (else arg)))
   (define (args) (map parse-arg (cdr signature)))
-  (table-set! meth-table name #t)
+  (table-set! meth-table name '()) ; <- wouldnt work in lisp hehe
   `(begin
      (define ,(gen-method-table-name name) (make-table test: equal?))
      (define (,name ,@(args))
@@ -226,10 +231,10 @@
           ,@(args))))))
 
 ;; FIXME: VERY BAD object verification..
-(define-macro (get-class obj)
-  `(if (and (vector? obj) (vector? (vector-ref obj 0)))
-       (vector-ref obj 0)
-       any-type))
+;; (define-macro (get-class obj)
+;;   `(if (and (vector? obj) (vector? (vector-ref obj 0)))
+;;        (vector-ref obj 0)
+;;        any-type))
 
 (define-macro (define-method signature bod . bods)
   (define (name) (meth-name signature))
@@ -255,14 +260,28 @@
          (error (to-string (show "Generic method was not defined: " (name))))
          (raise e)))
    (lambda ()
-     (if (not (table-ref meth-table (name) #f))
-         (raise unknown-meth-error)
-         `(begin
-            ,(receive (args types) (parse-args (cdr signature))
-                      `(table-set! ,(gen-method-table-name
-                                     (name))
-                                   ',types
-                                   (lambda ,args ,bod ,@bods))))))))
+     (cond
+      ((table-ref meth-table (name) #f) =>
+       (lambda (current-meth-data)
+         (receive (args types) (parse-args (cdr signature))
+          (table-set! meth-table
+                      (name)
+                      (cons (make-method (name) types
+                                         `(lambda ,args ,bod ,@bods))
+                            current-meth-data))
+          `(table-set! ,(gen-method-table-name (name))
+                       ',types
+                       (lambda ,args ,bod ,@bods)))))
+           (else (raise unknown-meth-error))))))
+
+(define-macro (polymorphize-methods!)
+  (define (is-subclass? class-id super-id)
+    (or (eq? class-id super-id)
+        (exists (lambda (class-super) (is-subclass? class-super super-id))
+                (class-super (class-info-desc
+                              (table-ref class-table class-id))))))
+  (define (find-sub-classes class-id)
+    ))
 
 (init)
 
@@ -309,15 +328,15 @@
     (display (A-b)))
   'ok)
 
-(define-test test-generic "10dix" 'ok
+(define-test test-generic-simple "10dix" 'ok
   (define-class A () (slot: a))
   (define-class B () (slot: b))
   (define-generic (test obj))
-;;   (define-method (test (a A)) (number->string (A-a a)))
-;;   (define-method (test (b B)) (symbol->string (B-b b)))
+  (define-method (test (a A)) (number->string (A-a a)))
+  (define-method (test (b B)) (symbol->string (B-b b)))
 
-;;   (display (test (make-A 10)))
-;;   (display (test (make-B 'dix)))
+  (display (test (make-A 10)))
+  (display (test (make-B 'dix)))
   'ok)
 
 ;; (pp (lambda () (define-class A () (slot: a) (class-slot: b)) 'blu))

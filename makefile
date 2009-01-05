@@ -38,6 +38,11 @@ PATH_TO_GAMBIT=/usr/local/Gambit-C/current
 GAMBIT_LIB=$(PATH_TO_GAMBIT)/lib
 GAMBIT_INCLUDE=$(PATH_TO_GAMBIT)/include
 
+## Some scheme libraries paths
+OOSYSYEM_PATH=$(HOME)/diro/ift6232/class
+SCMLIB_PATH=$(HOME)/projet/maitrise/scm-lib
+
+
 ## Default options
 UI=sdl
 OS=linux
@@ -194,7 +199,7 @@ user-interface.c: user-interface.scm scm-lib-macro.scm opengl-header.scm
 sdl-user-interface.c: sdl-user-interface.scm scm-lib-macro.scm opengl-header.scm
 	$(GSC) -c sdl-user-interface.scm 
 
-engine.c: engine.scm thread-simulation-macro.scm 
+engine.c: engine.scm thread-simulation-macro.scm class.scm
 	$(GSC) -c engine.scm
 
 
@@ -207,6 +212,17 @@ glu.c: glu.scm glu-header.scm
 
 glut.c: glut.scm glut-header.scm
 	$(GSC) -c glut.scm
+
+
+# External Scheme library dependencies
+class.scm: $(OOSYSYEM_PATH)/class.scm
+	cp $(OOSYSYEM_PATH)/class.scm .
+
+scm-lib.scm: $(SCMLIB_PATH)/scm-lib.scm
+	cp $(SCMLIB_PATH)/scm-lib.scm .
+
+scm-lib-macro.scm: $(SCMLIB_PATH)/scm-lib-macro.scm
+	cp $(SCMLIB_PATH)/scm-lib-macro.scm .
 
 
 ## General build instructions

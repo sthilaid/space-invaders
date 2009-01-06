@@ -55,6 +55,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (include "class.scm")
+(set-manual-method-developpement!)
+
 (include "thread-simulation-macro.scm")
 
 ;;*****************************************************************************
@@ -178,12 +180,31 @@
 (define (inverse-dir dir . options)
   (let ((x-fact (if (memq 'x options) -1 1))
         (y-fact (if (memq 'y options) -1 1)))
-    (make-pos2d (* x-fact (pos2d-x dir))
-               (* y-fact (pos2d-y dir)))))
+    (make-point (* x-fact (point-x dir))
+               (* y-fact (point-y dir)))))
 
 
 ;;;; Rectangle structure used in collision detection ;;;;
-(define-type rect x y width height)
+(define-class point () (slot: x) (slot: y))
+(define-class rect (point) (slot: width) (slot: height))
+
+;; these are translation of the pos2d lib from scm-lib into oo
+(define (point-add p1 p2) (make-point (+ (point-x p1) (point-x p2))
+                                      (+ (point-y p1) (point-y p2))))
+(define (point-sub p1 p2) (make-point (- (point-x p1) (point-x p2))
+                                      (- (point-y p1) (point-y p2))))
+(define (point-scalar-prod p1 p2)
+  (+ (* (point-x p1) (point-x p2)) (* (point-y p1) (point-y p2))))
+(define (point-cartesian-distance p1 p2)
+  (sqrt (+ (expt (- (point-x p1) (point-x p2)) 2)
+           (expt (- (point-y p1) (point-y p2)) 2))))
+
+(define (point-complexify p) (make-rectangular (point-x p) (point-y p)))
+
+(define (point= p1 p2)
+  (and (= (point-x p1) (point-x p2))
+       (= (point-y p1) (point-y p2))))
+
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -191,8 +212,16 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;; General game object description ;;;;
-(define-type game-object id type pos state color speed
-  extender: define-type-of-game-object)
+(define-class game-object ()
+  (slot: id)
+  (slot: pos)
+  (slot: state)
+  (slot: color)
+  (slot: speed)
+  (class-slot: sprite-id)
+  (class-slot: bbox)
+  (class-slot: state-num)
+  (class-slot: score-value))
 
 (define (cycle-state! obj)
   (define current-state (game-object-state obj))
@@ -202,12 +231,10 @@
                    (object-type-state-num (game-object-type obj))))))
 
 (define (get-bounding-box obj)
-  (make-rect (+ (pos2d-x (game-object-pos obj))
-                (rect-x (object-type-bbox (game-object-type obj))))
-             (+ (pos2d-y (game-object-pos obj))
-                (rect-y (object-type-bbox (game-object-type obj))))
-             (type-width (game-object-type obj))
-             (type-height (game-object-type obj))))
+  (make-rect (+ (point-x (game-object-pos obj)) (rect-x (object-bbox obj)))
+             (+ (point-y (game-object-pos obj)) (rect-y (object-bbox obj)))
+             (type-width obj)
+             (type-height obj)))
 
 ;; In function of a certain coordinate, will choose the appropriate
 ;; color for the object (red if in the upper-screen, white in the
@@ -217,7 +244,7 @@
         (normal-bottom (- screen-max-y 201))
         (green-bottom (- screen-max-y 259)))
     (lambda (pos)
-      (let ((y (pos2d-y pos)))
+      (let ((y (point-y pos)))
         (cond 
          ((> y red-bottom) 'red)
          ((> y normal-bottom) 'white)
@@ -229,78 +256,77 @@
 ;; Other object derived types
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;;;; Specific game object descriptions ;;;;
-(define-type-of-game-object invader-ship row col)
-(define-type-of-game-object player-ship)
-(define-type-of-game-object mothership)
-(define-type-of-game-object laser-obj)
-(define-type-of-game-object shield particles)
-(define-type-of-game-object message-obj text)
+(define-macro (setup-static-fields! class-name
+                                    sprite-id bbox state-num score-value)
+  (begin
+    `(,(symbol-append class-name '-sprite-id-set!)   ,sprite-id)
+    `(,(symbol-append class-name '-bbox-set!)        ,bbox)
+    `(,(symbol-append class-name '-state-num-set!)   ,state-num)
+    `(,(symbol-append class-name '-score-value-set!) ,score-value)))
 
+;;;; Specific game object descriptions ;;;;
+
+;; Evil Invaders!
+(define-class invader-ship (game-object) (slot: row) (slot: col))
+(define-class easy-invader   (invader-ship))
+(define-class medium-invader (invader-ship))
+(define-class hard-invader   (invader-ship))
+(setup-static-fields! easy-invader 'easy (make-rect 0 0 12 8) 2 10)
+(setup-static-fields! medium-invader 'medium (make-rect 0 0 12 8) 2 20)
+(setup-static-fields! hard-invader 'hard (make-rect 0 0 12 8) 2 30)
+
+
+(define-class player-ship  (game-object))
+(setup-static-fields! player-ship 'player (make-rect 0 0 13 8) 1 0)
+
+(define-class mothership   (game-object))
+(setup-static-fields! mothership 'mothership (make-rect 0 0 16 7) 1 100)
+
+(define-class laser-obj    (game-object))
+(define-class laserA         (laser-obj))
+(define-class laserB         (laser-obj))
+(define-class laserC         (laser-obj))
+(define-class player_laser   (laser-obj))
+(setup-static-fields! laserA 'laserA (make-rect 1 0 1 7) 6 0)
+(setup-static-fields! laserB 'laserB (make-rect 1 0 1 7) 8 0)
+(setup-static-fields! laserC 'laserC (make-rect 1 0 1 7) 4 0)
+(setup-static-fields! player_laser 'player_laser (make-rect 0 0 1 7) 1 0)
+
+(define-class shield       (game-object) (slot: particles))
+(setup-static-fields! shield 'shield (make-rect 0 0 22 16) 1 0)
+
+(define-class explosion    (game-object))
+(define-class invader_explosion       (explosion))
+(define-class invader_laser_explosion (explosion))
+(define-class player_explosion        (explosion))
+(define-class player_laser_explosion  (explosion))
+(define-class mothership_explosion    (explosion))
+(setup-static-fields!
+ invader_explosion 'invader_explosion (make-rect 0 0 13 8) 1 0)
+(setup-static-fields!
+ invader_laser_explosion 'invader_laser_explosion (make-rect 0 0 6 8) 1 0)
+(setup-static-fields!
+ player_explosion 'player_explosion (make-rect 0 0 16 8) 2 0)
+(setup-static-fields! 
+ player_laser_explosion 'player_laser_explosion (make-rect 0 0 8 8) 1 0)
+(setup-static-fields!
+ mothership_explosion 'mothership_explosion (make-rect 0 0 21 8) 1 0)
+
+(define-class message-obj  (game-object) (slot: text))
+(setup-static-fields! message-obj 'message (make-rect 0 0 0 0) 0 0)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Object types
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; FIXME: to remove!
+
 ;;;; object type definition ;;;;
 (define-type object-type id bbox state-num score-value)
-(define type-id object-type-id)
-(define (type-height t) (rect-height (object-type-bbox t)))
-(define (type-width t) (rect-width (object-type-bbox t)))
+(define type-id object-sprite-id)
+(define (type-height t) (rect-height (object-bbox t)))
+(define (type-width t) (rect-width (object-bbox t)))
 
-;; Global associative list of all object types
-(define types
-  ;; Bounding boxes for all ship types must be equal such that they
-  ;; behave the same way in the level.
-  `( (easy ,(make-object-type 'easy (make-rect 0 0 12 8) 2 10))
-     (medium ,(make-object-type 'medium (make-rect 0 0 12 8) 2 20))
-     (hard ,(make-object-type 'hard (make-rect 0 0 12 8) 2 30))
-     (mothership ,(make-object-type 'mothership (make-rect 0 0 16 7) 1 100))
-     (player ,(make-object-type 'player (make-rect 0 0 13 8) 1 0))
-     ;; Little bounding box hack here to facilitate the laser
-     ;; penetration into shields.
-     (laserA ,(make-object-type 'laserA (make-rect 1 0 1 7) 6 0))
-     (laserB ,(make-object-type 'laserB (make-rect 1 0 1 7) 8 0))
-     (laserC ,(make-object-type 'laserC (make-rect 1 0 1 7) 4 0))
-     (player_laser
-      ,(make-object-type 'player_laser (make-rect 0 0 1 7) 1 0))
-     (shield ,(make-object-type 'shield (make-rect 0 0 22 16) 1 0))
-     (invader_explosion
-      ,(make-object-type 'invader_explosion (make-rect 0 0 13 8) 1 0))
-     (invader_laser_explosion
-      ,(make-object-type 'invader_laser_explosion (make-rect 0 0 6 8) 1 0))
-     (player_laser_explosion
-      ,(make-object-type 'player_laser_explosion (make-rect 0 0 8 8) 1 0))
-     (player_explosion
-      ,(make-object-type 'player_explosion (make-rect 0 0 16 8) 2 0))
-     (mothership_explosion
-      ,(make-object-type 'mothership_explosion (make-rect 0 0 21 8) 1 0))
-     (message ,(make-object-type 'message (make-rect 0 0 0 0) 0 0))
-   ))
-
-(define (get-type type-name)
-  (let ((type (assq type-name types)))
-  (if type
-      (cadr type)
-      (error (string-append "no such type: " (symbol->string type-name))))))
-
-(define (get-type-id obj)
-  (cond ((game-object? obj)
-         (object-type-id (game-object-type obj)))
-        ((wall-struct? obj) 'wall)
-        (else (error "unknown object type"))))
-
-;; Returns #t only if the type-id corresponds to an explosion
-(define (is-explosion? type-id)
-  (case type-id
-    ((invader_laser_explosion
-      player_laser_explosion invader_explosion player_explosion) #t)
-    (else #f)))
-
-(define (get-object-score-value obj)
-  (object-type-score-value (game-object-type obj)))
-      
-      
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -323,14 +349,14 @@
 ;; specified invader's bounding box. This is used with the
 ;; invader-shield collision resolution.
 (define (invader-ship-particles inv)
-  (define height (type-height (game-object-type inv)))
-  (define width (type-width (game-object-type inv)))
+  (define height (type-height inv))
+  (define width (type-width inv))
   (let loop-y ((y 0) (acc '()))
     (if (< y height)
         (loop-y (+ y 1)
                 (append (let loop-x ((x 0) (acc '()))
                           (if (< x width)
-                              (loop-x (+ x 1) (cons (make-pos2d x y) acc))
+                              (loop-x (+ x 1) (cons (make-point x y) acc))
                               acc))
                         acc))
         acc)))
@@ -346,42 +372,36 @@
 (define (get-laser-penetration-pos laser-obj)
   (let* ((delta 2)
          (pos (game-object-pos laser-obj))
-         (dy (pos2d-y (game-object-speed laser-obj)))
+         (dy (point-y (game-object-speed laser-obj)))
          (delta-vect 
-          (cond ((< dy 0) (make-pos2d 0 (- delta)))
-                ((> dy 0) (make-pos2d 0 delta))
-                (else (make-pos2d 0 0)))))
-    (pos2d-add pos delta-vect)))
+          (cond ((< dy 0) (make-point 0 (- delta)))
+                ((> dy 0) (make-point 0 delta))
+                (else (make-point 0 0)))))
+    (point-add pos delta-vect)))
 
 
 ;;;; Shields ;;;;
 (define (generate-shields)
-  (define shield-type (get-type 'shield))
-  (define speed (make-pos2d 0 0))
+  (define speed (make-point 0 0))
   (define (generate-particles)
       (rgb-pixels-to-boolean-point-list
        (parse-ppm-image-file "sprites/shield0.ppm")
        rgb-threshold?))
 
-  (list (make-shield 'shield1 shield-type (make-pos2d  36 40) 0 'green
+  (list (make-shield 'shield1 (make-point  36 40) 0 'green
                      speed (generate-particles))
-        (make-shield 'shield2 shield-type (make-pos2d  81 40) 0 'green
+        (make-shield 'shield2 (make-point  81 40) 0 'green
                      speed (generate-particles))
-        (make-shield 'shield3 shield-type (make-pos2d 126 40) 0 'green
+        (make-shield 'shield3 (make-point 126 40) 0 'green
                      speed (generate-particles))
-        (make-shield 'shield4 shield-type (make-pos2d 171 40) 0 'green
+        (make-shield 'shield4 (make-point 171 40) 0 'green
                      speed (generate-particles))))
 
 ;; Get particle cloud associated with a certain colliding object.
 (define (get-explosion-particles colliding-obj)
-  (let ((type-id (type-id (game-object-type colliding-obj))))
-    (cond ((eq? type-id 'player_laser) player-laser-explosion-particles)
-          ((or (eq? type-id 'laserA)
-               (eq? type-id 'laserB)
-               (eq? type-id 'laserC))
-           invader-laser-explosion-particles)
-          (else
-           (invader-ship-particles colliding-obj)))))
+  (cond ((player_laser colliding-obj) player-laser-explosion-particles)
+        ((laser? colliding-obj)       invader-laser-explosion-particles)
+        (else (invader-ship-particles colliding-obj))))
 
 ;; Damage the givent shield such that all the particles inside the
 ;; colliding-obj are removed from the shield's particles.
@@ -393,15 +413,15 @@
   (define particles (shield-particles shield))
   
   (define relative-expl-particles
-    (let ((relative-expl-pos (pos2d-sub explosion-pos
+    (let ((relative-expl-pos (point-sub explosion-pos
                                         shield-pos)))
-      (map (lambda (ex-part) (pos2d-add ex-part relative-expl-pos))
+      (map (lambda (ex-part) (point-add ex-part relative-expl-pos))
          explosion-particles)))
   
   (define (particle-member p p-list)
     (if (not (pair? p-list))
         #f
-        (if (pos2d= p (car p-list))
+        (if (point= p (car p-list))
             p-list
             (particle-member p (cdr p-list)))))
   
@@ -417,9 +437,9 @@
   (define pos (game-object-pos laser-obj))
   (define wall-damage
     (map 
-     (lambda (p) (pos2d-add p pos))
+     (lambda (p) (point-add p pos))
      (filter
-      (lambda (p) (= (pos2d-y p) 0))
+      (lambda (p) (= (point-y p) 0))
       explosion-particles)))
   (level-damage-wall! level wall-damage))
 
@@ -430,12 +450,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;; Wall or game boundary structure ;;;;
-(define-type wall-struct rect id)
+(define-class wall () (slot: rect) (slot: id))
 (define (new-wall x y width height id)
-  (make-wall-struct (make-rect x y width height ) id))
-(define wall? wall-struct?)
-(define wall-rect wall-struct-rect)
-(define wall-id wall-struct-id)
+  (make-wall (make-rect x y width height ) id))
 
 (define (generate-walls)
   (list (new-wall wall-x-offset screen-bottom-offset +inf.0 -inf.0 'bottom)
@@ -449,9 +466,13 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;; Game level description ;;;;
-(define-type level
-  height width object-table hi-score init-corouts mutex
-  extender: define-type-of-level)
+(define-class level ()
+  (slot: height)
+  (slot: width)
+  (slot: object-table)
+  (slot: hi-score)
+  (slot: init-corouts) 
+  (slot: mutex))
 
 ;; A word should be mentionned on the draw-game-field? parameter since
 ;; it is mostly a hack to let know the user interface not to draw all
@@ -459,12 +480,19 @@
 ;; switching context from 1 player to another and that a PLAY
 ;; PLAYER<X> will be redisplayed. I am conscient that this is not
 ;; clean, but it greatly simplifies the problem.
-(define-type-of-level game-level
-  player-id score lives walls wall-damage draw-game-field?
-  extender: define-type-of-game-level)
+(define-class game-level (level)
+  (slot: player-id)
+  (slot: score)
+  (slot: lives)
+  (slot: walls)
+  (slot: wall-damage)
+  (slot: draw-game-field?))
 
-(define-type-of-game-level 2p-game-level
-  finished? other-finished? other-score)
+
+(define-class 2p-game-level (game-level)
+  (slot: finished?)
+  (slot: other-finished?)
+  (slot: other-score))
 
 ;; Level utilitary functions
 (define (level-add-object! lvl obj)
@@ -529,12 +557,10 @@
    (table-ref (level-object-table lvl) 'mothership #f))
 
 (define (new-player! level)
-  (let* ((player-type (get-type 'player))
-         (pos (make-pos2d 22 (- screen-max-y 240)))
+  (let* ((pos (make-point 22 (- screen-max-y 240)))
          (state 0)
-         (speed (make-pos2d 0 0))
-         (player-ship (make-player-ship 'player
-                                        player-type pos state 'green speed)))
+         (speed (make-point 0 0))
+         (player-ship (make-player-ship 'player pos state 'green speed)))
     (level-add-object! level player-ship)))
 
 (define (play-level level)
@@ -558,25 +584,24 @@
 ;; messages.
 (define (add-global-score-messages! level)
   (define y 254)
-  (define type (get-type 'message))
   (define state 'white)
-  (define speed (make-pos2d 0 0))
+  (define speed (make-point 0 0))
   (define hi-score (level-hi-score level))
   (for-each
    (lambda (m) (level-add-object! level m))
    (append 
     (list
-     (make-message-obj 'top-banner type (make-pos2d 2 y) state 'white speed
+     (make-message-obj 'top-banner (make-point 2 y) state 'white speed
                        "SCORE<1>  HI-SCORE  SCORE<2>")
-     (make-message-obj 'hi-score-msg type
-                       (make-pos2d 95 (- y 17)) state 'white speed
+     (make-message-obj 'hi-score-msg
+                       (make-point 95 (- y 17)) state 'white speed
                        (get-score-string hi-score)))
     (if (game-level? level)
         (list
-         (make-message-obj 'player2-score-msg type
-                           (make-pos2d 175 (- y 17)) state 'white speed "")
-         (make-message-obj 'player1-score-msg type
-                           (make-pos2d 15 (- y 17)) state 'white speed ""))
+         (make-message-obj 'player2-score-msg 
+                           (make-point 175 (- y 17)) state 'white speed "")
+         (make-message-obj 'player1-score-msg 
+                           (make-point 15 (- y 17)) state 'white speed ""))
         '()))))
 
 ;; New game level generation. Works for both single and 2 player
@@ -714,9 +739,9 @@
     (add-global-score-messages! level)
     (level-add-object!
      level
-     (make-message-obj 'demo-msg (get-type 'message)
-                       (make-pos2d 100 (- screen-max-y 60))
-                       'dummy 'white (make-pos2d 0 0) "DEMO"))
+     (make-message-obj 'demo-msg 
+                       (make-point 100 (- screen-max-y 60))
+                       'dummy 'white (make-point 0 0) "DEMO"))
     
     (for-each (lambda (s) (level-add-object! level s)) shields)
     (level-init-corouts-set! level init-corouts)
@@ -755,15 +780,15 @@
 (define (move-object! level obj)
   (define (move-object-raw! obj)
     (let* ((pos (game-object-pos obj) )
-           (x (pos2d-x pos))
-           (y (pos2d-y pos))
+           (x (point-x pos))
+           (y (point-y pos))
            (speed (game-object-speed obj))
-           (dx (pos2d-x speed))
-           (dy (pos2d-y speed)))
+           (dx (point-x speed))
+           (dy (point-y speed)))
       (cycle-state! obj)
       (game-object-color-set! obj (choose-color pos))
-      (pos2d-x-set! pos (+ x dx))
-      (pos2d-y-set! pos (+ y dy))))
+      (point-x-set! pos (+ x dx))
+      (point-y-set! pos (+ y dy))))
   
   ;; 1st move the object, then detect/respond to a collision if
   ;; required.
@@ -792,46 +817,41 @@
 ;; Collision detection
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(define-generic (detect-collision? obj1 obj2))
+
 ;; Returns #f is the object is not colliding, else returns an object
 ;; which is in collision with obj. Only one object is return, even if
 ;; multiple collision are occurring.
-(define (detect-collision? obj level)
+(define-method (detect-collision? (obj game-object) (lvl level))
   ;; exists is exptected to return the object that satisfy the condition
-  (or (exists (lambda (collision-obj)
-                (if (shield? collision-obj)
-                    (obj-shield-collision? obj collision-obj)
-                    (obj-obj-collision? obj collision-obj)))
-              (level-all-objects level))
-;;      (obj-shield-collision? obj (game-level-shields level))
-      (obj-wall-collision? obj (game-level-walls level))))
+  (exists (lambda (collision-obj)
+            (detect-collision? obj collision-obj))
+          (append (game-level-walls lvl)
+                  (level-all-objects lvl))))
 
 ;; collision detection between 2 game objects
-(define (obj-obj-collision? obj1 obj2)
+(define-method (detect-collision? (obj1 game-object) (obj2 game-object))
   (let* ((obj1-pos (game-object-pos obj1))
          (obj2-pos (game-object-pos obj2)))
     (and (not (eq? obj1 obj2))
-         (rectangle-collision?
-          (get-bounding-box obj1)
-          (get-bounding-box obj2)))))
+         (detect-collision? (get-bounding-box obj1)
+                            (get-bounding-box obj2)))))
 
-(define (obj-wall-collision? obj walls)
-  (exists (lambda (wall)
-            (rectangle-collision?
-             (get-bounding-box obj)
-             (wall-rect wall)))
-          walls))
+(define-method (detect-collision? (obj game-object) (wall wall))
+  (detect-collision? (get-bounding-box obj)
+                     (wall-rect wall)))
 
-(define (obj-shield-collision? obj shield)
-  (if (obj-obj-collision? obj shield)
+(define-method (detect-collision? (obj game-object) (shield shield))
+  (if (obj-obj-collision? obj (cast shield 'game-object))
       (let* ((pos (game-object-pos shield)))
         (exists (lambda (particle)
-                  (point-rect-collision? (pos2d-add pos particle)
+                  (point-rect-collision? (point-add pos particle)
                                          (get-bounding-box obj)))
                 (shield-particles shield)))
       #f))
 
 ;; Simple rectangular collision detection. Not optimized.
-(define (rectangle-collision? r1 r2)
+(define-method (detect-collision? (r1 rect) (r2 rect))
   (let* ((r1-x1 (rect-x r1))
          (r1-x2 (+ r1-x1 (rect-width r1)))
          (r1-x-min (min r1-x1 r1-x2))
@@ -854,7 +874,7 @@
              (< r1-y-max r2-y-min)
              (> r1-y-min r2-y-max)))))
 
-(define (point-rect-collision? point rect)
+(define (detect-collision? (point point) (rect rect))
   (let* ((rect-x1 (rect-x rect))
          (rect-x2 (+ rect-x1 (rect-width rect)))
          (rect-x-min (min rect-x1 rect-x2))
@@ -863,29 +883,21 @@
          (rect-y2 (+ rect-y1 (rect-height rect)))
          (rect-y-min (min rect-y1 rect-y2))
          (rect-y-max (max rect-y1 rect-y2))
-         (point-x (pos2d-x point))
-         (point-y (pos2d-y point)))
+         (point-x (point-x point))
+         (point-y (point-y point)))
     (and (>= point-x rect-x-min)
          (<= point-x rect-x-max)
          (>= point-y rect-y-min)
          (<= point-y rect-y-max))))
+(define (detect-collision? (rect rect) (point point))
+  (detect-collision? point rect))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Collision resolution
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Will resolve the collision between obj and collision-obj, depending
-;; on their types.
-(define (resolve-collision! level obj collision-obj)
-  (cond
-   ((player-ship? obj) (resolve-player-collision! level obj collision-obj))
-   ((laser-obj? obj) (resolve-laser-collision! level obj collision-obj))
-   ((invader-ship? obj) (resolve-invader-collision! level obj collision-obj))
-   ((mothership? obj) (resolve-mothership-collision! level obj collision-obj))
-   (else
-    (error "cannot resolve object collision.")))
-  (get-type-id collision-obj))
+(define-generic (resolve-collision! level obj1 obj2))
 
 ;; Abstraction used to simplify the resolve-laser-collision!
 ;; function. This will remove the laser object from the level and
@@ -900,65 +912,69 @@
       (set! player-laser-last-destruction-time
             (time->seconds (current-time)))))
 
-(define (resolve-laser-collision! level laser-obj collision-obj)
-  (define type-id (object-type-id (game-object-type laser-obj)))
+(define-method (resolve-collision! level (laser laser-obj) (inv invader))
+  (invader-ship? inv) 
+  (level-increase-score! level inv)
+  (destroy-laser! level laser)
+  (explode-invader! level inv))
+(define-method (resolve-collision! level (inv invader) (laser laser-obj))
+  (resolve-collision! laser invader))
 
-  ;; Collision resolution is straightforward
-  (cond ((invader-ship? collision-obj) 
-         (level-increase-score! level collision-obj)
-         (destroy-laser! level laser-obj)
-         (explode-invader! level collision-obj))
-        
-        ((laser-obj? collision-obj)
-         (let ((inv-laser
-                (if (not (eq? type-id 'player_laser)) laser-obj collision-obj)))
-           (explode-laser! level inv-laser)
-           (destroy-laser! level inv-laser)))
-        
-        ((player-ship? collision-obj)
-         (spawn-brother-thunk 'player-explosion-anim
-                              (lambda ()
-                                (explode-player! level collision-obj)))
-         (destroy-laser! level laser-obj))
+(define-method (resolve-collision! level (laser1 laser-obj) (laser2 laser-obj))
+  (let ((inv-laser (if (player_laser? laser1) laser2 laser1)))
+    (explode-laser! level inv-laser)
+    (destroy-laser! level inv-laser)))
 
-        ((shield? collision-obj)
-         (let ((penetrated-pos (get-laser-penetration-pos laser-obj)))
-           (game-object-pos-set! laser-obj penetrated-pos)
-           (explode-laser! level laser-obj)
-           (shield-explosion! collision-obj laser-obj))
-         (destroy-laser! level laser-obj))
+(define-method (resolve-collision!
+                level (laser laser-obj) (player player-ship))
+  (spawn-brother-thunk 'player-explosion-anim
+                       (lambda () (explode-player! level player)))
+  (destroy-laser! level laser))
+(define-method (resolve-collision!
+                level (player player-ship) (laser laser-obj))
+  (resolve-collision! laser player))
 
-        ((mothership? collision-obj)
-         (destroy-laser! level laser-obj)
-         (explode-mothership! level collision-obj)
-         (level-increase-score! level collision-obj)
-         (let ((delta-t (mothership-random-delay)))
-           (spawn-brother-thunk
-            'mothership (compose-thunks
-                         (lambda () (sleep-for delta-t))
-                         (create-new-mothership level)))))
+(define-method (resolve-collision! level (laser laser-obj) (shield shield))
+  (let ((penetrated-pos (get-laser-penetration-pos laser)))
+    (game-object-pos-set! laser penetrated-pos)
+    (explode-laser! level laser)
+    (shield-explosion! shield laser))
+  (destroy-laser! level laser))
+(define-method (resolve-collision! level (shield shield) (laser laser-obj))
+  (resolve-collision! laser shield))
 
-        ((wall? collision-obj)
-         (damage-wall! level laser-obj)
-         (explode-laser! level laser-obj)
-         (destroy-laser! level laser-obj))))
+(define-method (resolve-collision! level (laser laser-obj) (mother mothership))
+  (destroy-laser! level laser)
+  (explode-mothership! level mother)
+  (level-increase-score! level mother)
+  (let ((delta-t (mothership-random-delay)))
+    (spawn-brother-thunk
+     'mothership (compose-thunks
+                  (lambda () (sleep-for delta-t))
+                  (create-new-mothership level)))))
+(define-method (resolve-collision! level (mother mothership) (laser laser-obj))
+  (resolve-collision! laser mother))
 
-  
-(define (resolve-invader-collision! level invader collision-obj)
-  (cond ((laser-obj? collision-obj)
-         (resolve-laser-collision! level collision-obj invader))
-        ((shield? collision-obj)
-         (shield-explosion! collision-obj invader))
-        ((wall? collision-obj)
-         (if (eq? (wall-id collision-obj) 'bottom)
-             (game-over! level)))))
+(define-method (resolve-collision! level (laser laser-obj) (wall wall))
+  (damage-wall! level laser)
+  (explode-laser! level laser)
+  (destroy-laser! level laser))
+(define-method (resolve-collision! level (wall wall) (laser laser-obj))
+  (resolve-collision! laser wall)))
+
+(define-method (resolve-collision! level (invader invader) (shield shield))
+  (shield-explosion! shield invader))
+
+(define-method (resolve-collision! level (invader invader) (wall wall))
+  (if (eq? (wall-id collision-obj) 'bottom)
+      (game-over! level)))
 
 (define (resolve-player-collision! level player collision-obj)
   (cond ((wall? collision-obj)
          (let ((current-speed (game-object-speed player)))
            (game-object-speed-set! player
-                                   (make-pos2d (- (pos2d-x current-speed))
-                                               (pos2d-y current-speed)))
+                                   (make-point (- (point-x current-speed))
+                                               (point-y current-speed)))
            (move-object! level player)))
         
         ((laser-obj? collision-obj)
@@ -1005,14 +1021,13 @@
   (define animation-duration 3)
   (define player-id (game-level-player-id level))
   (lambda ()
-    (let* ((pos (make-pos2d 61 (- screen-max-y 136)))
-           (type (get-type 'message))
+    (let* ((pos (make-point 61 (- screen-max-y 136)))
            (state 'white)
-           (speed (make-pos2d 0 0))
+           (speed (make-point 0 0))
            (text (if (is-player2? level)
                      "PLAY  PLAYER<2>"
                      "PLAY  PLAYER<1>"))
-           (msg (make-message-obj 'start-msg type pos
+           (msg (make-message-obj 'start-msg pos
                                   state 'white speed text)))
       (game-level-draw-game-field?-set! level #f)
       (level-add-object! level msg)
@@ -1036,20 +1051,20 @@
   (define y-offset (- 265 152))
 
   (define (determine-type-id col)
-    (cond ((< col 2) 'easy)
-          ((< col 4) 'medium)
-          (else 'hard)))
+    (cond ((< col 2) make-easy-invader)
+          ((< col 4) make-medium-invader)
+          (else make-hard-invader)))
 
   (define (generate-inv! row col)
     (let* ((x (+ x-offset (* col invader-spacing)))
            (y (+ y-offset (* row invader-spacing)))
-           (pos (make-pos2d x y))
-           (current-type (get-type (determine-type-id row)))
+           (pos (make-point x y))
+           (current-type-instantiator (determine-type-id row))
            (state 1)
-           (speed (make-pos2d invader-x-movement-speed 0))
+           (speed (make-point invader-x-movement-speed 0))
            (invader
-            (make-invader-ship
-             (gensym 'inv) current-type pos state 'white speed row col)))
+            (current-type-instantiator
+             (gensym 'inv) pos state 'white speed row col)))
       (level-add-object! level invader)))
                          
   (synchronized-thunk level
@@ -1088,7 +1103,7 @@
           (continue-with-thunk!
            (lambda () (generate-invaders
                        level (create-init-invader-move level))))
-          (let* ((old-dx (pos2d-x (game-object-speed (caar rows))))
+          (let* ((old-dx (point-x (game-object-speed (caar rows))))
                  (dt (get-invader-move-refresh-rate level))
                  (duration (* (length rows) dt)))
             (if wall-collision?
@@ -1134,7 +1149,7 @@
               (if (not (null? current-row))
                   (begin
                     (for-each
-                     (lambda (inv) (let ((speed (make-pos2d dx dy)))
+                     (lambda (inv) (let ((speed (make-point dx dy)))
                                      (game-object-speed-set! inv speed)))
                      current-row)
                     (move-ship-row! level row-index)
@@ -1148,14 +1163,13 @@
     (let* ((dx-mult (list-ref '(1 -1) (random-integer 2)))
            (mothership
             (make-mothership 'mothership
-                             (get-type 'mothership)
-                             (make-pos2d (if (> dx-mult 0)
+                             (make-point (if (> dx-mult 0)
                                              gamefield-min-x
                                              (- gamefield-max-x 16))
                                          201)
                              0
                             'red
-                            (make-pos2d (* dx-mult mothership-movement-speed)
+                            (make-point (* dx-mult mothership-movement-speed)
                                         0))))
       (play-sound 'mothership-sfx)
       (level-add-object! level mothership)
@@ -1187,15 +1201,15 @@
              (type (game-object-type inv))
              (width (type-width type))
              (heigth (type-height type))
-             (inv-rect (make-rect (pos2d-x pos) (pos2d-y pos) width heigth)))
+             (inv-rect (make-rect (point-x pos) (point-y pos) width heigth)))
         (rectangle-collision? rect inv-rect))))
                                   
   (define (bottom-invader? inv)
     (let* ((pos (game-object-pos inv))
-           (rect (make-rect (pos2d-x pos)        ;; x
-                            (- (pos2d-y pos) 1)  ;; y
+           (rect (make-rect (point-x pos)        ;; x
+                            (- (point-y pos) 1)  ;; y
                             (type-width (game-object-type inv)) ;; width
-                            (- (pos2d-y pos))))) ;; height
+                            (- (point-y pos))))) ;; height
       (not (exists (rect-inv-collision? rect) (level-invaders level)))))
                        
   (define (get-candidates)
@@ -1233,26 +1247,25 @@
                           player-laser-last-destruction-time)
                        player-laser-refresh-constraint))))
                     
-      (let* ((shooter-x (pos2d-x (game-object-pos shooter-obj)))
-             (shooter-y (pos2d-y (game-object-pos shooter-obj)))
+      (let* ((shooter-x (point-x (game-object-pos shooter-obj)))
+             (shooter-y (point-y (game-object-pos shooter-obj)))
              (x (+ shooter-x
-                   (floor (/ (type-width (game-object-type shooter-obj)) 2))))
+                   (floor (/ (type-width shooter-obj) 2))))
              (y (if (< dy 0)
                     (- shooter-y
                        (type-height (get-type laser-type))
                        invader-y-movement-speed)
                     (+ shooter-y
-                       (type-height (game-object-type shooter-obj)))))
+                       (type-height shooter-obj))))
              (laser-id (if (eq? laser-type 'player_laser)
                            'player-laser
                            (gensym 'inv-laser)))
              (laser-obj (make-laser-obj
                          laser-id
-                         (get-type laser-type)
-                         (make-pos2d x y)
+                         (make-point x y)
                          0
                          'white
-                         (make-pos2d 0 dy))))
+                         (make-point 0 dy))))
         (level-add-object! level laser-obj)
         ;; Fixme: unsure here...
         (spawn-brother-thunk 'laser-mov (create-laser laser-obj level)))))
@@ -1267,7 +1280,7 @@
     (let loop ()
      ;; centered laser position (depending on the laser type...
       (let ((pos (let ((pos (game-object-pos laser-obj)))
-                   (pos2d-add pos (make-pos2d (floor (/ (type-width type) 2))
+                   (point-add pos (make-point (floor (/ (type-width type) 2))
                                               0))))
             (collision-occured? (move-object! level laser-obj)))
         (if (or (not collision-occured?)
@@ -1302,7 +1315,7 @@
                       (get-type 'mothership_explosion)
                       pos
                       0 (choose-color pos)
-                      (make-pos2d 0 0)))
+                      (make-point 0 0)))
   ;; Update the global mothership's score value to the current value...
   (object-type-score-value-set! (get-type 'mothership) score-val)
   (level-remove-object! level mothership)
@@ -1321,7 +1334,7 @@
           (type (get-type 'message))
           (state 'dummy-state)
           (color (choose-color pos))
-          (speed (make-pos2d 0 0))
+          (speed (make-point 0 0))
           (text (number->string points)))
     (make-message-obj id type pos state color speed text)))
   (synchronized-thunk
@@ -1345,7 +1358,7 @@
                       (get-type 'player_explosion)
                       (game-object-pos player)
                       0 (choose-color (game-object-pos player))
-                      (make-pos2d 0 0)))
+                      (make-point 0 0)))
   (level-loose-1-life! level)
   (level-add-object! level expl-obj)
   (level-remove-object! level player)
@@ -1414,7 +1427,7 @@
     ;; centered in x. I'm unsure why other lasers don't require this
     ;; shift so far...
     (if (eq? (laser-type-id) 'player_laser)
-        (pos2d-sub pos (make-pos2d (floor (/ (type-width expl-type) 2))
+        (point-sub pos (make-point (floor (/ (type-width expl-type) 2))
                                    0))
         pos))
   (define obj
@@ -1423,7 +1436,7 @@
                       (center-pos (game-object-pos laser-obj))
                       0
                       (choose-color (game-object-pos laser-obj))
-                      (make-pos2d 0 0)))
+                      (make-point 0 0)))
   (level-remove-object! level laser-obj)
   (level-add-object! level obj)
   (sleep-for animation-duration)
@@ -1479,30 +1492,30 @@
 ;; Special animation that occur in the intro movie A (main intro)
 (define (create-animation-A level)
   (define msg-type (get-type 'message))
-  (define speed (make-pos2d 0 0))
+  (define speed (make-point 0 0))
   (define state 'white)
 
   (lambda ()
     ;; messages declaration
-    (let* ((play   (let ((pos (make-pos2d 101 (- screen-max-y 88))))
+    (let* ((play   (let ((pos (make-point 101 (- screen-max-y 88))))
                      (make-message-obj
                       'play msg-type pos state (choose-color pos) speed "")))
-           (space  (let ((pos (make-pos2d 61 (- screen-max-y 112))))
+           (space  (let ((pos (make-point 61 (- screen-max-y 112))))
                      (make-message-obj
                       'space msg-type pos state (choose-color pos) speed "")))
-           (score  (let ((pos (make-pos2d 37 (- screen-max-y 144))))
+           (score  (let ((pos (make-point 37 (- screen-max-y 144))))
                      (make-message-obj
                       'score msg-type pos state (choose-color pos) speed "")))
-           (mother (let ((pos (make-pos2d 85 (- screen-max-y 160))))
+           (mother (let ((pos (make-point 85 (- screen-max-y 160))))
                      (make-message-obj
                       'mother msg-type pos state (choose-color pos) speed "")))
-           (hard   (let ((pos (make-pos2d 85 (- screen-max-y 176))))
+           (hard   (let ((pos (make-point 85 (- screen-max-y 176))))
                      (make-message-obj
                       'hard msg-type pos state (choose-color pos) speed "")))
-           (medium (let ((pos (make-pos2d 85 (- screen-max-y 192))))
+           (medium (let ((pos (make-point 85 (- screen-max-y 192))))
                      (make-message-obj
                       'medium msg-type pos state (choose-color pos) speed "")))
-           (easy   (let ((pos (make-pos2d 85 (- screen-max-y 208))))
+           (easy   (let ((pos (make-point 85 (- screen-max-y 208))))
                      (make-message-obj
                       'easy msg-type pos state (choose-color pos) speed "")))
            (anim-messages
@@ -1521,8 +1534,8 @@
 ;; Animation A follow-up, which will create a table showing the score
 ;; for killing each kind of invaders.
 (define (create-animate-score-adv-table level)
-  (define speed (make-pos2d 0 0))
-  (define (pos x y) (make-pos2d x (- screen-max-y y)))
+  (define speed (make-point 0 0))
+  (define (pos x y) (make-point x (- screen-max-y y)))
   (lambda ()
     ;; create the ship prototypes
     (let ((mothership (make-mothership 'mothership
@@ -1582,21 +1595,21 @@
 ;; basic game instruction get displayed on screen.
 (define (create-animation-B level)
   (define msg-type (get-type 'message))
-  (define speed (make-pos2d 0 0))
+  (define speed (make-point 0 0))
   (define state 'white)
 
   (lambda ()
     (let* ((instruction
-            (let ((pos (make-pos2d 70 (- screen-max-y 100))))
+            (let ((pos (make-point 70 (- screen-max-y 100))))
               (make-message-obj
                'instruction msg-type pos state (choose-color pos) speed "")))
-           (press1 (let ((pos (make-pos2d 20 (- screen-max-y 130))))
+           (press1 (let ((pos (make-point 20 (- screen-max-y 130))))
                     (make-message-obj
                      'press1 msg-type pos state (choose-color pos) speed "")))
-           (press2 (let ((pos (make-pos2d 20 (- screen-max-y 154))))
+           (press2 (let ((pos (make-point 20 (- screen-max-y 154))))
                      (make-message-obj
                       'press2 msg-type pos state (choose-color pos) speed "")))
-           (score (let ((pos (make-pos2d 37 (- screen-max-y 144))))
+           (score (let ((pos (make-point 37 (- screen-max-y 144))))
                     (make-message-obj
                      'score msg-type pos state (choose-color pos) speed "")))
            (anim-messages
@@ -1613,24 +1626,24 @@
 
 (define (create-animation-credit level)
   (define msg-type (get-type 'message))
-  (define speed (make-pos2d 0 0))
+  (define speed (make-point 0 0))
   (define state 'white)
 
   (lambda ()
     (let* ((producer
-            (let ((pos (make-pos2d 65 (- screen-max-y 80))))
+            (let ((pos (make-point 65 (- screen-max-y 80))))
               (make-message-obj
                'producer msg-type pos state 'white speed "")))
-           (dsth (let ((pos (make-pos2d 59 (- screen-max-y 107))))
+           (dsth (let ((pos (make-point 59 (- screen-max-y 107))))
                     (make-message-obj
                      'dsth msg-type pos state 'red speed "")))
-           (support (let ((pos (make-pos2d 65 (- screen-max-y 150))))
+           (support (let ((pos (make-point 65 (- screen-max-y 150))))
                       (make-message-obj
                        'support msg-type pos state 'white speed "")))
-           (support-chars (let ((pos (make-pos2d 20 (- screen-max-y 180))))
+           (support-chars (let ((pos (make-point 20 (- screen-max-y 180))))
                     (make-message-obj
                      'support-chars msg-type pos state 'blue speed "")))
-           (you (let ((pos (make-pos2d 100 (- screen-max-y 220))))
+           (you (let ((pos (make-point 100 (- screen-max-y 220))))
                   (make-message-obj
                    'you msg-type pos state 'yellow speed "")))
            (anim-messages
@@ -1661,7 +1674,7 @@
   ;; simple abastraction used in left/right movements
   (define (move-player! dx)
     (let ((player (level-player level))
-          (new-speed (make-pos2d dx 0)))
+          (new-speed (make-point dx 0)))
       (game-object-speed-set! player new-speed)
       (move-object! level player)))
 
@@ -1731,8 +1744,8 @@
   (define continuation-delay 2)
   (lambda ()
     (let* ((type (get-type 'message))
-           (pos (make-pos2d 77 (- screen-max-y 60)))
-           (speed (make-pos2d 0 0))
+           (pos (make-point 77 (- screen-max-y 60)))
+           (speed (make-point 0 0))
            (msg-obj (make-message-obj 'game-over-msg type
                                       pos 'red 'red speed "")))
       (level-add-object! level msg-obj)
@@ -1752,8 +1765,8 @@
                      "GAME OVER PLAYER<2>"
                      "GAME OVER PLAYER<1>"))
            (type (get-type 'message))
-           (pos (make-pos2d 37 (- screen-max-y 248)))
-           (speed (make-pos2d 0 0))
+           (pos (make-point 37 (- screen-max-y 248)))
+           (speed (make-point 0 0))
            (msg-obj (make-message-obj 'game-over-msg type
                                       pos 'green 'green speed "")))
       (level-add-object! level msg-obj)
@@ -1791,13 +1804,13 @@
                                 player-laser-speed)))
              ((right)
               (if (player-can-move?)
-                  (let ((new-speed (make-pos2d player-movement-speed 0)))
+                  (let ((new-speed (make-point player-movement-speed 0)))
                     (game-object-speed-set! player new-speed)
                     (move-object! level player))))
               
              ((left)
               (if (player-can-move?)
-                  (let ((new-speed (make-pos2d (- player-movement-speed) 0)))
+                  (let ((new-speed (make-point (- player-movement-speed) 0)))
                     (game-object-speed-set! player new-speed)
                     (move-object! level player))))
               

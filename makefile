@@ -34,7 +34,7 @@ GSC=$(PATH_TO_GAMBIT)/bin/gsc -:=$(PATH_TO_GAMBIT) -debug
 CC=gcc
 
 ## Gambit-c
-PATH_TO_GAMBIT=/usr/local/Gambit-C/current
+PATH_TO_GAMBIT=/opt/gambit-c/current
 GAMBIT_LIB=$(PATH_TO_GAMBIT)/lib
 GAMBIT_INCLUDE=$(PATH_TO_GAMBIT)/include
 
@@ -202,6 +202,10 @@ sdl-user-interface.c: sdl-user-interface.scm scm-lib-macro.scm opengl-header.scm
 engine.c: engine.scm thread-simulation-macro.scm class.scm
 	$(GSC) -c engine.scm
 
+font-macro.c font.c sdl-interface.c sdl-user-interface.c sprite-macro.c thread-simulation.c user-interface-images.c user-interface.c: scm-lib-macro.scm
+	$(GSC) -c $*.scm
+
+
 
 # Opengl interface interdependance
 opengl.c: opengl.scm opengl-header.scm
@@ -265,6 +269,8 @@ endif
 ALL_SCM = $(wildcard *.scm)
 clean:
 	rm -f $(ALL_SCM:.scm=.c) *_.c *.o* space-invaders.exe *.tar.gz *.tgz *.~*~ *.zip
+  # external libs
+	rm -f class.scm scm-lib.scm scm-lib-macro.scm
 	$(MAKE) clean -C doc
 
 tarball: makefile README $(wildcard *.scm) $(SPRITE_FILES) $(FONT_FILES) $(DOC_FILES) $(SOUND_FILES)

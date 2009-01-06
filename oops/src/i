@@ -1,5 +1,0 @@
-;; (include "i") is shorter to type..
-(include "common-macros.scm")
-(include "oops-macros.scm")
-(include "../Test/testing-macros.scm")
-;;; eof ;;;

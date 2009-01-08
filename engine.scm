@@ -55,8 +55,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (include "class.scm")
-(set-manual-method-developpement!)
-
+(include "scm-lib-macro.scm")
 (include "thread-simulation-macro.scm")
 
 ;;*****************************************************************************
@@ -258,11 +257,11 @@
 
 (define-macro (setup-static-fields! class-name
                                     sprite-id bbox state-num score-value)
-  (begin
-    `(,(symbol-append class-name '-sprite-id-set!)   ,sprite-id)
-    `(,(symbol-append class-name '-bbox-set!)        ,bbox)
-    `(,(symbol-append class-name '-state-num-set!)   ,state-num)
-    `(,(symbol-append class-name '-score-value-set!) ,score-value)))
+  `(begin
+     (,(symbol-append class-name '-sprite-id-set!)   ,sprite-id)
+     (,(symbol-append class-name '-bbox-set!)        ,bbox)
+     (,(symbol-append class-name '-state-num-set!)   ,state-num)
+     (,(symbol-append class-name '-score-value-set!) ,score-value)))
 
 ;;;; Abstract classes ;;;;
 
@@ -346,9 +345,10 @@
 
 ;;;; centered explosion particle positions ;;;;
 (define invader-laser-explosion-particles
-  (rgb-pixels-to-boolean-point-list
-   (parse-ppm-image-file "sprites/explodeInvL0.ppm")
-   rgb-threshold? 'dont-center))
+  (map (lambda (p) (make-point (pos2d-x p) (pos2d-y p)))
+       (rgb-pixels-to-boolean-point-list
+        (parse-ppm-image-file "sprites/explodeInvL0.ppm")
+        rgb-threshold? 'dont-center)))
 
 ;; Generate a rectangle of points that should correspond to the
 ;; specified invader's bounding box. This is used with the
@@ -368,9 +368,10 @@
 
 ;; Particles of a player laser explosion
 (define player-laser-explosion-particles
-  (rgb-pixels-to-boolean-point-list
-   (parse-ppm-image-file "sprites/explodeL0.ppm")
-   rgb-threshold? 'center))
+  (map (lambda (p) (make-point (pos2d-x p) (pos2d-y p)))
+       (rgb-pixels-to-boolean-point-list
+        (parse-ppm-image-file "sprites/explodeL0.ppm")
+        rgb-threshold? 'center)))
 
 ;; Calculate the interpenetration distance and add it to the laser's
 ;; position. 
@@ -389,9 +390,10 @@
 (define (generate-shields)
   (define speed (make-point 0 0))
   (define (generate-particles)
-      (rgb-pixels-to-boolean-point-list
-       (parse-ppm-image-file "sprites/shield0.ppm")
-       rgb-threshold?))
+    (map (lambda (p) (make-point (pos2d-x p) (pos2d-y p)))
+         (rgb-pixels-to-boolean-point-list
+          (parse-ppm-image-file "sprites/shield0.ppm")
+          rgb-threshold?)))
 
   (list (make-shield 'shield1 (make-point  36 40) 0 'green
                      speed (generate-particles))
@@ -800,7 +802,8 @@
   (move-object-raw! obj)
   (let ((collision-obj (detect-collision? obj level)))
     (if collision-obj
-        (resolve-collision! level obj collision-obj)
+        (begin (resolve-collision! level obj collision-obj)
+               collision-obj)
         #f)))
   
 ;; Moves the entire ship row of specified index
@@ -847,10 +850,10 @@
                      (wall-rect wall)))
 
 (define-method (detect-collision? (obj game-object) (shield shield))
-  (if (obj-obj-collision? obj (cast shield 'game-object))
+  (if (detect-collision? obj (cast shield 'game-object))
       (let* ((pos (game-object-pos shield)))
         (exists (lambda (particle)
-                  (point-rect-collision? (point-add pos particle)
+                  (detect-collision? (point-add pos particle)
                                          (get-bounding-box obj)))
                 (shield-particles shield)))
       #f))
@@ -923,7 +926,7 @@
   (destroy-laser! level laser)
   (explode-invader! level inv))
 (define-method (resolve-collision! level (inv invader-ship) (laser laser-obj))
-  (resolve-collision! laser invader))
+  (resolve-collision! laser inv))
 
 (define-method (resolve-collision! level (laser1 laser-obj) (laser2 laser-obj))
   (let ((inv-laser (if (player_laser? laser1) laser2 laser1)))
@@ -970,7 +973,7 @@
   (shield-explosion! shield invader))
 
 (define-method (resolve-collision! level (invader invader-ship) (wall wall))
-  (if (eq? (wall-id collision-obj) 'bottom)
+  (if (eq? (wall-id wall) 'bottom)
       (game-over! level)))
 
 ;; Player collisions
@@ -983,8 +986,8 @@
 (define-method (resolve-collision! level
                                    (player player-ship)
                                    (inv    invader-ship))
-  (spawn-brother-thunk (lambda () (explode-player! level collision-obj)))
-  (explode-invader! level collision-obj))
+  (spawn-brother-thunk (lambda () (explode-player! level player)))
+  (explode-invader! level inv))
 
 
 (define-method (resolve-collision! level
@@ -1092,9 +1095,14 @@
     (let* ((rows (get-all-invader-rows level))
            (walls (game-level-walls level))
            (wall-collision?
+            ;; FIXME: Kinda innefficient algo :S!
             (exists
              (lambda (row)
-               (exists (lambda (inv) (detect-collision? inv walls)) row))
+               (exists (lambda (inv)
+                         (exists (lambda (wall)
+                                   (detect-collision? inv wall))
+                                 walls))
+                       row))
              rows)))
       (if (null? rows)
           ;; Regenerate invaders when they all died
@@ -1449,8 +1457,8 @@
                                  0
                                  (choose-color (game-object-pos laser-obj))
                                  (make-point 0 0))))
-    (update obj laser pos
-            (lambda (p) (center-pos p (type-width obj))))
+    (update! obj laser-obj pos
+             (lambda (p) (center-pos p (type-width obj))))
     (level-remove-object! level laser-obj)
     (level-add-object! level obj)
     (sleep-for animation-duration)
@@ -1551,29 +1559,29 @@
   (define (pos x y) (make-point x (- screen-max-y y)))
   (lambda ()
     ;; create the ship prototypes
-    (let ((mothership (make-mothership 'mothership
-                                       (pos 68 160)
-                                       0
-                                       (choose-color (pos 68 160))
-                                       speed))
-          (hard-ship (make-invader-ship 'hard-ship
-                                        (pos 72 176)
-                                        0
-                                        (choose-color (pos 72 176))
-                                        speed
-                                        0 0))
-          (medium-ship (make-invader-ship 'medium-ship
-                                          (pos 71 192)
-                                          0
-                                          (choose-color (pos 71 192))
-                                          speed
-                                          0 0))
-          (easy-ship (make-invader-ship 'easy-ship
-                                        (pos 70 208)
-                                        0
-                                        (choose-color (pos 70 208))
-                                        speed
-                                        0 0))
+    (let ((mothership (make-mothership     'mothership
+                                           (pos 68 160)
+                                           0
+                                           (choose-color (pos 68 160))
+                                           speed))
+          (hard-ship (make-hard-invader     'hard-ship
+                                            (pos 72 176)
+                                            0
+                                            (choose-color (pos 72 176))
+                                            speed
+                                            0 0))
+          (medium-ship (make-medium-invader 'medium-ship
+                                            (pos 71 192)
+                                            0
+                                            (choose-color (pos 71 192))
+                                            speed
+                                            0 0))
+          (easy-ship (make-easy-invader     'easy-ship
+                                            (pos 70 208)
+                                            0
+                                            (choose-color (pos 70 208))
+                                            speed
+                                            0 0))
           (score-msg-obj (level-get level 'score)))
       ;; add all the new ships into the intro level
       (for-each (lambda (ship) (level-add-object! level ship))
@@ -1713,9 +1721,10 @@
   (define (create-ai-laser)
     (if (level-player level)
         (begin
-          (shoot-laser! level make-player_laser
+          (shoot-laser! level
+                        make-player_laser
                         (level-player level)
-                        player_laser-speed))
+                        player-laser-speed))
         (prioritized-thunk-continuation end-of-demo)))
 
   ;; This will end the demo. NOTE: here the synchronized-thunk
@@ -1804,9 +1813,10 @@
            (case msg
              ((space)
               (if (player-can-move?)
-                  (shoot-laser! level make-player_laser
+                  (shoot-laser! level
+                                make-player_laser
                                 (level-player level)
-                                player_laser-speed)))
+                                player-laser-speed)))
              ((right)
               (if (player-can-move?)
                   (let ((new-speed (make-point player-movement-speed 0)))
@@ -2013,7 +2023,7 @@
         (y (point-y (game-object-pos obj)))
         (state (game-object-state obj))
         (color (game-object-color obj)))
-    (render-fontified-sprite (object-sprite-id obj) x y state color)))
+    (render-fontified-sprite (game-object-sprite-id obj) x y state color)))
 
 (define-method (render (level level))
   ;; Draw all objects
@@ -2068,6 +2078,3 @@
     (for i 0 (< i (- nb-lives 1))
          (render-fontified-sprite 'player (+ 30 (* i 15)) 0 0 'green))))
 
-
-;; Generate generic functions!
-(setup-generic-functions!)

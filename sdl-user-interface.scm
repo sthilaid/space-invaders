@@ -29,7 +29,7 @@
 (define simulation-thread #f)
 (define event-thread #f)
 (define display-fps? #f)
-(define FPS (create-simple-moving-avg))
+(define FPS (create-bounded-simple-moving-avg 10))
 
 ;; SDL mixer sound chunks
 (define star-wars-chunk #f)

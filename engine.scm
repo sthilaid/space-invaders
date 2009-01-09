@@ -920,26 +920,26 @@
       (set! player-laser-last-destruction-time
             (time->seconds (current-time)))))
 
+;; Laser collisions ;;
 (define-method (resolve-collision! level (laser laser-obj) (inv invader-ship))
   (invader-ship? inv) 
   (level-increase-score! level inv)
   (destroy-laser! level laser)
   (explode-invader! level inv))
-(define-method (resolve-collision! level (inv invader-ship) (laser laser-obj))
-  (resolve-collision! laser inv))
 
 (define-method (resolve-collision! level (laser1 laser-obj) (laser2 laser-obj))
   (let ((inv-laser (if (player_laser? laser1) laser2 laser1)))
     (explode-laser! level inv-laser)
     (destroy-laser! level inv-laser)))
 
+(define-method (resolve-collision! level (laser laser-obj) (expl explosion))
+  (explode-laser! level laser)
+  (destroy-laser! level laser))
+
 (define-method (resolve-collision! level (laser laser-obj) (player player-ship))
   (spawn-brother-thunk 'player-explosion-anim
                        (lambda () (explode-player! level player)))
   (destroy-laser! level laser))
-(define-method (resolve-collision! level (player player-ship) (laser laser-obj))
-  (resolve-collision! level laser player))
-
 
 (define-method (resolve-collision! level (laser laser-obj) (shield shield))
   (let ((penetrated-pos (get-laser-penetration-pos laser)))
@@ -947,8 +947,6 @@
     (explode-laser! level laser)
     (shield-explosion! shield laser))
   (destroy-laser! level laser))
-(define-method (resolve-collision! level (shield shield) (laser laser-obj))
-  (resolve-collision! laser shield))
 
 (define-method (resolve-collision! level (laser laser-obj) (mother mothership))
   (destroy-laser! level laser)
@@ -959,16 +957,13 @@
      'mothership (compose-thunks
                   (lambda () (sleep-for delta-t))
                   (create-new-mothership level)))))
-(define-method (resolve-collision! level (mother mothership) (laser laser-obj))
-  (resolve-collision! laser mother))
 
 (define-method (resolve-collision! level (laser laser-obj) (wall wall))
   (damage-wall! level laser)
   (explode-laser! level laser)
   (destroy-laser! level laser))
-(define-method (resolve-collision! level (wall wall) (laser laser-obj))
-  (resolve-collision! laser wall))
 
+;; Invader Collision ;;
 (define-method (resolve-collision! level (invader invader-ship) (shield shield))
   (shield-explosion! shield invader))
 
@@ -976,7 +971,11 @@
   (if (eq? (wall-id wall) 'bottom)
       (game-over! level)))
 
-;; Player collisions
+(define-method (resolve-collision! level (inv invader-ship) (laser laser-obj))
+  (resolve-collision! level laser inv))
+
+
+;; Player collisions ;;
 (define-method (resolve-collision! level (player player-ship) (wall wall))
   (let ((current-speed (game-object-speed player)))
     (game-object-speed-set! player
@@ -986,18 +985,32 @@
 (define-method (resolve-collision! level
                                    (player player-ship)
                                    (inv    invader-ship))
-  (spawn-brother-thunk (lambda () (explode-player! level player)))
+  (spawn-brother-thunk 'player-explosion
+                       (lambda () (explode-player! level player)))
   (explode-invader! level inv))
 
+(define-method (resolve-collision! level (player player-ship) (laser laser-obj))
+  (resolve-collision! level laser player))
 
-(define-method (resolve-collision! level
-                                              (mother mothership) (wall wall))
+
+
+;; Mothership collisions ;;
+(define-method (resolve-collision! level (mother mothership) (wall wall))
   (level-remove-object! level mother)
   (let ((delta-t (mothership-random-delay)))
-    (spawn-brother-thunk
-     'mothership (compose-thunks
-                  (lambda () (sleep-for delta-t))
-                  (create-new-mothership level)))))
+    (spawn-brother-thunk 'mothership
+                         (compose-thunks
+                          (lambda () (sleep-for delta-t))
+                          (create-new-mothership level)))))
+
+(define-method (resolve-collision! level (mother mothership) (laser laser-obj))
+  (resolve-collision! level laser mother))
+
+;; Fallback ;;
+(define-method (resolve-collision! level (o1 game-object) (o2 game-object))
+  (pp `(Warning: unresolved collision between
+                 ,(get-class-id o1) and ,(get-class-id o2))))
+
 
 
 ;;*****************************************************************************
@@ -1322,6 +1335,7 @@
                0 ;state reinitialised
                (game-object-color inv)
                (game-object-speed inv))))
+    (level-add-object! level expl)
     (sleep-for animation-duration)
     (continue-with-thunk!
      (create-explosion-end! level expl))))

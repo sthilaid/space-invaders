@@ -371,4 +371,9 @@
     (display usage-message))))
 
 
+(include "statprof.scm")
+(profile-start!)
 (main)
+(profile-stop!)
+
+(write-profile-report "profiling")

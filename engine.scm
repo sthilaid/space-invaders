@@ -1120,8 +1120,8 @@
       (if (null? rows)
           ;; Regenerate invaders when they all died
           (continue-with-thunk!
-           (lambda () (generate-invaders
-                       level (create-init-invader-move level))))
+           (compose-thunks (generate-invaders level)
+                           (create-init-invader-move level)))
           (let* ((old-dx (point-x (game-object-speed (caar rows))))
                  (dt (get-invader-move-refresh-rate level))
                  (duration (* (length rows) dt)))

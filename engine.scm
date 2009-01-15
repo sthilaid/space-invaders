@@ -850,7 +850,7 @@
                      (wall-rect wall)))
 
 (define-method (detect-collision? (obj game-object) (shield shield))
-  (if (detect-collision? obj (cast shield 'game-object))
+  (if (detect-collision? obj shield cast: '(game-object game-object))
       (let* ((pos (game-object-pos shield)))
         (exists (lambda (particle)
                   (detect-collision? (point-add pos particle)
@@ -2044,7 +2044,7 @@
   (for-each render (level-all-objects level)))
 
 (define-method (render (level game-level))
-  (render (cast level 'level))
+  (render level cast: '(level))
   
   (glBlendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA)
 

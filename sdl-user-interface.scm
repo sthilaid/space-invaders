@@ -30,6 +30,8 @@
 (define event-thread #f)
 (define display-fps? #f)
 (define FPS (create-bounded-simple-moving-avg 10))
+(define GC-dt-set '())
+(define fps-set '())
 
 ;; SDL mixer sound chunks
 (define star-wars-chunk #f)
@@ -107,10 +109,18 @@
          ;; Draw background stuff
          (render level)
 
-         (let ((now (time->seconds (current-time))))
+         (let* ((now (time->seconds (current-time)))
+                (this-fps (/ 1 (- now last-render-time))))
+           (set! fps-set (cons this-fps fps-set))
            (if (not (= last-render-time 0))
-               (FPS (/ 1 (- now last-render-time))))
+               (FPS this-fps))
            (set! last-render-time now))
+
+         ;; Accumulate last GC time
+         (##gc)
+         (set! GC-dt-set (cons (* (f64vector-ref (##process-statistics) 14)
+                                  1000)
+                               GC-dt-set))
 
          ;;draw frame-rate just over the green line
          (if display-fps?
@@ -377,3 +387,7 @@
 (profile-stop!)
 
 (write-profile-report "profiling")
+(with-output-to-file "histo-fps.csv"
+  (lambda () (generate-histogram 3 fps-set)))
+(with-output-to-file "histo-gc.csv"
+  (lambda () (generate-histogram 3 GC-dt-set)))

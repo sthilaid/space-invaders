@@ -26,7 +26,7 @@ DOC_FILES = $(wildcard doc/*.ppm)
 SOUND_FILES = $(wildcard sounds/*.wav)
 
 GL_FILES = opengl.scm glu.scm 
-SPACE_INVADERS_FILES =  scm-lib.scm rbtree.scm ppm-reader.scm thread-simulation.scm texture.scm sprite.scm font.scm engine.scm user-interface-images.scm 
+SPACE_INVADERS_FILES =  scm-lib.scm scm-lib-macro.scm stats.scm ppm-reader.scm thread-simulation.scm texture.scm sprite.scm font.scm engine.scm user-interface-images.scm 
 
 
 ## compilers
@@ -201,10 +201,6 @@ sdl-user-interface.c: sdl-user-interface.scm scm-lib-macro.scm opengl-header.scm
 
 engine.c: engine.scm thread-simulation-macro.scm class.scm
 	$(GSC) -c engine.scm
-
-font-macro.c font.c sdl-interface.c sdl-user-interface.c sprite-macro.c thread-simulation.c user-interface-images.c user-interface.c: scm-lib-macro.scm
-	$(GSC) -c $*.scm
-
 
 
 # Opengl interface interdependance

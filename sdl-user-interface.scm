@@ -26,12 +26,14 @@
 ;;;;;;;;;;;;;;;;;;;;;;; Global state variables  ;;;;;;;;;;;;;;;;;;;;;;;
 
 (define game-loop-thunk #f)
+(define sdl-screen #f)
 (define simulation-thread #f)
 (define event-thread #f)
 (define display-fps? #f)
 (define FPS (create-bounded-simple-moving-avg 10))
 (define GC-dt-set '())
 (define fps-set '())
+(define draw-set '())
 
 ;; SDL mixer sound chunks
 (define star-wars-chunk #f)
@@ -88,49 +90,51 @@
 (define render-scene
   (let ((last-render-time 0))
     (lambda (sdl-screen level)
-      (SDL::with-locked-surface
-       sdl-screen
-       (lambda ()
-         (glClearColor 0. 0. 0. 0.)
-         (glClear GL_COLOR_BUFFER_BIT)
+      (let ((render-init-time (time->seconds (current-time))))
+       (SDL::with-locked-surface
+        sdl-screen
+        (lambda ()
+          (glClearColor 0. 0. 0. 0.)
+          (glClear GL_COLOR_BUFFER_BIT)
 
-         (glBlendFunc GL_SRC_ALPHA GL_ONE)
-         (glColor4f .1215 .9960 .1215 0.05)
-         (let ((y 65))
-           (glBegin GL_QUADS)
-           (glVertex2i 0 0)
-           (glVertex2i screen-max-x 0)
-           (glVertex2i screen-max-x y)
-           (glVertex2i 0 y)
-           (glEnd))
+          (glBlendFunc GL_SRC_ALPHA GL_ONE)
+          (glColor4f .1215 .9960 .1215 0.05)
+          (let ((y 65))
+            (glBegin GL_QUADS)
+            (glVertex2i 0 0)
+            (glVertex2i screen-max-x 0)
+            (glVertex2i screen-max-x y)
+            (glVertex2i 0 y)
+            (glEnd))
 
-         (glBlendFunc GL_ONE GL_ZERO)
+          (glBlendFunc GL_ONE GL_ZERO)
          
-         ;; Draw background stuff
-         (render level)
+          ;; Draw background stuff
+          (render level)
 
-         (let* ((now (time->seconds (current-time)))
-                (this-fps (/ 1 (- now last-render-time))))
-           (set! fps-set (cons this-fps fps-set))
-           (if (not (= last-render-time 0))
-               (FPS this-fps))
-           (set! last-render-time now))
+          (let* ((now (time->seconds (current-time)))
+                 (this-fps (/ 1 (- now last-render-time))))
+            (set! fps-set (cons this-fps fps-set))
+            (set! draw-set (cons (- now render-init-time) fps-set))
+            (if (not (= last-render-time 0))
+                (FPS this-fps))
+            (set! last-render-time now))
 
-         ;; Accumulate last GC time
-         (##gc)
-         (set! GC-dt-set (cons (* (f64vector-ref (##process-statistics) 14)
-                                  1000)
-                               GC-dt-set))
+          ;; Accumulate last GC time
+          (##gc)
+          (set! GC-dt-set (cons (* (f64vector-ref (##process-statistics) 14)
+                                   1000)
+                                GC-dt-set))
 
-         ;;draw frame-rate just over the green line
-         (if display-fps?
-             (render-string
-              0 11 
-              (with-output-to-string "" (lambda () (show "FPS: " (FPS))))
-              'white))
+          ;;draw frame-rate just over the green line
+          (if display-fps?
+              (render-string
+               0 11 
+               (with-output-to-string "" (lambda () (show "FPS: " (FPS))))
+               'white))
 
-         (glFlush)
-         (SDL::GL::SwapBuffers))))))
+          (glFlush)
+          (SDL::GL::SwapBuffers)))))))
 
 
 
@@ -338,6 +342,7 @@
       (if screen
           (call/cc
            (lambda (k)
+             (set! sdl-screen screen)
              (set! return
                    (lambda (ret-val)
                      (thread-terminate! event-thread)
@@ -387,7 +392,15 @@
 (profile-stop!)
 
 (write-profile-report "profiling")
-(with-output-to-file "histo-fps.csv"
-  (lambda () (generate-histogram 3 fps-set)))
-(with-output-to-file "histo-gc.csv"
-  (lambda () (generate-histogram 3 GC-dt-set)))
+
+;; Creation of histogram data
+(let ((histo-size 30))
+  (with-output-to-file "histo-fps.csv"
+    (lambda () (generate-histogram histo-size fps-set)))
+  (with-output-to-file "histo-render.csv"
+    (lambda () (generate-histogram histo-size
+                                   (map (lambda (x) (/ 1 x)) fps-set))))
+  (with-output-to-file "histo-gc.csv"
+    (lambda () (generate-histogram histo-size GC-dt-set 0.001)))
+  (with-output-to-file "histo-draw.csv"
+    (lambda () (generate-histogram histo-size draw-set))))

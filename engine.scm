@@ -87,7 +87,7 @@
 (define invader-x-movement-speed 2)
 (define invader-y-movement-speed 8)
 (define player-movement-speed 2)
-(define player-laser-speed 2)
+(define player-laser-speed 6)
 (define invader-laser-speed 2)
 (define mothership-movement-speed 1)
 
@@ -95,12 +95,9 @@
 
 
 ;; Simulation delays
-(define mothership-update-interval 0.02)
-(define player-laser-update-interval 0.0001)
-(define invader-laser-update-interval 0.02)
 (define next-invader-laser-interval 0.2)
-(define manager-time-interfal 0.001)
-(define redraw-interval 0.01)
+(define manager-time-interfal 1/120)
+(define redraw-interval 1/60)
 (define animation-end-wait-delay 2)
 
 
@@ -1203,7 +1200,7 @@
              (if (or (not collision-occured?)
                      (explosion? collision-occured?)
                      (eq? collision-occured? 'message))
-                 (begin (sleep-for mothership-update-interval)
+                 (begin (sleep-for redraw-interval)
                         (loop (level-mothership level)))))))))
 
 
@@ -1306,10 +1303,8 @@
         (if (or (not collision-occured?)
                 (level-exists level (game-object-id laser-obj)))
             ;; if no collisions, continue on with the laser motion
-            (let ((delta-t (if (eq? (level-player-laser level) laser-obj)
-                               player-laser-update-interval
-                               invader-laser-update-interval)))
-              (sleep-for delta-t)
+            (begin
+              (sleep-for redraw-interval)
               (loop)))))))
 
 ;; (define-class game-object ()

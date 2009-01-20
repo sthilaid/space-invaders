@@ -1,8 +1,8 @@
 #!/bin/bash
 
-file=${1%.*}
-
-echo "
+function generate_histogram_image {
+    file=${1%.*}
+    echo "
 set terminal postscript
 set output \"${file}.ps\"
 set datafile separator ','
@@ -18,4 +18,10 @@ set boxwidth 2
 set xtic rotate by -45
 
 plot [] [0:] \"${file}.csv\" using 2:xtic(1) ti col
-" | gnuplot && gv ${file}.ps
+" | gnuplot # && gv ${file}.ps
+}
+
+for f in histo*.csv 
+do
+    generate_histogram_image $f
+done

@@ -30,7 +30,7 @@ SPACE_INVADERS_FILES =  scm-lib.scm scm-lib-macro.scm stats.scm ppm-reader.scm t
 
 
 ## compilers
-GSC=$(PATH_TO_GAMBIT)/bin/gsc -:=$(PATH_TO_GAMBIT) -debug 
+GSC=$(PATH_TO_GAMBIT)/bin/gsc -:=$(PATH_TO_GAMBIT) -debug
 CC=gcc
 
 ## Gambit-c

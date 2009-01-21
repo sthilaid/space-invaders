@@ -115,15 +115,14 @@
           (let* ((now (time->seconds (current-time)))
                  (this-fps (/ 1 (- now last-render-time))))
             (set! fps-set (cons this-fps fps-set))
-            (set! draw-set (cons (- now render-init-time) fps-set))
+            (set! draw-set (cons (- now render-init-time) draw-set))
             (if (not (= last-render-time 0))
                 (FPS this-fps))
             (set! last-render-time now))
 
           ;; Accumulate last GC time
           (##gc)
-          (set! GC-dt-set (cons (* (f64vector-ref (##process-statistics) 14)
-                                   1000)
+          (set! GC-dt-set (cons (f64vector-ref (##process-statistics) 14)
                                 GC-dt-set))
 
           ;;draw frame-rate just over the green line
@@ -393,14 +392,19 @@
 
 (write-profile-report "profiling")
 
+
 ;; Creation of histogram data
 (let ((histo-size 30))
+  (set! fps-set   (drop-right fps-set   1))
+  (set! GC-dt-set (drop-right GC-dt-set 1))
+  (set! draw-set  (drop-right draw-set  1))
   (with-output-to-file "histo-fps.csv"
     (lambda () (generate-histogram histo-size fps-set)))
   (with-output-to-file "histo-render.csv"
     (lambda () (generate-histogram histo-size
-                                   (map (lambda (x) (/ 1 x)) fps-set))))
+                                   (map (lambda (x) (/ 1 x)) fps-set)
+                                   0.001)))
   (with-output-to-file "histo-gc.csv"
     (lambda () (generate-histogram histo-size GC-dt-set 0.001)))
   (with-output-to-file "histo-draw.csv"
-    (lambda () (generate-histogram histo-size draw-set))))
+    (lambda () (generate-histogram histo-size draw-set  0.001))))

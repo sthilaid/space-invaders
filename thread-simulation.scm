@@ -10,13 +10,12 @@
 ;; Internal definitions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Data type definitions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define-type corout id kont mailbox (state unprintable:) prioritize?
-  on-entry on-exit)
+  on-entry on-exit delta-t)
 
 (define (flush-entry-exit-thunks! corout)
   (corout-on-entry-set! corout (new-stack))
@@ -151,7 +150,7 @@
   (call/cc (lambda (k)
                (return-to-sched k)
                (let ((kontinuation (corout-kont (current-corout))))
-                 ;; if it is a statefull couroutine
+                 ;; if it is a statefull coroutine
                  ;; (executing a scheduler) then restore its
                  ;; environnement
                  (if (corout-state (current-corout))
@@ -159,6 +158,9 @@
                        (restore-state (corout-state (current-corout)))
                        (parent-state state)))
                  ;; run the coroutine
+                 (if trace-coroutines?
+                     (corout-delta-t-set! (current-corout)
+                                           (time->seconds (current-time))))
                  (kontinuation 'go)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -229,6 +231,16 @@
   (call/cc
    (lambda (k)
      (corout-kont-set! (current-corout) k)
+     (if trace-coroutines?
+         (table-set! trace-corout-table
+                     (corout-id (current-corout))
+                     (cons (- (time->seconds (current-time))
+                              (corout-delta-t (current-corout)))
+                           (cond ((table-ref trace-corout-table
+                                             (corout-id (current-corout))
+                                             #f)
+                                  => (lambda (vals) vals))
+                                 (else '())))))
      (resume-scheduling))))
 
 (define (internal-sleep-until condition-thunk)
@@ -254,7 +266,8 @@
                ;; here the terminate-corout call is added to ensure that
                ;; the thread will terminate cleanly.
                (lambda (dummy) (terminate-corout (thunk)))
-               (new-queue) #f #f (new-stack) (new-stack)))
+               (new-queue) #f #f (new-stack) (new-stack)
+               #f))
 
 ;; Querry the current-coroutine's mailbox to see if its empty
 (define (empty-mailbox?)
@@ -297,6 +310,16 @@
            ;; system's coroutine.
            (corout-state-set! (current-corout) state)
            (corout-kont-set! (current-corout) k)
+           (if trace-coroutines?
+               (table-set! trace-corout-table
+                     (corout-id (current-corout))
+                     (cons (- (time->seconds (current-time))
+                              (corout-delta-t (current-corout)))
+                           (cond ((table-ref trace-corout-table
+                                             (corout-id (current-corout))
+                                             #f)
+                                  => (lambda (vals) vals))
+                                 (else '())))))
            (resume-scheduling)))))
   (for-each (lambda (f) (f))
             (reverse (stack->list (corout-on-entry (current-corout))))))
@@ -325,18 +348,20 @@
 (define (boot return-handler c1 . cs)
   (call/cc
    (lambda (k)
-     (let ((fresh-start? (unbound? (current-corout))))
-       (if (not fresh-start?) (parent-state (save-state)))
-       (root-k               k)
-       (current-corout       #f)
-       (q                    (new-queue))
-       (sleep-q              (new-queue))
-       (return-value-handler return-handler)
-       (return-value         #f)
-       (if fresh-start? (parent-state #f)))
-     (for-each (lambda (c) (corout-enqueue! (q) c))
-               (cons c1 cs))
-     (corout-scheduler))))
+     (begin
+       (let ((fresh-start? (unbound? (current-corout))))
+         (if (not fresh-start?) (parent-state (save-state)))
+         (root-k               k)
+         (current-corout       #f)
+         (q                    (new-queue))
+         (sleep-q              (new-queue))
+         (return-value-handler return-handler)
+         (return-value         #f)
+         (if fresh-start? (parent-state #f)))
+       (for-each (lambda (c) (corout-enqueue! (q) c))
+                 (cons c1 cs))
+       (corout-scheduler)))))
+
 
 ;; Kills all the currently executing coroutines. This will operate on
 ;; only 1 level of scheduling, killing thus the currently executing
@@ -418,7 +443,31 @@
   (pp `(mutex-unlocked val: ,(sem-value sem))))
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Coroutine tracing system
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(define trace-coroutines? #t)
+(define trace-corout-table (make-table test: eq?))
+
+(define (output-corout-tracing-results)
+  (with-output-to-file "histo-threads.csv"
+    (lambda () (generate-histogram "corout-threads" 30
+                                   (table->list trace-corout-table)
+                                   0.0001)))
+  #;
+  (with-output-to-file "thread-tracing.html"
+    (display "<html>\n")
+    (display
+     "\t<head><title>Thread simulation tracing results</title></head>\n")
+    (display "\t<body>\n")
+    (##table-for-each
+                (lambda (id values)
+                  (pp `(,id avg: ,(average values)
+                            stdev: ,(standard-deviation values))))
+                trace-corout-table)
+    (display "\t</body>\n")
+    (display "</html>\n")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Tests

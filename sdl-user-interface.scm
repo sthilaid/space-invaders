@@ -385,12 +385,12 @@
     (display usage-message))))
 
 
-(include "statprof.scm")
-(profile-start!)
+;; (include "statprof.scm")
+;; (profile-start!)
 (main)
-(profile-stop!)
+;; (profile-stop!)
 
-(write-profile-report "profiling")
+;; (write-profile-report "profiling")
 
 
 ;; Creation of histogram data
@@ -399,12 +399,24 @@
   (set! GC-dt-set (drop-right GC-dt-set 1))
   (set! draw-set  (drop-right draw-set  1))
   (with-output-to-file "histo-fps.csv"
-    (lambda () (generate-histogram histo-size fps-set)))
+    (lambda () (generate-histogram
+                "fps"
+                histo-size
+                `(("Framerate" . ,fps-set)))))
   (with-output-to-file "histo-render.csv"
-    (lambda () (generate-histogram histo-size
-                                   (map (lambda (x) (/ 1 x)) fps-set)
-                                   0.001)))
+    (lambda () (generate-histogram
+                "rendering"
+                histo-size
+                `(("time to render all of a frame" .
+                   ,(map (lambda (x) (/ 1 x)) fps-set))
+                  ("time to draw a frame" . ,draw-set))
+                0.001)))
   (with-output-to-file "histo-gc.csv"
-    (lambda () (generate-histogram histo-size GC-dt-set 0.001)))
-  (with-output-to-file "histo-draw.csv"
-    (lambda () (generate-histogram histo-size draw-set  0.001))))
+    (lambda () (generate-histogram
+                "gc"
+                histo-size
+                `(("Garbage collection time" . ,GC-dt-set))
+                0.001))))
+
+(if trace-coroutines?
+    (output-corout-tracing-results))

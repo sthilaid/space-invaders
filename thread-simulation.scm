@@ -452,9 +452,14 @@
 
 (define (output-corout-tracing-results)
   (with-output-to-file "histo-threads.csv"
-    (lambda () (generate-histogram "corout-threads" 30
-                                   (table->list trace-corout-table)
-                                   0.0001)))
+    (lambda () (generate-histogram
+                "corout-threads" 30
+                (##table-foldl rcons
+                               '()
+                               (lambda (k v)
+                                 (cons k (map (lambda (x) (* x 1000)) v)))
+                               trace-corout-table)
+                0.1)))
   #;
   (with-output-to-file "thread-tracing.html"
     (display "<html>\n")

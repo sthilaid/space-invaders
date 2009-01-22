@@ -16,9 +16,8 @@
                             samples))
          (interval  (/ (- max-value min-value) nb-of-divisions))
          (simplified-samples
-          (map (lambda (sample-assoc)
-                 (let* ((sample (cdr sample-assoc))
-                        (bars (make-vector (+ nb-of-divisions 1) 0))
+          (map (lambda (sample)
+                 (let* ((bars (make-vector (+ nb-of-divisions 1) 0))
                         (simple-sample
                          (map (lambda (x)
                                 (inexact->exact
@@ -26,8 +25,11 @@
                               sample)))
                    (for-each (lambda (s) (inc bars s)) simple-sample)
                    bars))
-               samples))
-         (bars (make-vector (+ nb-of-divisions 1) 0)))
+               samples)))
+
+    (pp `(,title : min: ,min-value max: ,max-value int: ,interval))
+    (for-each (lambda (el) (pp `(,(car el) ,(apply max (cdr el)))))
+              samples-alist)
 
     (with-output-to-file (string-append filename  ".csv")
      (lambda ()
@@ -39,7 +41,7 @@
                     (loop (cdr samples-alist)))))
        (display "\n")
        ;; content
-       (for i 0 (< i nb-of-divisions)
+       (for i 0 (<= i nb-of-divisions)
             (begin
               (display (fix-precision (+ (* i interval) min-value)
                                       range-precision))
@@ -71,7 +73,6 @@
         "plot [] [0:] \"" filename ".csv\" using 2:xtic(1) ti col")
        (for i 0 (< i (- (length samples-alist) 1))
             (show ", \"\" using " (+ i 3) " ti col"))
-       (display "\n\n"))))
-  (pp (length samples-alist)))
+       (display "\n\n")))))
 
 

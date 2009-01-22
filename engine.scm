@@ -490,6 +490,7 @@
   (slot: lives)
   (slot: walls)
   (slot: wall-damage)
+  (slot: wall-collision-detected?)
   (slot: draw-game-field?))
 
 
@@ -616,6 +617,7 @@
          (shields (generate-shields))
          (init-corouts 'unbound)
          (lives 3)
+         (wall-collision-detected? #f)
          (draw-game-field? #t)
          (finished? #f)        ; only used for 2p games
          (other-finished? #f)  ; only used for 2p games
@@ -626,17 +628,19 @@
                      screen-max-y screen-max-x (make-table)
                      hi-score init-corouts (new-mutex)
                      player-id init-score lives 
-                     walls wall-damage draw-game-field?
+                     walls wall-damage wall-collision-detected?
+                     draw-game-field?
                      finished? other-finished? other-score)
                     
                     (make-game-level
                      screen-max-y screen-max-x (make-table)
                      hi-score init-corouts (new-mutex)
                      player-id init-score lives 
-                     walls wall-damage draw-game-field?)))
+                     walls wall-damage wall-collision-detected?
+                     draw-game-field?)))
          (init-corouts
           (list (new-corout
-                 'invader-move
+                 'game-initialisation
                  (compose-thunks
                   ;; Intro anim
                   (start-of-game-animation level)
@@ -703,17 +707,17 @@
          (player-id 'demo)
          (lives 3)
          (score 0)
+         (wall-collision-detected? #f)
          (draw-game-field? #t)
-         (other-finished? #f)  ; only used for 2p games
-         (other-score 0)       ; only used for 2p games
          (level (make-game-level
                  screen-max-y screen-max-x (make-table)
                  hi-score init-corouts (new-mutex)
                  player-id score lives 
-                 walls wall-damage draw-game-field?))
+                 walls wall-damage wall-collision-detected?
+                 draw-game-field?))
          (init-corouts
           (list (new-corout
-                 'invader-move
+                 'game-init
                  (compose-thunks
                   (generate-invaders level)
                   ;; Setup level and start primordial game corouts
@@ -965,8 +969,12 @@
   (shield-explosion! shield invader))
 
 (define-method (resolve-collision! level (invader invader-ship) (wall wall))
-  (if (eq? (wall-id wall) 'bottom)
-      (game-over! level)))
+  (cond ((eq? (wall-id wall) 'bottom)
+         (game-over! level))
+        ((or (eq? (wall-id wall) 'right)
+             (eq? (wall-id wall) 'left))
+         (game-level-wall-collision-detected?-set! level #t))))
+
 
 (define-method (resolve-collision! level (inv invader-ship) (laser laser-obj))
   (resolve-collision! level laser inv))
@@ -1102,37 +1110,31 @@
 ;; ;; Event that will move a single row of invaders
 (define (create-init-invader-move level)
   (synchronized-thunk level
-    (let* ((rows (get-all-invader-rows level))
-           (walls (game-level-walls level))
-           (wall-collision?
-            ;; FIXME: Kinda innefficient algo :S!
-            (exists
-             (lambda (row)
-               (exists (lambda (inv)
-                         (exists (lambda (wall)
-                                   (detect-collision? inv wall))
-                                 walls))
-                       row))
-             rows)))
-      (if (null? rows)
+    (corout-id-set! (current-corout) 'invader-move)
+    (let* ((invaders (level-invaders level)))
+      (if (null? invaders)
           ;; Regenerate invaders when they all died
           (continue-with-thunk!
            (compose-thunks (generate-invaders level)
                            (create-init-invader-move level)))
-          (let* ((old-dx (point-x (game-object-speed (caar rows))))
-                 (dt (get-invader-move-refresh-rate level))
-                 (duration (* (length rows) dt)))
-            (if wall-collision?
-                (continue-with-thunk!
-                  (compose-thunks
-                   (create-invader-row-move!
-                    0 (- invader-y-movement-speed) level)
-                   (lambda () (sleep-for dt))
-                   (create-invader-wall-movement-continuation
+          (let* (;; sample an arbitrary invader's speed
+                 (old-dx (point-x (game-object-speed (car invaders))))
+                 (dt (get-invader-move-refresh-rate level)))
+            (if (game-level-wall-collision-detected? level)
+                (begin
+                  (continue-with-thunk!
+                   (compose-thunks
+                    (create-invader-row-move!
+                     0 (- invader-y-movement-speed) level)
+                    (lambda () (sleep-for dt))
+                    (create-invader-wall-movement-continuation
                      old-dx level)
-                   (lambda () (sleep-for dt))
-                   ;; should this event creation be put after the sleep?
-                   (create-init-invader-move level)))
+                    (lambda ()
+                      ;; reset the colision flag
+                      (game-level-wall-collision-detected?-set! level #f)
+                      (sleep-for dt))
+                    ;; should this event creation be put after the sleep?
+                    (create-init-invader-move level))))
                 
                 (continue-with-thunk!
                  (compose-thunks
@@ -1144,6 +1146,7 @@
 ;; make the invader move in the opposite x direction.
 (define (create-invader-wall-movement-continuation old-dx level)
   (synchronized-thunk level
+    (corout-id-set! (current-corout) 'invader-wall-move)
     (let ((rows (get-all-invader-rows level)))
       (if (null? rows)
           ;; Regenerate invaders when they all died
@@ -1158,6 +1161,7 @@
 (define (create-invader-row-move! dx dy level)
   (define rows (get-all-invader-rows level))
   (synchronized-thunk level
+    (corout-id-set! (current-corout) 'invader-row-move)
     (let ((dt (get-invader-move-refresh-rate level)))
       (let loop ((row-index 0))
         (if (< row-index invader-row-number)

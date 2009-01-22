@@ -451,6 +451,7 @@
 (define trace-corout-table (make-table test: eq?))
 
 (define (output-corout-tracing-results)
+  ;; Print in milliseconds the time used by each threads
   (with-output-to-file "histo-threads.csv"
     (lambda () (generate-histogram
                 "corout-threads" 30
@@ -459,7 +460,7 @@
                                (lambda (k v)
                                  (cons k (map (lambda (x) (* x 1000)) v)))
                                trace-corout-table)
-                0.1)))
+                0.01)))
   #;
   (with-output-to-file "thread-tracing.html"
     (display "<html>\n")

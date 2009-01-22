@@ -540,11 +540,10 @@
   (kill-all! (game-level-score level)))
 
 
-;; Returns (not efficiently) the list of all invaders located on the
-;; specified row index or '() if none exists.
 (define (get-invaders-from-row level row-index)
-  (filter (lambda (inv) (= (invader-ship-row inv) row-index))
-          (level-invaders level)))
+  (filter (lambda (inv) (and (invader-ship? inv)
+                             (= (invader-ship-row inv) row-index)))
+          (level-all-objects level)))
 
 (define (get-all-invader-rows level)
   (let loop ((i 0) (acc '()))
@@ -1026,9 +1025,9 @@
 
 (define-macro (synchronized-thunk level action . actions)
   `(dynamic-corout-extent
-    (lambda () (sem-lock! (level-mutex ,level)))
+    (lambda (_) (sem-lock! (level-mutex ,level)))
     (lambda () ,action ,@actions)
-    (lambda () (sem-unlock! (level-mutex ,level)))))
+    (lambda (_) (sem-unlock! (level-mutex ,level)))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1168,11 +1167,10 @@
             (let ((current-row (get-invaders-from-row level row-index)))
               (if (not (null? current-row))
                   (begin
-                    (for-each
-                     (lambda (inv) (let ((speed (make-point dx dy)))
-                                     (game-object-speed-set! inv speed)))
-                     current-row)
-                    (move-ship-row! level row-index)
+                    (for-each (lambda (inv) (let ((speed (make-point dx dy)))
+                                              (game-object-speed-set! inv speed)
+                                              (move-object! level inv)))
+                              current-row)
                     (sleep-for dt))
                   (yield))
               (loop (+ row-index 1))))))))
@@ -1895,7 +1893,7 @@
   (lambda ()
     (let loop ()
       (update-score-msg! level)
-      (thread-send user-interface-thread `(redraw ,level))
+      (time (thread-send user-interface-thread `(redraw ,level)))
       (sleep-for redraw-interval)
       (loop))))
 

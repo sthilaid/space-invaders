@@ -17,9 +17,35 @@
 (define-type corout id kont mailbox (state unprintable:) prioritize?
   on-entry on-exit delta-t)
 
+(define (new-initial-entry-stack)
+  (let ((s (new-stack)))
+    (push! (lambda (corout)
+             (if trace-coroutines?
+                 (corout-delta-t-set! corout
+                                      (time->seconds (current-time)))))
+           s)
+    s))
+
+(define (new-initial-exit-stack)
+  (let ((s (new-stack)))
+    (push! (lambda (corout)
+             (if trace-coroutines?
+                 (table-set!
+                  trace-corout-table
+                  (corout-id corout)
+                  (cons (- (time->seconds (current-time))
+                           (corout-delta-t corout))
+                        (cond ((table-ref trace-corout-table
+                                          (corout-id corout)
+                                          #f)
+                               => (lambda (vals) vals))
+                              (else '()))))))
+           s)
+    s))
+
 (define (flush-entry-exit-thunks! corout)
-  (corout-on-entry-set! corout (new-stack))
-  (corout-on-exit-set! corout (new-stack)))
+  (corout-on-entry-set! corout (new-initial-entry-stack))
+  (corout-on-exit-set! corout (new-initial-exit-stack)))
 
 (define-type state
   current-corout q sleep-q root-k return-value-handler
@@ -143,8 +169,8 @@
               (loop (dequeue!? (sleep-q)) still-sleeping))
             (loop (dequeue!? (sleep-q))
                   (cons sleeping-el still-sleeping)))
-            (for-each (lambda (el) (enqueue! (sleep-q) el))
-                      still-sleeping))))
+        (for-each (lambda (el) (enqueue! (sleep-q) el))
+                  still-sleeping))))
 
 (define (resume-coroutine)
   (call/cc (lambda (k)
@@ -158,9 +184,6 @@
                        (restore-state (corout-state (current-corout)))
                        (parent-state state)))
                  ;; run the coroutine
-                 (if trace-coroutines?
-                     (corout-delta-t-set! (current-corout)
-                                           (time->seconds (current-time))))
                  (kontinuation 'go)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -196,7 +219,15 @@
   (cond
    ((corout? (current-corout))
     (begin
-      (resume-coroutine)
+      (let ((c (current-corout)))
+        (for-each (lambda (f) (f c))
+                  (reverse (stack->list (corout-on-entry c))))
+;;         (pp `(entering-coroutine-of ,(corout-id c)) )
+        (resume-coroutine)
+;;         (pp `(exiting-coroutine-of ,(corout-id c)) )
+        (for-each (lambda (f) (f c))
+                  (stack->list (corout-on-exit c))))
+      
       ;; loop the scheduler, if the coroutine finished
       (corout-scheduler)))
 
@@ -225,34 +256,11 @@
 (define (sem-decrease! sem) (sem-value-set! sem (- (sem-value sem) 1)))
 
 
-;; These internal funcitons by-pass the on-entry/exit process for
-;; internal usange only...
 (define (internal-yield)
   (call/cc
    (lambda (k)
      (corout-kont-set! (current-corout) k)
-     (if trace-coroutines?
-         (table-set! trace-corout-table
-                     (corout-id (current-corout))
-                     (cons (- (time->seconds (current-time))
-                              (corout-delta-t (current-corout)))
-                           (cond ((table-ref trace-corout-table
-                                             (corout-id (current-corout))
-                                             #f)
-                                  => (lambda (vals) vals))
-                                 (else '())))))
      (resume-scheduling))))
-
-(define (internal-sleep-until condition-thunk)
-  (if (not (condition-thunk))
-      (begin
-        (call/cc
-         (lambda (k)
-           (corout-kont-set! (current-corout) k)
-           (enqueue! (sleep-q)
-                     (make-sleep-q-el condition-thunk (current-corout)))
-           (current-corout sleeping)
-           ((return-to-sched) 'asleep))))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -266,7 +274,8 @@
                ;; here the terminate-corout call is added to ensure that
                ;; the thread will terminate cleanly.
                (lambda (dummy) (terminate-corout (thunk)))
-               (new-queue) #f #f (new-stack) (new-stack)
+               (new-queue) #f #f
+               (new-initial-entry-stack) (new-initial-exit-stack)
                #f))
 
 ;; Querry the current-coroutine's mailbox to see if its empty
@@ -290,16 +299,12 @@
 ;; Yields the current coroutine's calculation. The calculation will
 ;; resume where it left once the scheduler decides to resume it.
 (define (yield)
-  (for-each (lambda (f) (f)) (stack->list (corout-on-exit (current-corout))))
-  (internal-yield)
-  (for-each (lambda (f) (f))
-            (reverse (stack->list (corout-on-entry (current-corout))))))
+  (internal-yield))
 
 ;; This will yield the work of the scheduler itselft, assuming that
 ;; the scheduler runs inside a coroutine too, i.e. that we are in a
 ;; child recursive coroutine.
 (define (super-yield)
-  (for-each (lambda (f) (f)) (stack->list (corout-on-exit (current-corout))))
   (call/cc
    (lambda (k)
      (if (parent-state)
@@ -310,25 +315,12 @@
            ;; system's coroutine.
            (corout-state-set! (current-corout) state)
            (corout-kont-set! (current-corout) k)
-           (if trace-coroutines?
-               (table-set! trace-corout-table
-                     (corout-id (current-corout))
-                     (cons (- (time->seconds (current-time))
-                              (corout-delta-t (current-corout)))
-                           (cond ((table-ref trace-corout-table
-                                             (corout-id (current-corout))
-                                             #f)
-                                  => (lambda (vals) vals))
-                                 (else '())))))
-           (resume-scheduling)))))
-  (for-each (lambda (f) (f))
-            (reverse (stack->list (corout-on-entry (current-corout))))))
+           (resume-scheduling))))))
 
 ;; Terminates early the calculation of the current coroutine and
 ;; returns with the givent ret-val.
 (define (terminate-corout exit-val)
   ;; first do all the requester actions on exit
-  (for-each (lambda (f) (f)) (stack->list (corout-on-exit (current-corout))))
   (current-corout exit-val)
   (resume-scheduling))
 
@@ -368,9 +360,10 @@
 ;; scheduler.
 (define (kill-all! exit-val)
   ;; first do all the requester actions on exit
-  (for-each (lambda (f) (f)) (stack->list (corout-on-exit (current-corout))))
   (let ((finish-scheduling (root-k))
         #; (ret-val (return-value)))
+    (for-each (lambda (f) (f (current-corout)))
+              (stack->list (corout-on-exit (current-corout))))
     (restore-state (parent-state))
     (finish-scheduling exit-val)))
 
@@ -399,18 +392,14 @@
 (define (sleep-until condition-thunk)
   (if (not (condition-thunk))
       (begin
-        (for-each (lambda (f) (f))
-                  (stack->list (corout-on-exit (current-corout))))
         (call/cc
          (lambda (k)
            (corout-kont-set! (current-corout) k)
            (enqueue! (sleep-q)
                      (make-sleep-q-el condition-thunk (current-corout)))
            (current-corout sleeping)
-           ((return-to-sched) 'asleep)))
-        (for-each (lambda (f) (f))
-                  (reverse
-                   (stack->list (corout-on-entry (current-corout))))))))
+           (resume-scheduling))))
+      (yield)))
 
 
 ;; Will put the current-corout to sleep for about "secs" seconds
@@ -432,7 +421,7 @@
 ;; event will be resumed when an unlock is performed.
 (define (sem-lock! sem)
   (while (sem-locked? sem)
-         (internal-sleep-until (lambda ()(not (sem-locked? sem)))))
+         (sleep-until (lambda ()(not (sem-locked? sem)))))
   (sem-decrease! sem)
   #;
   (pp `(mutex-locked val: ,(sem-value sem))))
@@ -680,9 +669,9 @@
 (define-test test-dynamic-corout-extent:yield "INOUT2IN1OUT" 'done
   (let ((c1 (new-corout 'c1
                         (dynamic-corout-extent
-                         (lambda () (display "IN"))
+                         (lambda (_) (display "IN"))
                          (lambda () (yield) (display "1"))
-                         (lambda () (display "OUT")))))
+                         (lambda (_) (display "OUT")))))
          (c2 (new-corout 'c2 (lambda () (display "2") (yield) 'done))))
     (simple-boot c1 c2)))
 
@@ -690,12 +679,12 @@
   (let* ((cond-var #f)
          (c1 (new-corout 'c1
                          (dynamic-corout-extent
-                          (lambda () (display "IN"))
+                          (lambda (_) (display "IN"))
                           (lambda ()
                             (sleep-for 0.1)
                             (display "1")
                             (set! cond-var #t))
-                          (lambda () (display "OUT")))))
+                          (lambda (_) (display "OUT")))))
          (c2 (new-corout 'c2 (lambda ()
                                (display "2")
                                (sleep-until (lambda () cond-var))
@@ -706,17 +695,17 @@
   "IN-00OUT-0IN-11OUT-1IN-22OUT-2" 'done
   (let* ((cond-var #f)
          (c0 (new-corout 'c0 (dynamic-corout-extent
-                              (lambda () (display "IN-0"))
+                              (lambda (_) (display "IN-0"))
                               (lambda () (display "0") (terminate-corout 'fini))
-                              (lambda () (display "OUT-0")))))
+                              (lambda (_) (display "OUT-0")))))
          (c1 (new-corout 'c1 (dynamic-corout-extent
-                              (lambda () (display "IN-1"))
+                              (lambda (_) (display "IN-1"))
                               (lambda () (display "1") (terminate-corout 'fini))
-                              (lambda () (display "OUT-1")))))
+                              (lambda (_) (display "OUT-1")))))
          (c2 (new-corout 'c2 (dynamic-corout-extent
-                              (lambda () (display "IN-2"))
+                              (lambda (_) (display "IN-2"))
                               (lambda () (display "2") (kill-all! 'done))
-                              (lambda () (display "OUT-2"))))))
+                              (lambda (_) (display "OUT-2"))))))
     (simple-boot c0 c1 c2)))
 
 (define-test test-dynamic-corout-extent:cont
@@ -725,9 +714,9 @@
               (lambda () (display "2"))
               (lambda () 'done)))
          (c0 (new-corout 'c0 (dynamic-corout-extent
-                              (lambda () (display "IN-0"))
+                              (lambda (_) (display "IN-0"))
                               (lambda () (display "0")
                                       (continue-with-thunk! t2))
-                              (lambda () (display "OUT-0")))))
+                              (lambda (_) (display "OUT-0")))))
          (c1 (new-corout 'c1 (lambda () (display "1")))))
     (simple-boot c0 c1)))

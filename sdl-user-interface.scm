@@ -385,12 +385,12 @@
     (display usage-message))))
 
 
-;; (include "statprof.scm")
-;; (profile-start!)
+(include "statprof.scm")
+(profile-start!)
 (main)
-;; (profile-stop!)
+(profile-stop!)
 
-;; (write-profile-report "profiling")
+(write-profile-report "profiling")
 
 
 ;; Creation of histogram data

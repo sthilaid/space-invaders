@@ -19,17 +19,17 @@
 
 (define (new-initial-entry-stack)
   (let ((s (new-stack)))
-    (push! (lambda (corout)
-             (if trace-coroutines?
+    (if trace-coroutines?
+        (push! (lambda (corout)
                  (corout-delta-t-set! corout
-                                      (time->seconds (current-time)))))
-           s)
+                                      (time->seconds (current-time))))
+               s))
     s))
 
 (define (new-initial-exit-stack)
   (let ((s (new-stack)))
-    (push! (lambda (corout)
-             (if trace-coroutines?
+    (if trace-coroutines?
+        (push! (lambda (corout)
                  (table-set!
                   trace-corout-table
                   (corout-id corout)
@@ -39,8 +39,8 @@
                                           (corout-id corout)
                                           #f)
                                => (lambda (vals) vals))
-                              (else '()))))))
-           s)
+                              (else '())))))
+               s))
     s))
 
 (define (flush-entry-exit-thunks! corout)

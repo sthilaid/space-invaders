@@ -48,7 +48,7 @@
   (corout-on-exit-set! corout (new-initial-exit-stack)))
 
 (define-type state
-  current-corout q sleep-q root-k return-value-handler
+  current-corout q sleep-q time-sleep-q root-k return-value-handler
   return-value return-to-sched
   (parent-state unprintable:))
 
@@ -74,6 +74,28 @@
   ((car sleep-q-el)))
 (define sleep-q-el-coroutine cdr)
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; time related sleep queue
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; (make-time-sleep-q )
+(define make-time-sleep-q sleep-queue-create)
+;; (make-time-sleep-q wake-time corout)
+(define make-time-sleep-q-el sleep-queue-node-create)
+(define time-sleep-q-el-wake-time sleep-queue-wake-time)
+(define time-sleep-q-el-corout sleep-queue-corout)
+(define time-sleep-q-empty? sleep-queue-empty?)
+(define (time-sleep-q-peek? q)
+  (and (not (sleep-queue-empty? q))
+       (sleep-queue-leftmost q)))
+(define time-sleep-q-dequeue! sleep-queue-retrieve-top!)
+(define time-sleep-q-insert! sleep-queue-insert!)
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Internal symbols
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (define unbound '!---unbound---!)
 (define (unbound? v) (eq? v unbound))
 
@@ -85,14 +107,15 @@
 ;; Scheduling state global variables
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define current-corout (make-parameter unbound))
-(define q (make-parameter unbound))
-(define sleep-q (make-parameter unbound))
-(define root-k (make-parameter unbound))
+(define current-corout       (make-parameter unbound))
+(define q                    (make-parameter unbound))
+(define sleep-q              (make-parameter unbound))
+(define time-sleep-q         (make-parameter unbound))
+(define root-k               (make-parameter unbound))
 (define return-value-handler (make-parameter unbound))
-(define return-value (make-parameter unbound))
-(define parent-state (make-parameter unbound))
-(define return-to-sched (make-parameter unbound))
+(define return-value         (make-parameter unbound))
+(define parent-state         (make-parameter unbound))
+(define return-to-sched      (make-parameter unbound))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; State management functionnalities
@@ -103,6 +126,7 @@
   (if (not (or (unbound? (current-corout))
                (unbound? (q))
                (unbound? (sleep-q))
+               (unbound? (time-sleep-q))
                (unbound? (root-k))
                (unbound? (return-value-handler))
                (unbound? (return-value))))
@@ -110,6 +134,7 @@
       (make-state (current-corout)
                   (q)
                   (sleep-q)
+                  (time-sleep-q)
                   (root-k)
                   (return-value-handler)
                   (return-value)
@@ -124,6 +149,7 @@
         (current-corout       (state-current-corout state))
         (q                    (state-q state))
         (sleep-q              (state-sleep-q state))
+        (time-sleep-q         (state-time-sleep-q state))
         (root-k               (state-root-k state))
         (return-value-handler (state-return-value-handler state))
         (return-value         (state-return-value state))
@@ -135,6 +161,7 @@
         (current-corout       unbound)
         (q                    unbound)
         (sleep-q              unbound)
+        (time-sleep-q         unbound)
         (root-k               unbound)
         (return-value-handler unbound)
         (return-value         unbound)
@@ -161,6 +188,14 @@
          ((return-value-handler) (return-value) (current-corout)))))))
 
 (define (wake-up-sleepers)
+  (let ((now (time->seconds (current-time))))
+    (while (and (not (time-sleep-q-empty? (time-sleep-q)))
+                (<= (time-sleep-q-el-wake-time
+                     (time-sleep-q-peek? (time-sleep-q)))
+                    now))
+           (corout-enqueue! (q) (time-sleep-q-el-corout
+                                 (time-sleep-q-dequeue! (time-sleep-q))))))
+  
   (let loop ((sleeping-el (dequeue!? (sleep-q))) (still-sleeping '()))
     (if sleeping-el
         (if (sleep-q-el-condition? sleeping-el)
@@ -232,9 +267,11 @@
       (corout-scheduler)))
 
    ;; If only sleeping coroutines are left, sleep for a while
-   ((not (empty-queue? (sleep-q)))
+   ((not (time-sleep-q-empty? (time-sleep-q)))
     (begin
-      (thread-sleep! 0.001) ; TODO: change this?
+      (let ((next-wake-time (time-sleep-q-el-wake-time
+                             (time-sleep-q-peek? (time-sleep-q)))))
+          (thread-sleep! (- next-wake-time (time->seconds (current-time)))))
       (current-corout sleeping)
       (corout-scheduler)))
       
@@ -347,6 +384,7 @@
          (current-corout       #f)
          (q                    (new-queue))
          (sleep-q              (new-queue))
+         (time-sleep-q         (make-time-sleep-q))
          (return-value-handler return-handler)
          (return-value         #f)
          (if fresh-start? (parent-state #f)))
@@ -404,8 +442,17 @@
 
 ;; Will put the current-corout to sleep for about "secs" seconds
 (define (sleep-for secs)
-  (let ((alarm (+ (time->seconds (current-time)) secs)))
-    (sleep-until (lambda () (> (time->seconds (current-time)) alarm)))))
+  (if (>= secs 0)
+      (let ((wake-time (+ (time->seconds (current-time)) secs)))
+        (call/cc
+         (lambda (k)
+           (corout-kont-set! (current-corout) k)
+           (time-sleep-q-insert! (time-sleep-q)
+                                 (make-time-sleep-q-el wake-time
+                                                       (current-corout)))
+           (current-corout sleeping)
+           (resume-scheduling))))
+      (yield)))
 
 
 ;; Create a new semaphore or mutex object
@@ -597,20 +644,13 @@
                  "bonne-aprem\n"
                  "bonne-nuit\n")
   'dont-care
-  (let ((c1 (new-corout
-             'c1
-             (lambda ()
-               (let ((counter 0))
-                 (sleep-until (lambda ()
-                                (set! counter (+ counter 2))
-                                (> counter 5))))
-               (pretty-print 'bonne-aprem))))
+  (let ((c1 (new-corout 'c1 (lambda ()
+                              (sleep-for 2)
+                              (pretty-print 'bonne-nuit))))
         (c2 (new-corout 'c2 (lambda () (pretty-print 'bon-matin))))
-        (c3 (new-corout
-             'c3
-             (lambda ()
-               (sleep-for 1)
-               (pretty-print 'bonne-nuit)))))
+        (c3 (new-corout 'c3 (lambda ()
+                              (sleep-for 1)
+                              (pretty-print 'bonne-aprem)))))
     (simple-boot c1 c2 c3)
     'dont-care))
 

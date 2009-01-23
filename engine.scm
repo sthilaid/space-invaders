@@ -1893,7 +1893,7 @@
   (lambda ()
     (let loop ()
       (update-score-msg! level)
-      (time (thread-send user-interface-thread `(redraw ,level)))
+      (thread-send user-interface-thread `(redraw ,level))
       (sleep-for redraw-interval)
       (loop))))
 

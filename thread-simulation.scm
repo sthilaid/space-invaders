@@ -3,6 +3,7 @@
 (include "thread-simulation-macro.scm")
 
 ;; FIXME: Load calls should be removed in the final compiled version
+(load "rbtree.scm")
 (load "scm-lib")
 (load "test")
 
@@ -15,13 +16,13 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define-type corout id kont mailbox (state unprintable:) prioritize?
-  on-entry on-exit delta-t)
+  sleeping? on-entry on-exit delta-t)
 
 (define (new-initial-entry-stack)
   (let ((s (new-stack)))
     (if trace-coroutines?
-        (push! (lambda (corout)
-                 (corout-delta-t-set! corout
+        (push! (lambda ()
+                 (corout-delta-t-set! (current-corout)
                                       (time->seconds (current-time))))
                s))
     s))
@@ -29,14 +30,14 @@
 (define (new-initial-exit-stack)
   (let ((s (new-stack)))
     (if trace-coroutines?
-        (push! (lambda (corout)
+        (push! (lambda ()
                  (table-set!
                   trace-corout-table
-                  (corout-id corout)
+                  (corout-id (current-corout))
                   (cons (- (time->seconds (current-time))
-                           (corout-delta-t corout))
+                           (corout-delta-t (current-corout)))
                         (cond ((table-ref trace-corout-table
-                                          (corout-id corout)
+                                          (corout-id (current-corout))
                                           #f)
                                => (lambda (vals) vals))
                               (else '())))))
@@ -98,10 +99,6 @@
 
 (define unbound '!---unbound---!)
 (define (unbound? v) (eq? v unbound))
-
-(define sleeping '!---sleeping---!)
-(define (sleeping? v) (eq? v unbound))
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Scheduling state global variables
@@ -180,8 +177,10 @@
 ;; sleep-q can be awaken yet.
 (define (manage-return-value)
   (cond
-   ((corout? (current-corout)) (corout-enqueue! (q) (current-corout)))
-   ((not (sleeping? (current-corout)))
+   ((and (corout? (current-corout))
+         (not (corout-sleeping? (current-corout))))
+    (corout-enqueue! (q) (current-corout)))
+   ((not (corout? (current-corout)))
     (return-value
      (if (not (return-value))
          (current-corout)
@@ -193,19 +192,10 @@
                 (<= (time-sleep-q-el-wake-time
                      (time-sleep-q-peek? (time-sleep-q)))
                     now))
-           (corout-enqueue! (q) (time-sleep-q-el-corout
-                                 (time-sleep-q-dequeue! (time-sleep-q))))))
-  
-  (let loop ((sleeping-el (dequeue!? (sleep-q))) (still-sleeping '()))
-    (if sleeping-el
-        (if (sleep-q-el-condition? sleeping-el)
-            (begin
-              (corout-enqueue! (q) (sleep-q-el-coroutine sleeping-el))
-              (loop (dequeue!? (sleep-q)) still-sleeping))
-            (loop (dequeue!? (sleep-q))
-                  (cons sleeping-el still-sleeping)))
-        (for-each (lambda (el) (enqueue! (sleep-q) el))
-                  still-sleeping))))
+           (let ((corout-to-wake (time-sleep-q-el-corout
+                                  (time-sleep-q-dequeue! (time-sleep-q)))))
+             (corout-sleeping?-set! corout-to-wake #f)
+             (corout-enqueue! (q) corout-to-wake)))))
 
 (define (resume-coroutine)
   (call/cc (lambda (k)
@@ -221,6 +211,23 @@
                  ;; run the coroutine
                  (kontinuation 'go)))))
 
+(define (call-on-entry-thunks corout init-k)
+  (parameterize ((return-to-sched
+                  (lambda (r)
+                    (pretty-print 'resumed!!)
+                    (corout-kont-set! corout init-k)
+                    ((return-to-sched) r))))
+    (for-each (lambda (f) (f))
+              (reverse (stack->list (corout-on-entry corout))))))
+(define (call-on-exit-thunks corout init-k)
+  (parameterize ((return-to-sched
+                  (lambda (r)
+                    (pretty-print 'resumed!!)
+                    (corout-kont-set! corout init-k)
+                    ((return-to-sched) r))))
+    (for-each (lambda (f) (f))
+              (stack->list (corout-on-exit corout)))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Scheduler
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -230,7 +237,7 @@
 ;; it's super scheduer (if there is one) when all the coroutines
 ;; finishes.
 (define (corout-scheduler)
-  
+
   ;; Verify for a return value
   (manage-return-value)
   
@@ -253,15 +260,14 @@
   ;; scheduler.
   (cond
    ((corout? (current-corout))
-    (begin
-      (let ((c (current-corout)))
-        (for-each (lambda (f) (f c))
-                  (reverse (stack->list (corout-on-entry c))))
-;;         (pp `(entering-coroutine-of ,(corout-id c)) )
-        (resume-coroutine)
-;;         (pp `(exiting-coroutine-of ,(corout-id c)) )
-        (for-each (lambda (f) (f c))
-                  (stack->list (corout-on-exit c))))
+    (let* ((c (current-corout))
+           (init-k (corout-kont c)))
+      (call/cc
+       (lambda (k)
+         (parameterize ((return-to-sched k))
+           (call-on-entry-thunks c init-k)
+           (resume-coroutine)
+           (call-on-exit-thunks c init-k))))
       
       ;; loop the scheduler, if the coroutine finished
       (corout-scheduler)))
@@ -269,10 +275,11 @@
    ;; If only sleeping coroutines are left, sleep for a while
    ((not (time-sleep-q-empty? (time-sleep-q)))
     (begin
-      (let ((next-wake-time (time-sleep-q-el-wake-time
-                             (time-sleep-q-peek? (time-sleep-q)))))
-          (thread-sleep! (- next-wake-time (time->seconds (current-time)))))
-      (current-corout sleeping)
+      (let* ((next-wake-time
+              (time-sleep-q-el-wake-time (time-sleep-q-peek? (time-sleep-q)))))
+;;         (pp `(going to sleep for
+;;                     ,(- next-wake-time (time->seconds (current-time)))))
+        (thread-sleep! (- next-wake-time (time->seconds (current-time)))))
       (corout-scheduler)))
       
    ;; finish up the scheduling process by restoring the super
@@ -312,6 +319,7 @@
                ;; the thread will terminate cleanly.
                (lambda (dummy) (terminate-corout (thunk)))
                (new-queue) #f #f
+               #f ; not sleeping
                (new-initial-entry-stack) (new-initial-exit-stack)
                #f))
 
@@ -320,7 +328,8 @@
   (empty-queue? (corout-mailbox (current-corout))))
 
 ;; Gets the next message in the mailbox queue. If no message is
-;; available, the coroutine will sleep until a message is received.
+;; available, the coroutine will "actively sleep" until a message is
+;; received.
 (define (?)
   (define mail (corout-mailbox (current-corout)))
   (if (empty-queue? mail)
@@ -400,8 +409,9 @@
   ;; first do all the requester actions on exit
   (let ((finish-scheduling (root-k))
         #; (ret-val (return-value)))
-    (for-each (lambda (f) (f (current-corout)))
-              (stack->list (corout-on-exit (current-corout))))
+    ;; Warning: unsure here if passing the corout's continuation is correct
+    (call/cc (lambda (k)
+               (call-on-exit-thunks (current-corout) k)))
     (restore-state (parent-state))
     (finish-scheduling exit-val)))
 
@@ -425,38 +435,23 @@
   (enqueue! (q) (new-corout id thunk)))
 
 
-;; Will put the coroutine into sleep, until the condition-thunk
-;; returns #t.
-(define (sleep-until condition-thunk)
-  (if (not (condition-thunk))
-      (begin
-        (call/cc
-         (lambda (k)
-           (corout-kont-set! (current-corout) k)
-           (enqueue! (sleep-q)
-                     (make-sleep-q-el condition-thunk (current-corout)))
-           (current-corout sleeping)
-           (resume-scheduling))))
-      (yield)))
-
-
 ;; Will put the current-corout to sleep for about "secs" seconds
 (define (sleep-for secs)
   (if (>= secs 0)
-      (let ((wake-time (+ (time->seconds (current-time)) secs)))
-        (call/cc
-         (lambda (k)
-           (corout-kont-set! (current-corout) k)
+      (call/cc
+       (lambda (k)
+         (let ((corout (current-corout))
+               (wake-time (+ (time->seconds (current-time)) secs)))
+           (corout-kont-set! corout k)
            (time-sleep-q-insert! (time-sleep-q)
-                                 (make-time-sleep-q-el wake-time
-                                                       (current-corout)))
-           (current-corout sleeping)
+                                 (make-time-sleep-q-el wake-time corout))
+           (corout-sleeping?-set! corout #t)
            (resume-scheduling))))
       (yield)))
 
 
 ;; Create a new semaphore or mutex object
-(define (new-semaphore init-value) (make-sem init-value '()))
+(define (new-semaphore init-value) (make-sem init-value (new-queue)))
 (define (new-mutex) (new-semaphore 1))
 
 ;; Return #t if the semaphore is locked or #f if not
@@ -468,15 +463,27 @@
 ;; event will be resumed when an unlock is performed.
 (define (sem-lock! sem)
   (while (sem-locked? sem)
-         (sleep-until (lambda ()(not (sem-locked? sem)))))
+         (pretty-print `(sem-locked putting ,(corout-id (current-corout)) to sleep))
+         (call/cc (lambda (k)
+                    (let ((corout (current-corout)))
+                      (corout-kont-set! corout k)
+                      (enqueue! (sem-wait-queue sem) corout)
+                      (corout-sleeping?-set! corout #t)
+                      (resume-scheduling)))))
+  (pretty-print `(,(corout-id (current-corout)) took the lock!))
+  ;; should be unqueued by the unlock call...
   (sem-decrease! sem)
-  #;
-  (pp `(mutex-locked val: ,(sem-value sem))))
+  #; (pretty-print `(mutex-locked val: ,(sem-value sem))))
 
 (define (sem-unlock! sem)
+  (pretty-print `(locked released by ,(corout-id (current-corout))))
+  (if (not (empty-queue? (sem-wait-queue sem)))
+      (let ((corout-to-wake (dequeue! (sem-wait-queue sem))))
+        (pretty-print `(waking up ,(corout-id corout-to-wake)))
+        (corout-sleeping?-set! corout-to-wake #f)
+        (corout-enqueue! (q) corout-to-wake)))
   (sem-increase! sem)
-  #;
-  (pp `(mutex-unlocked val: ,(sem-value sem))))
+  #; (pretty-print `(mutex-unlocked val: ,(sem-value sem))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -645,11 +652,11 @@
                  "bonne-nuit\n")
   'dont-care
   (let ((c1 (new-corout 'c1 (lambda ()
-                              (sleep-for 2)
+                              (sleep-for 0.2)
                               (pretty-print 'bonne-nuit))))
         (c2 (new-corout 'c2 (lambda () (pretty-print 'bon-matin))))
         (c3 (new-corout 'c3 (lambda ()
-                              (sleep-for 1)
+                              (sleep-for 0.1)
                               (pretty-print 'bonne-aprem)))))
     (simple-boot c1 c2 c3)
     'dont-care))
@@ -709,25 +716,23 @@
 (define-test test-dynamic-corout-extent:yield "INOUT2IN1OUT" 'done
   (let ((c1 (new-corout 'c1
                         (dynamic-corout-extent
-                         (lambda (_) (display "IN"))
+                         (lambda () (display "IN"))
                          (lambda () (yield) (display "1"))
-                         (lambda (_) (display "OUT")))))
+                         (lambda () (display "OUT")))))
          (c2 (new-corout 'c2 (lambda () (display "2") (yield) 'done))))
     (simple-boot c1 c2)))
 
 (define-test test-dynamic-corout-extent:sleep "INOUT2IN1OUT" 'done
-  (let* ((cond-var #f)
-         (c1 (new-corout 'c1
-                         (dynamic-corout-extent
-                          (lambda (_) (display "IN"))
-                          (lambda ()
-                            (sleep-for 0.1)
-                            (display "1")
-                            (set! cond-var #t))
-                          (lambda (_) (display "OUT")))))
+  (let* ((c1 (new-corout 'c1 (dynamic-corout-extent
+                              (lambda () (display "IN"))
+                              (lambda ()
+                                (sleep-for 0.1)
+                                (display "1"))
+                              (lambda () (display "OUT")))))
          (c2 (new-corout 'c2 (lambda ()
+                               (sleep-for 0.01)
                                (display "2")
-                               (sleep-until (lambda () cond-var))
+                               (sleep-for 0.3)
                                'done))))
     (simple-boot c1 c2)))
 
@@ -735,17 +740,17 @@
   "IN-00OUT-0IN-11OUT-1IN-22OUT-2" 'done
   (let* ((cond-var #f)
          (c0 (new-corout 'c0 (dynamic-corout-extent
-                              (lambda (_) (display "IN-0"))
+                              (lambda () (display "IN-0"))
                               (lambda () (display "0") (terminate-corout 'fini))
-                              (lambda (_) (display "OUT-0")))))
+                              (lambda () (display "OUT-0")))))
          (c1 (new-corout 'c1 (dynamic-corout-extent
-                              (lambda (_) (display "IN-1"))
+                              (lambda () (display "IN-1"))
                               (lambda () (display "1") (terminate-corout 'fini))
-                              (lambda (_) (display "OUT-1")))))
+                              (lambda () (display "OUT-1")))))
          (c2 (new-corout 'c2 (dynamic-corout-extent
-                              (lambda (_) (display "IN-2"))
+                              (lambda () (display "IN-2"))
                               (lambda () (display "2") (kill-all! 'done))
-                              (lambda (_) (display "OUT-2"))))))
+                              (lambda () (display "OUT-2"))))))
     (simple-boot c0 c1 c2)))
 
 (define-test test-dynamic-corout-extent:cont
@@ -754,9 +759,25 @@
               (lambda () (display "2"))
               (lambda () 'done)))
          (c0 (new-corout 'c0 (dynamic-corout-extent
-                              (lambda (_) (display "IN-0"))
+                              (lambda () (display "IN-0"))
                               (lambda () (display "0")
                                       (continue-with-thunk! t2))
-                              (lambda (_) (display "OUT-0")))))
+                              (lambda () (display "OUT-0")))))
          (c1 (new-corout 'c1 (lambda () (display "1")))))
     (simple-boot c0 c1)))
+
+(define-test test-dynamic-corout-extent:mutex
+  "0|1" 'done
+  (let* ((m (new-mutex))
+         (c0 (new-corout 'c0 (dynamic-corout-extent
+                              (lambda () (sem-lock! m))
+                              (lambda () (display "0")
+                                      (sleep-for 0.2)
+                                      (display "1")
+                                      'done)
+                              (lambda () (sem-unlock! m)))))
+         (c2 (new-corout 'c2 (lambda () (sem-lock! m)
+                                     (sleep-for 1)
+                                     (display "|")
+                                     (sem-unlock! m)))))
+    (simple-boot c0 c2 )))

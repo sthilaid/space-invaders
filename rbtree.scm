@@ -455,6 +455,14 @@
     (sleep-queue-remove! top)
     top))
 
+(define (sleep-queue->list h)
+  (let loop ((result '()))
+      (if (sleep-queue-empty? h)
+          result
+          (let* ((smallest (sleep-queue-leftmost h)))
+            (sleep-queue-remove! smallest)
+            (loop (cons smallest result))))))
+
 ;; A simple usage example which sorts a list of numbers
 (define (sleep-queue-sort lst)
   (let ((t (sleep-queue-create)))

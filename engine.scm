@@ -1025,9 +1025,9 @@
 
 (define-macro (synchronized-thunk level action . actions)
   `(dynamic-corout-extent
-    (lambda (_) (sem-lock! (level-mutex ,level)))
+    (lambda () (sem-lock! (level-mutex ,level)))
     (lambda () ,action ,@actions)
-    (lambda (_) (sem-unlock! (level-mutex ,level)))))
+    (lambda () (sem-unlock! (level-mutex ,level)))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

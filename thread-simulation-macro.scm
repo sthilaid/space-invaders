@@ -48,8 +48,7 @@
   `(begin
      ;; here execute on-exit thunks because we are leaving the initial
      ;; body to be reborn as a new thunk
-     (for-each (lambda (f) (f (current-corout)))
-               (stack->list (corout-on-exit (current-corout))))
+     (call/cc (lambda (k) (call-on-exit-thunks (current-corout) k)))
      (flush-entry-exit-thunks! (current-corout))
      (yield)
      (,continuation-thunk)))
@@ -77,8 +76,7 @@
   `(lambda ()
      (push! ,before-thunk (corout-on-entry (current-corout)))
      (push! ,after-thunk (corout-on-exit (current-corout)))
-     (for-each (lambda (f) (f (current-corout)))
-               (reverse (stack->list (corout-on-entry (current-corout)))))
+     (call/cc (lambda (k) (call-on-entry-thunks (current-corout) k)))
      ;; Note: There is no need to add calls to the on-exit thunks
      ;; because the body is supposed to be wrapped and exit with a
      ;; terminate-corout call which calls the on-exit thunks.

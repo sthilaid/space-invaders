@@ -7,6 +7,34 @@
 (load "scm-lib")
 (load "test")
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Timer
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(define-type timer time freq paused? thread)
+(define (start-timer! freq)
+  (let* ((timer (make-timer 0 freq #f #f))
+         (thread (make-thread
+                  (lambda ()
+                    (let loop ()
+                      (if (not (timer-paused? timer))
+                          (timer-time-set! timer (+ (timer-time timer 1))))
+                      (thread-sleep! (timer-freq timer))
+                      (loop))))))
+    (timer-thread-set! timer thread)
+    (thread-start! thread)
+    timer))
+
+(define (stop-timer! timer)
+  (thread-terminate! (timer-thread timer)))
+
+;; Naive implementation, assuming here that the timer is *not* taking
+;; alot of cpu time. Also not really thread safe, but should be ok on
+;; the long run.
+(define (pause-timer! timer)
+  (timer-paused?-set! timer (not (timer-paused? timer))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Internal definitions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -16,40 +44,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define-type corout id kont mailbox (state unprintable:) prioritize?
-  sleeping? on-entry on-exit delta-t)
-
-(define (new-initial-entry-stack)
-  (let ((s (new-stack)))
-    (if trace-coroutines?
-        (push! (lambda ()
-                 (corout-delta-t-set! (current-corout)
-                                      (time->seconds (current-time))))
-               s))
-    s))
-
-(define (new-initial-exit-stack)
-  (let ((s (new-stack)))
-    (if trace-coroutines?
-        (push! (lambda ()
-                 (table-set!
-                  trace-corout-table
-                  (corout-id (current-corout))
-                  (cons (- (time->seconds (current-time))
-                           (corout-delta-t (current-corout)))
-                        (cond ((table-ref trace-corout-table
-                                          (corout-id (current-corout))
-                                          #f)
-                               => (lambda (vals) vals))
-                              (else '())))))
-               s))
-    s))
-
-(define (flush-entry-exit-thunks! corout)
-  (corout-on-entry-set! corout (new-initial-entry-stack))
-  (corout-on-exit-set! corout (new-initial-exit-stack)))
+  sleeping? delta-t)
 
 (define-type state
-  current-corout q sleep-q time-sleep-q root-k return-value-handler
+  current-corout q timer time-sleep-q root-k return-value-handler
   return-value return-to-sched
   (parent-state unprintable:))
 
@@ -69,11 +67,6 @@
   (corout-prioritize?-set! c #t))
 (define (unprioritize! c)
   (corout-prioritize?-set! c #f))
-
-(define (make-sleep-q-el cond corout) (cons cond corout))
-(define (sleep-q-el-condition? sleep-q-el)
-  ((car sleep-q-el)))
-(define sleep-q-el-coroutine cdr)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; time related sleep queue
@@ -106,13 +99,18 @@
 
 (define current-corout       (make-parameter unbound))
 (define q                    (make-parameter unbound))
-(define sleep-q              (make-parameter unbound))
+(define timer                (make-parameter unbound))
 (define time-sleep-q         (make-parameter unbound))
 (define root-k               (make-parameter unbound))
 (define return-value-handler (make-parameter unbound))
 (define return-value         (make-parameter unbound))
 (define parent-state         (make-parameter unbound))
 (define return-to-sched      (make-parameter unbound))
+
+(define (current-sim-time)
+  (cond ((timer? (timer))
+         (timer-time (timer)))
+        (else (error "could not retrieve the simulation time"))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; State management functionnalities
@@ -122,7 +120,7 @@
 (define (save-state)
   (if (not (or (unbound? (current-corout))
                (unbound? (q))
-               (unbound? (sleep-q))
+               (unbound? (timer))
                (unbound? (time-sleep-q))
                (unbound? (root-k))
                (unbound? (return-value-handler))
@@ -130,7 +128,7 @@
       
       (make-state (current-corout)
                   (q)
-                  (sleep-q)
+                  (timer)
                   (time-sleep-q)
                   (root-k)
                   (return-value-handler)
@@ -145,7 +143,7 @@
       (begin
         (current-corout       (state-current-corout state))
         (q                    (state-q state))
-        (sleep-q              (state-sleep-q state))
+        (timer                (state-timer state))
         (time-sleep-q         (state-time-sleep-q state))
         (root-k               (state-root-k state))
         (return-value-handler (state-return-value-handler state))
@@ -157,7 +155,7 @@
       (begin
         (current-corout       unbound)
         (q                    unbound)
-        (sleep-q              unbound)
+        (timer                unbound)
         (time-sleep-q         unbound)
         (root-k               unbound)
         (return-value-handler unbound)
@@ -187,7 +185,7 @@
          ((return-value-handler) (return-value) (current-corout)))))))
 
 (define (wake-up-sleepers)
-  (let ((now (time->seconds (current-time))))
+  (let ((now (current-sim-time)))
     (while (and (not (time-sleep-q-empty? (time-sleep-q)))
                 (<= (time-sleep-q-el-wake-time
                      (time-sleep-q-peek? (time-sleep-q)))
@@ -211,23 +209,6 @@
                  ;; run the coroutine
                  (kontinuation 'go)))))
 
-(define (call-on-entry-thunks corout init-k)
-  (parameterize ((return-to-sched
-                  (lambda (r)
-                    (pretty-print 'resumed!!)
-                    (corout-kont-set! corout init-k)
-                    ((return-to-sched) r))))
-    (for-each (lambda (f) (f))
-              (reverse (stack->list (corout-on-entry corout))))))
-(define (call-on-exit-thunks corout init-k)
-  (parameterize ((return-to-sched
-                  (lambda (r)
-                    (pretty-print 'resumed!!)
-                    (corout-kont-set! corout init-k)
-                    ((return-to-sched) r))))
-    (for-each (lambda (f) (f))
-              (stack->list (corout-on-exit corout)))))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Scheduler
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -247,39 +228,22 @@
   ;; Get the next coroutine, if one is available
   (current-corout (dequeue!? (q)))
 
-  ;; Usefull for debug:
-#;
-(pp `(corout-scheduler cur: ,(if (corout? (current-corout))
-                                   (corout-id (current-corout))
-                                   (current-corout))
-                         q: ,(map corout-id (queue-list (q)))
-                         sleep-q: ,(map corout-id
-                                        (map cdr (queue-list (sleep-q))))))
-
   ;; if there is one coroutine, run it, else stop the coroutine
   ;; scheduler.
   (cond
    ((corout? (current-corout))
-    (let* ((c (current-corout))
-           (init-k (corout-kont c)))
-      (call/cc
-       (lambda (k)
-         (parameterize ((return-to-sched k))
-           (call-on-entry-thunks c init-k)
-           (resume-coroutine)
-           (call-on-exit-thunks c init-k))))
-      
-      ;; loop the scheduler, if the coroutine finished
-      (corout-scheduler)))
+
+    (resume-coroutine)
+
+    ;; loop the scheduler, if the coroutine finished
+    (corout-scheduler))
 
    ;; If only sleeping coroutines are left, sleep for a while
    ((not (time-sleep-q-empty? (time-sleep-q)))
     (begin
       (let* ((next-wake-time
               (time-sleep-q-el-wake-time (time-sleep-q-peek? (time-sleep-q)))))
-;;         (pp `(going to sleep for
-;;                     ,(- next-wake-time (time->seconds (current-time)))))
-        (thread-sleep! (- next-wake-time (time->seconds (current-time)))))
+        (thread-sleep! (- next-wake-time (current-sim-time))))
       (corout-scheduler)))
       
    ;; finish up the scheduling process by restoring the super
@@ -320,7 +284,6 @@
                (lambda (dummy) (terminate-corout (thunk)))
                (new-queue) #f #f
                #f ; not sleeping
-               (new-initial-entry-stack) (new-initial-exit-stack)
                #f))
 
 ;; Querry the current-coroutine's mailbox to see if its empty
@@ -375,7 +338,11 @@
 ;; default return value handler, thus will return the value returned
 ;; by the last coroutine to finish.
 (define (simple-boot c1 . cs)
-  (apply boot (lambda (acc val) val) c1 cs))
+  (define default-freq 0.001)
+  (let* ((used-timer (start-timer! default-freq))
+         (result     (apply boot used-timer (lambda (acc val) val) c1 cs)))
+    (stop-timer! used-timer)
+    result))
 
 ;; Starts the scheduling of the givent coroutines with a specific
 ;; return value handler. The return value handler must have the
@@ -383,7 +350,7 @@
 ;; accumulated return value and val is the last returned value by a
 ;; coroutine. The accumulated value will be return when the scheduling
 ;; process finishes.
-(define (boot return-handler c1 . cs)
+(define (boot used-timer return-handler c1 . cs)
   (call/cc
    (lambda (k)
      (begin
@@ -392,7 +359,7 @@
          (root-k               k)
          (current-corout       #f)
          (q                    (new-queue))
-         (sleep-q              (new-queue))
+         (timer                used-timer)
          (time-sleep-q         (make-time-sleep-q))
          (return-value-handler return-handler)
          (return-value         #f)
@@ -409,9 +376,6 @@
   ;; first do all the requester actions on exit
   (let ((finish-scheduling (root-k))
         #; (ret-val (return-value)))
-    ;; Warning: unsure here if passing the corout's continuation is correct
-    (call/cc (lambda (k)
-               (call-on-exit-thunks (current-corout) k)))
     (restore-state (parent-state))
     (finish-scheduling exit-val)))
 
@@ -441,7 +405,7 @@
       (call/cc
        (lambda (k)
          (let ((corout (current-corout))
-               (wake-time (+ (time->seconds (current-time)) secs)))
+               (wake-time (+ (current-sim-time) secs)))
            (corout-kont-set! corout k)
            (time-sleep-q-insert! (time-sleep-q)
                                  (make-time-sleep-q-el wake-time corout))
@@ -561,8 +525,11 @@
         (c3 (new-corout 'c3 (lambda () (begin (display #\a)
                                               (terminate-corout 3)
                                               (yield)
-                                              (display #\b))))))
-    (boot (lambda (acc v) (+ acc v)) c1 c2 c3)))
+                                              (display #\b)))))
+        (timer (start-timer! 0.001)))
+    (let ((result (boot timer (lambda (acc v) (+ acc v)) c1 c2 c3)))
+      (stop-timer! timer)
+      result)))
 
 
 (define-test test-mailboxes

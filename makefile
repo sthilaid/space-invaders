@@ -34,7 +34,7 @@ GSC=$(PATH_TO_GAMBIT)/bin/gsc -:=$(PATH_TO_GAMBIT) -debug
 CC=gcc
 
 ## Gambit-c
-PATH_TO_GAMBIT=/opt/gambit-c/current
+PATH_TO_GAMBIT=/opt/gambit-c
 GAMBIT_LIB=$(PATH_TO_GAMBIT)/lib
 GAMBIT_INCLUDE=$(PATH_TO_GAMBIT)/include
 

@@ -47,6 +47,11 @@
 (define-type corout id kont mailbox (state unprintable:) prioritize?
   sleeping? delta-t)
 
+(define (mailbox-enqueue thrd msg)
+  (enqueue! (corout-mailbox thrd) msg))
+(define (mailbox-dequeue thrd)
+  (dequeue! (corout-mailbox thrd)))
+
 (define-type state
   current-corout q timer time-sleep-q root-k return-value-handler
   return-value return-to-sched
@@ -197,18 +202,21 @@
              (corout-enqueue! (q) corout-to-wake)))))
 
 (define (resume-coroutine)
-  (call/cc (lambda (k)
-               (return-to-sched k)
-               (let ((kontinuation (corout-kont (current-corout))))
-                 ;; if it is a statefull coroutine
-                 ;; (executing a scheduler) then restore its
-                 ;; environnement
-                 (if (corout-state (current-corout))
-                     (let ((state (save-state)))
-                       (restore-state (corout-state (current-corout)))
-                       (parent-state state)))
-                 ;; run the coroutine
-                 (kontinuation 'go)))))
+  (continuation-capture
+   (lambda (k)
+     (return-to-sched k)
+     (let ((kontinuation (corout-kont (current-corout))))
+       ;; if it is a statefull coroutine
+       ;; (executing a scheduler) then restore its
+       ;; environnement
+       (if (corout-state (current-corout))
+           (let ((state (save-state)))
+             (restore-state (corout-state (current-corout)))
+             (parent-state state)))
+       ;; run the coroutine
+       (if (procedure? kontinuation)
+           (kontinuation 'go)
+           (continuation-return kontinuation 'go))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Scheduler
@@ -227,7 +235,7 @@
   (wake-up-sleepers)
 
   ;; Get the next coroutine, if one is available
-  (current-corout (dequeue!? (q)))
+  (current-corout (dequeue! (q)))
 
   ;; if there is one coroutine, run it, else stop the coroutine
   ;; scheduler.
@@ -253,12 +261,12 @@
     (let ((finish-scheduling (root-k))
           (ret-val (return-value)))
       (restore-state (parent-state))
-      (finish-scheduling ret-val)))))
+      (continuation-return finish-scheduling ret-val)))))
 
 
 ;; Simple abstraction that just resumes the scheduler's calculation
 (define (resume-scheduling)
-  ((return-to-sched) 'back-in-sched))
+  (continuation-return (return-to-sched) 'back-in-sched))
 
 ;; Semaphore's internals 
 (define (sem-increase! sem) (sem-value-set! sem (+ (sem-value sem) 1)))
@@ -266,7 +274,7 @@
 
 
 (define (internal-yield)
-  (call/cc
+  (continuation-capture
    (lambda (k)
      (corout-kont-set! (current-corout) k)
      (resume-scheduling))))
@@ -287,24 +295,49 @@
                #f ; not sleeping
                #f))
 
+
+;;; Mailbox system
+
 ;; Querry the current-coroutine's mailbox to see if its empty
 (define (empty-mailbox?)
   (empty-queue? (corout-mailbox (current-corout))))
 
-;; Gets the next message in the mailbox queue. If no message is
-;; available, the coroutine will "actively sleep" until a message is
-;; received.
 (define (?)
-  (define mail (corout-mailbox (current-corout)))
-  (if (empty-queue? mail)
-      (begin (yield)
-             (?))
-      (dequeue! mail)))
+  (define mailbox (corout-mailbox (current-corout)))
+  (while (empty-queue? mailbox)
+         (continuation-capture
+          (lambda (k)
+            (let ((corout (current-corout)))
+              (corout-kont-set! corout k)
+              (corout-sleeping?-set! corout #t)
+              (resume-scheduling)))))
+  (dequeue! mailbox))
 
 
 ;; Send a message to the givent destination coroutine object.
 (define (! dest-corout msg)
-  (enqueue! (corout-mailbox dest-corout) msg))
+  (enqueue! (corout-mailbox dest-corout) msg)
+  (if (corout-sleeping? dest-corout)
+      (begin
+        (corout-sleeping?-set! dest-corout #f)
+        (corout-enqueue! (q) dest-corout))))
+
+(define (?? pred)
+  (define mailbox (corout-mailbox (current-corout)))
+  (let loop ()
+    (cond ((queue-find-and-remove! pred mailbox)
+           => (lambda (val) val))
+          (else
+           (continuation-capture
+            (lambda (k)
+              (let ((corout (current-corout)))
+                (corout-kont-set! corout k)
+                (corout-sleeping?-set! corout #t)
+                (resume-scheduling))))
+           (loop)))))
+
+
+;;; Thread control
 
 ;; Yields the current coroutine's calculation. The calculation will
 ;; resume where it left once the scheduler decides to resume it.
@@ -315,7 +348,7 @@
 ;; the scheduler runs inside a coroutine too, i.e. that we are in a
 ;; child recursive coroutine.
 (define (super-yield)
-  (call/cc
+  (continuation-capture
    (lambda (k)
      (if (parent-state)
          (let ((state (save-state)))
@@ -352,7 +385,7 @@
 ;; coroutine. The accumulated value will be return when the scheduling
 ;; process finishes.
 (define (boot used-timer return-handler c1 . cs)
-  (call/cc
+  (continuation-capture
    (lambda (k)
      (begin
        (let ((fresh-start? (unbound? (current-corout))))
@@ -378,7 +411,7 @@
   (let ((finish-scheduling (root-k))
         #; (ret-val (return-value)))
     (restore-state (parent-state))
-    (finish-scheduling exit-val)))
+    (continuation-return finish-scheduling exit-val)))
 
 ;; Kills all schedulers in the currently running scheduler tree and
 ;; return exit-val as the exit value of the primordial scheduler.
@@ -403,7 +436,7 @@
 ;; Will put the current-corout to sleep for about "secs" seconds
 (define (sleep-for secs)
   (if (>= secs 0)
-      (call/cc
+      (continuation-capture
        (lambda (k)
          (let ((corout (current-corout))
                (wake-time (+ (current-sim-time) secs)))
@@ -430,12 +463,13 @@
 (define (sem-lock! sem)
   (while (sem-locked? sem)
          #; (pretty-print `(sem-locked putting ,(corout-id (current-corout)) to sleep))
-         (call/cc (lambda (k)
-                    (let ((corout (current-corout)))
-                      (corout-kont-set! corout k)
-                      (enqueue! (sem-wait-queue sem) corout)
-                      (corout-sleeping?-set! corout #t)
-                      (resume-scheduling)))))
+         (continuation-capture
+          (lambda (k)
+            (let ((corout (current-corout)))
+              (corout-kont-set! corout k)
+              (enqueue! (sem-wait-queue sem) corout)
+              (corout-sleeping?-set! corout #t)
+              (resume-scheduling)))))
   #; (pretty-print `(,(corout-id (current-corout)) took the lock!))
   ;; should be unqueued by the unlock call...
   (sem-decrease! sem)
@@ -681,4 +715,21 @@
                                      (display 'D)))))
     (simple-boot c3)))
 
-
+(define-test test-extended-mailboxes
+  (string-append "c2-sent-data\n"
+                 "c3-sleeps\n"
+                 "c3-sent-data\n"
+                 "3\n")
+  2
+  (let* ((c1 (new-corout 'c1 (lambda ()
+                               (pretty-print (?? odd?))
+                               (?))))
+         (c2 (new-corout 'c2 (lambda ()
+                               (! c1 2)
+                               (pretty-print 'c2-sent-data))))
+         (c3 (new-corout 'c3 (lambda ()
+                               (pretty-print 'c3-sleeps)
+                               (sleep-for 0.2)
+                               (! c1 3)
+                               (pretty-print 'c3-sent-data)))))
+    (simple-boot c1 c2 c3)))

@@ -236,6 +236,10 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;; Math stuff ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(define (1+ x) (+ x 1))
+(define (1- x) (- x 1))
+(define (one? x) (eq? x 1))
+
 (define (exactisize n)
   (inexact->exact (floor n)))
 
@@ -402,39 +406,78 @@
    (lambda () (pop! stack))))
 
 
-
 ;;; Queue implementation
-(define (new-queue) (cons '() '()))
-(define queue-list car)
-(define queue-list-set! set-car!)
-(define (queue-size queue)
-  (length (queue-list queue)))
+(define-type queue head tail size)
+(define-type queue-elem prev next value)
+(define (new-queue) (make-queue #f #f 0))
 
-(define (enqueue! queue val)
-  (queue-list-set! queue (cons val (queue-list queue))))
+(define (enqueue! q val)
+  (if (empty-queue? q)
+      (let ((elem (make-queue-elem 'q-tail 'q-head val)))
+        (queue-head-set! q elem)
+        (queue-tail-set! q elem))
+      (let* ((old-tail (queue-tail q))
+             (elem (make-queue-elem 'q-tail old-tail val)))
+        (queue-elem-prev-set! old-tail elem)
+        (queue-tail-set! q elem)))
+  (queue-size-set! q (1+ (queue-size q))))
 
-(define (dequeue! queue)
-  (define list (queue-list queue))
-  (if (empty-queue? queue)
-      (raise 'empty-q)
-      (let ((queue-head (car (take-right list 1))))
-        (queue-list-set! queue (drop-right list 1))
-        queue-head)))
+(define (dequeue! q)
+  (let ((qsize (queue-size q)))
+    (cond
+     ((zero? qsize) #f)
+     (else
+      (let* ((val (queue-elem-value (queue-head q))))
+        (if (one? qsize)
+            ;; if getting empty reset the queue
+            (begin (queue-head-set! q #f)
+                   (queue-tail-set! q #f))
+            (let ((new-head (queue-elem-prev (queue-head q))))
+              (queue-elem-next-set! new-head 'queue-head)
+              (queue-head-set! q new-head)))
+        (queue-size-set! q (1- (queue-size q)))
+        val)))))
 
-;; Will return #f if the queue is empty
-(define (dequeue!? queue)
-  (with-exception-catcher
-   (lambda (e) (case e ((empty-q) #f) (else (raise e))))
-   (lambda () (dequeue! queue))))
 
-(define (queue-push! queue val)
-  (queue-list-set! queue (append (queue-list queue) (list val))))
+(define (queue-push! q val)
+  (if (empty-queue? q)
+      (enqueue! q val)
+      (let* ((old-head (queue-head q))
+             (elem (make-queue-elem old-head 'q-head val)))
+        (queue-elem-next-set! old-head elem)
+        (queue-head-set! q elem)
+        (queue-size-set! q (1+ (queue-size q))))))
 
-(define (empty-queue? q) (not (pair? (queue-list q))))
+(define (empty-queue? q) (zero? (queue-size q)))
 
-(define (queue-find-obj? q predicate)
-  (exists predicate (queue-list q)))
+(define (queue-abstract-foldl it f acc el)
+  (if (not (queue-elem? el))
+      acc
+      (queue-abstract-foldl it f (f acc (queue-elem-value el)) (it el))))
+(define (queue-foldl f acc q)
+  (queue-abstract-foldl queue-elem-prev f acc (queue-head q)))
+(define (queue-rfoldl f acc q)
+  (queue-abstract-foldl queue-elem-next f acc (queue-tail q)))
 
+(define (queue-find-and-remove! pred q)
+  (define (find-n-rem it pred el)
+   (cond
+    ((not (queue-elem? el)) #f)
+    ((pred (queue-elem-value el))
+     (let ((val  (queue-elem-value el))
+           (prev (queue-elem-prev el))
+           (next (queue-elem-next el)))
+       (if (queue-elem? prev)
+           (queue-elem-next-set! prev next)
+           (queue-tail-set! q next))
+       (if (queue-elem? next)
+           (queue-elem-prev-set! next prev)
+           (queue-head-set! q prev))
+       (queue-size-set! q (1- (queue-size q)))
+       val))
+    (else (find-n-rem it pred (it el)))))
+
+  (find-n-rem queue-elem-prev pred (queue-head q)))
 
 
 ;;; Sets

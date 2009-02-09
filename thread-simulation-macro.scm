@@ -26,7 +26,7 @@
      (corout-kont-set! ,c (let ((k (corout-kont ,c)))
                            (lambda (,arg)
                              (unprioritize! ,c)
-                             (k ,arg))))
+                             (continuation-return k ,arg))))
      (terminate-corout ,c)))
 
 (define-macro (prioritized-thunk-continuation continuation-thunk)
@@ -63,3 +63,5 @@
               (continue-with-thunk! ,(composition (cdr thunks)))))))
   (composition thunks))
 
+(define-macro (recv pattern-list)
+  )

@@ -65,6 +65,34 @@
               (continue-with-thunk! ,(composition (cdr thunks)))))))
   (composition thunks))
 
-#;
+(define-macro (timeout? toval . code)
+  `(with-exception-catcher
+    (lambda (e) (if (eq? e mailbox-timeout-exception)
+                    ,toval
+                    (raise e)))
+    (lambda () ,@code)))
+
+
 (define-macro (recv pattern-list)
-  )
+  (define-type ast node-type test timeout body)
+  (define (pattern->ast pat)
+    (if (list? pat)
+        (cond
+         ;; matching ('symbol return-value)
+         ((and (list? (car pat))
+               (eq? (caar pat) 'quote))
+          (make-ast 'pattern-match
+                    `(lambda (x) (eq? x ',(cadar pat))) -1 (cdr pat)))
+         ((and (eq? (car pat) 'after)
+               (number? (cadr pat)))
+          (make-ast 'after `(lambda (x) #f) (cadr pat) (cddr pat)))
+         (else (error "ill-formed recv pattern expression")))))
+  (define (generate-code pat)
+    (let* ((ast (pattern->ast pat))
+           (?-req `(?? ,(ast-test ast) timeout: ,(ast-timeout ast))))
+      `(and ,(if (eq? (ast-node-type ast) 'after)
+                 `(timeout? #t ,?-req)
+                 `(timeout? #f ,?-req))
+            (begin ,@(ast-body ast)))))
+
+  (list 'quote `(or ,@(map generate-code pattern-list))))

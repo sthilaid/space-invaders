@@ -304,7 +304,7 @@
 (define (empty-mailbox?)
   (empty-queue? (corout-mailbox (current-corout))))
 
-(define (? #!key (timeout -1))
+(define (? #!key (timeout 'infinity))
   (define mailbox (corout-mailbox (current-corout)))
   (if (empty-queue? mailbox)
       (continuation-capture
@@ -312,9 +312,9 @@
          (let ((corout (current-corout)))
            (corout-kont-set! corout k)
            (corout-sleeping?-set! corout #t)
-           (if (<= timeout 0)
-               (resume-scheduling)
-               (sleep-for timeout))))))
+           (if (number? timeout)
+               (sleep-for timeout)
+               (resume-scheduling))))))
   (if (empty-queue? mailbox)
       (raise mailbox-timeout-exception)
       (dequeue! mailbox)))
@@ -328,20 +328,13 @@
         (corout-sleeping?-set! dest-corout #f)
         (corout-enqueue! (q) dest-corout))))
 
-(define (?? pred #!key (timeout -1))
+(define (?? pred #!key (timeout 'infinity))
   (define mailbox (corout-mailbox (current-corout)))
   (let loop ()
     (cond ((queue-find-and-remove! pred mailbox)
            => (lambda (val) val))
           (else
-           (if (<= timeout 0)
-               (begin (continuation-capture
-                       (lambda (k)
-                         (let ((corout (current-corout)))
-                           (corout-kont-set! corout k)
-                           (corout-sleeping?-set! corout #t)
-                           (resume-scheduling))))
-                      (loop))
+           (if (number? timeout)
                (begin
                 (continuation-capture
                  (lambda (k)
@@ -349,7 +342,14 @@
                      (corout-kont-set! corout k)
                      (corout-sleeping?-set! corout #t)
                      (sleep-for timeout))))
-                (raise mailbox-timeout-exception)))))))
+                (raise mailbox-timeout-exception))
+               (begin (continuation-capture
+                       (lambda (k)
+                         (let ((corout (current-corout)))
+                           (corout-kont-set! corout k)
+                           (corout-sleeping?-set! corout #t)
+                           (resume-scheduling))))
+                      (loop)))))))
 
 
 ;;; Thread control
@@ -768,4 +768,28 @@
                                      'done)))
          (c2 (new-corout 'c2 (lambda () (! c1 2))))
          (c3 (new-corout 'c2 (lambda () (! c1 4) (! c1 6)))))
+    (simple-boot c1 c2 c3)))
+
+(define-test test-timeout-extended "allogot-nothing" 'done
+  (let* ((c1 (new-corout 'c1 (lambda ()
+                               (cond ((timeout? #f (? timeout: 0))
+                                      => (lambda (x) (display x)))
+                                     (else (display 'got-nothing)))
+                               (cond ((timeout? #f (? timeout: 0.2))
+                                      => (lambda (x) (display x)))
+                                     (else (display 'got-nothing)))
+                               'done)))
+         (c2 (new-corout 'c2 (lambda () (! c1 'allo)))))
+    (simple-boot c1 c2)))
+
+(define-test test-recv "pongpingfinished!" 'done
+  (let* ((c1 (new-corout 'c1 (lambda ()
+                               (let loop ()
+                                 (recv
+                                  (('ping (display 'ping) (pp 'ping) (loop))
+                                   ('pong (display 'pong) (pp 'pong) (loop))
+                                   (after 5 (display 'finished!)))))
+                               'done)))
+         (c2 (new-corout 'c2 (lambda () (! c1 'pong))))
+         (c3 (new-corout 'c2 (lambda () (! c1 'ping)))))
     (simple-boot c1 c2 c3)))

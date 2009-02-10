@@ -302,7 +302,7 @@
 (define (empty-mailbox?)
   (empty-queue? (corout-mailbox (current-corout))))
 
-(define (?)
+(define (? #!optional (timeout -1))
   (define mailbox (corout-mailbox (current-corout)))
   (while (empty-queue? mailbox)
          (continuation-capture

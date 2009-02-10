@@ -90,7 +90,8 @@
        (sleep-queue-leftmost q)))
 (define time-sleep-q-dequeue! sleep-queue-retrieve-top!)
 (define time-sleep-q-insert! sleep-queue-insert!)
-
+(define time-sleep-q-remove! sleep-queue-remove!)
+(define time-sleep-q-node? sleep-queue-node?)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Internal symbols
@@ -307,13 +308,13 @@
 (define (? #!key (timeout 'infinity))
   (define mailbox (corout-mailbox (current-corout)))
   (if (empty-queue? mailbox)
-      (continuation-capture
-       (lambda (k)
-         (let ((corout (current-corout)))
-           (corout-kont-set! corout k)
-           (corout-sleeping?-set! corout #t)
-           (if (number? timeout)
-               (sleep-for timeout)
+      (if (number? timeout)
+          (sleep-for timeout)
+          (continuation-capture
+           (lambda (k)
+             (let ((corout (current-corout)))
+               (corout-kont-set! corout k)
+               (corout-sleeping?-set! corout #t)
                (resume-scheduling))))))
   (if (empty-queue? mailbox)
       (raise mailbox-timeout-exception)
@@ -325,6 +326,8 @@
   (enqueue! (corout-mailbox dest-corout) msg)
   (if (corout-sleeping? dest-corout)
       (begin
+        (if (time-sleep-q-node? (corout-sleeping? dest-corout))
+            (time-sleep-q-remove! (corout-sleeping? dest-corout)))
         (corout-sleeping?-set! dest-corout #f)
         (corout-enqueue! (q) dest-corout))))
 
@@ -335,14 +338,12 @@
            => (lambda (val) val))
           (else
            (if (number? timeout)
-               (begin
-                (continuation-capture
-                 (lambda (k)
-                   (let ((corout (current-corout)))
-                     (corout-kont-set! corout k)
-                     (corout-sleeping?-set! corout #t)
-                     (sleep-for timeout))))
-                (raise mailbox-timeout-exception))
+               (let ((msg-q-size (queue-size mailbox)))
+                 (sleep-for timeout)
+                 ;; might be awoken either from a (!) or timeout
+                 (if (= (queue-size mailbox) msg-q-size)
+                     (raise mailbox-timeout-exception)
+                     (loop)))
                (begin (continuation-capture
                        (lambda (k)
                          (let ((corout (current-corout)))
@@ -350,6 +351,7 @@
                            (corout-sleeping?-set! corout #t)
                            (resume-scheduling))))
                       (loop)))))))
+
 
 
 ;;; Thread control
@@ -453,12 +455,14 @@
   (if (>= secs 0)
       (continuation-capture
        (lambda (k)
-         (let ((corout (current-corout))
-               (wake-time (+ (current-sim-time) secs)))
+         (let* ((corout (current-corout))
+                (wake-time (+ (current-sim-time) secs))
+                (sleep-queue-node (make-time-sleep-q-el wake-time corout)))
            (corout-kont-set! corout k)
-           (time-sleep-q-insert! (time-sleep-q)
-                                 (make-time-sleep-q-el wake-time corout))
-           (corout-sleeping?-set! corout #t)
+           (time-sleep-q-insert! (time-sleep-q) sleep-queue-node)
+           ;; Here setting the node inside the sleeping? slot (for
+           ;; possible removal)...
+           (corout-sleeping?-set! corout sleep-queue-node)
            #; (pp `(now is ,(current-sim-time) sleeping until ,wake-time))
            (resume-scheduling))))
       (yield)))
@@ -759,16 +763,15 @@
          (c2 (new-corout 'c2 (lambda () (! c1 1)))))
     (simple-boot c1 c2)))
 
-(define-test test-timeout-?? "2ok" 'done
+(define-test test-timeout-?? "3ok" 'done
   (let* ((c1 (new-corout 'c1 (lambda () (with-exception-catcher
                                          (lambda (e) (display 'ok))
                                          (lambda ()
-                                           (display (?))
-                                           (display (?? odd? timeout: 0.1))))
+                                           (display (?? odd? timeout: 1))
+                                           (display (?? odd? timeout: 0.2))))
                                      'done)))
-         (c2 (new-corout 'c2 (lambda () (! c1 2))))
-         (c3 (new-corout 'c2 (lambda () (! c1 4) (! c1 6)))))
-    (simple-boot c1 c2 c3)))
+         (c2 (new-corout 'c2 (lambda () (! c1 2) (yield) (! c1 3)))))
+    (simple-boot c1 c2)))
 
 (define-test test-timeout-extended "allogot-nothing" 'done
   (let* ((c1 (new-corout 'c1 (lambda ()

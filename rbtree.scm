@@ -402,6 +402,10 @@
 (define (make-sleep-queue-node color parent left right time actions)
   (vector color parent left right time actions))
 
+;; not very safe... hehe
+(define (sleep-queue-node? n) (and (vector? n)
+                                   (= (vector-length n) 6)))
+
 (define (sleep-queue-color x)            (vector-ref x 0))
 (define (sleep-queue-color-set! x y)     (vector-set! x 0 y))
 (define (sleep-queue-parent x)           (vector-ref x 1))

@@ -96,3 +96,51 @@
             (begin ,@(ast-body ast)))))
 
   (list 'quote `(or ,@(map generate-code pattern-list))))
+
+(define (??? #!key (timeout 'infinity) #!rest preds)
+  (define mailbox (corout-mailbox (current-corout)))
+  (let loop ()
+    (cond ((queue-find-and-remove! pred mailbox)
+           => (lambda (val) val))
+          (else
+           (if (number? timeout)
+               (begin
+                (continuation-capture
+                 (lambda (k)
+                   (let ((corout (current-corout)))
+                     (corout-kont-set! corout k)
+                     (corout-sleeping?-set! corout #t)
+                     (sleep-for timeout))))
+                (raise mailbox-timeout-exception))
+               (begin (continuation-capture
+                       (lambda (k)
+                         (let ((corout (current-corout)))
+                           (corout-kont-set! corout k)
+                           (corout-sleeping?-set! corout #t)
+                           (resume-scheduling))))
+                      (loop)))))))
+
+(define-macro (recv pattern-list)
+  (define-type ast node-type test timeout body)
+  (define (pattern->ast pat)
+    (if (list? pat)
+        (cond
+         ;; matching ('symbol return-value)
+         ((and (list? (car pat))
+               (eq? (caar pat) 'quote))
+          (make-ast 'pattern-match
+                    `(lambda (x) (eq? x ',(cadar pat))) -1 (cdr pat)))
+         ((and (eq? (car pat) 'after)
+               (number? (cadr pat)))
+          (make-ast 'after `(lambda (x) #f) (cadr pat) (cddr pat)))
+         (else (error "ill-formed recv pattern expression")))))
+  (define (generate-code pat)
+    (let* ((ast (pattern->ast pat))
+           (?-req `(?? ,(ast-test ast) timeout: ,(ast-timeout ast))))
+      `(and ,(if (eq? (ast-node-type ast) 'after)
+                 `(timeout? #t ,?-req)
+                 `(timeout? #f ,?-req))
+            (begin ,@(ast-body ast)))))
+
+  (list 'quote `(or ,@(map generate-code pattern-list))))
+

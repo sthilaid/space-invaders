@@ -305,7 +305,11 @@
 (define (empty-mailbox?)
   (empty-queue? (corout-mailbox (current-corout))))
 
-(define (? #!key (timeout 'infinity))
+(define (? . opt-args)
+  (define timeout (let ((to (assq timeout: opt-args)))
+                    (if to
+                        (cadr to)
+                        'infinity)))
   (define mailbox (corout-mailbox (current-corout)))
   (if (empty-queue? mailbox)
       (if (number? timeout)
@@ -331,7 +335,11 @@
         (corout-sleeping?-set! dest-corout #f)
         (corout-enqueue! (q) dest-corout))))
 
-(define (?? pred #!key (timeout 'infinity))
+(define (?? pred . opt-args)
+  (define timeout (let ((to (assq timeout: opt-args)))
+                    (if to
+                        (cadr to)
+                        'infinity)))
   (define mailbox (corout-mailbox (current-corout)))
   (let loop ()
     (cond ((queue-find-and-remove! pred mailbox)
@@ -789,8 +797,8 @@
   (let* ((c1 (new-corout 'c1 (lambda ()
                                (let loop ()
                                  (recv
-                                  (('ping (display 'ping) (pp 'ping) (loop))
-                                   ('pong (display 'pong) (pp 'pong) (loop))
+                                  (('ping (display 'ping) (loop))
+                                   ('pong (display 'pong) (loop))
                                    (after 5 (display 'finished!)))))
                                'done)))
          (c2 (new-corout 'c2 (lambda () (! c1 'pong))))

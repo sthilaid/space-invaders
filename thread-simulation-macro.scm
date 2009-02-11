@@ -1,5 +1,4 @@
-
-
+;; (requires match.scm)
 
 ;; Critical section used with the semaphores. action and actions will
 ;; be executed inside the given semaphore (that should be a mutex for
@@ -72,75 +71,59 @@
                     (raise e)))
     (lambda () ,@code)))
 
-
 (define-macro (recv pattern-list)
-  (define-type ast node-type test timeout body)
+  (define (make-ast test-pattern eval-pattern)
+    (cons test-pattern eval-pattern))
+  (define (ast-test-pattern x) (car x))
+  (define (ast-eval-pattern x) (cdr x))
   (define (pattern->ast pat)
     (if (list? pat)
-        (cond
-         ;; matching ('symbol return-value)
-         ((and (list? (car pat))
-               (eq? (caar pat) 'quote))
-          (make-ast 'pattern-match
-                    `(lambda (x) (eq? x ',(cadar pat))) -1 (cdr pat)))
-         ((and (eq? (car pat) 'after)
-               (number? (cadr pat)))
-          (make-ast 'after `(lambda (x) #f) (cadr pat) (cddr pat)))
-         (else (error "ill-formed recv pattern expression")))))
-  (define (generate-code pat)
-    (let* ((ast (pattern->ast pat))
-           (?-req `(?? ,(ast-test ast) timeout: ,(ast-timeout ast))))
-      `(and ,(if (eq? (ast-node-type ast) 'after)
-                 `(timeout? #t ,?-req)
-                 `(timeout? #f ,?-req))
-            (begin ,@(ast-body ast)))))
+        (make-ast `(,(car pat) #t)
+                  `(,(car pat) ,@(cdr pat)))))
+  (define (generate-predicate asts)
+    `(lambda (msg) (match msg ,@(map ast-test-pattern asts))))
+  (define (generate-on-msg-found asts)
+    `(lambda (msg) (match msg ,@(map ast-eval-pattern asts))))
+  (define (filter pred list)
+    (cond
+     ((not (pair? list)) '())
+     ((pred (car list)) (cons (car list) (filter pred (cdr list))))
+     (else (filter pred (cdr list)))))
+  (include "match.scm")
+  (load "scm-lib")
 
-  (list 'quote `(or ,@(map generate-code pattern-list))))
-
-(define (??? #!key (timeout 'infinity) #!rest preds)
-  (define mailbox (corout-mailbox (current-corout)))
-  (let loop ()
-    (cond ((queue-find-and-remove! pred mailbox)
-           => (lambda (val) val))
-          (else
-           (if (number? timeout)
-               (begin
-                (continuation-capture
-                 (lambda (k)
-                   (let ((corout (current-corout)))
-                     (corout-kont-set! corout k)
-                     (corout-sleeping?-set! corout #t)
-                     (sleep-for timeout))))
-                (raise mailbox-timeout-exception))
-               (begin (continuation-capture
-                       (lambda (k)
-                         (let ((corout (current-corout)))
-                           (corout-kont-set! corout k)
-                           (corout-sleeping?-set! corout #t)
-                           (resume-scheduling))))
-                      (loop)))))))
-
-(define-macro (recv pattern-list)
-  (define-type ast node-type test timeout body)
-  (define (pattern->ast pat)
-    (if (list? pat)
-        (cond
-         ;; matching ('symbol return-value)
-         ((and (list? (car pat))
-               (eq? (caar pat) 'quote))
-          (make-ast 'pattern-match
-                    `(lambda (x) (eq? x ',(cadar pat))) -1 (cdr pat)))
-         ((and (eq? (car pat) 'after)
-               (number? (cadr pat)))
-          (make-ast 'after `(lambda (x) #f) (cadr pat) (cddr pat)))
-         (else (error "ill-formed recv pattern expression")))))
-  (define (generate-code pat)
-    (let* ((ast (pattern->ast pat))
-           (?-req `(?? ,(ast-test ast) timeout: ,(ast-timeout ast))))
-      `(and ,(if (eq? (ast-node-type ast) 'after)
-                 `(timeout? #t ,?-req)
-                 `(timeout? #f ,?-req))
-            (begin ,@(ast-body ast)))))
-
-  (list 'quote `(or ,@(map generate-code pattern-list))))
-
+  (let* ((last-pat (take-right pattern-list 1))
+         (timeout-val (if (eq? (caar last-pat) 'after)
+                          (cadar last-pat)
+                          'infinity))
+         (timeout-ret-val (if (eq? (caar last-pat) 'after)
+                              (caddar last-pat)
+                              '(raise mailbox-timeout-exception)))
+         (cleaned-patterns (filter
+                            (lambda (x) (match x
+                                               ((after ,_ ,_) #f)
+                                               (,_ #t)))
+                                   pattern-list))
+         (asts (map pattern->ast cleaned-patterns)))
+    (list 'quote
+          `(let ((mailbox (corout-mailbox (current-corout))))
+             (let loop ()
+               (cond ((queue-find-and-remove!
+                       ,(generate-predicate asts)
+                       mailbox)
+                      => ,(generate-on-msg-found asts))
+                     (else
+                      ,(if (eq? timeout-val 'infinity)
+                           `(begin (continuation-capture
+                                    (lambda (k)
+                                      (let ((corout (current-corout)))
+                                        (corout-kont-set! corout k)
+                                        (corout-sleeping?-set! corout #t)
+                                        (resume-scheduling))))
+                                   (loop))
+                           `(let ((msg-q-size (queue-size mailbox)))
+                              (sleep-for timeout)
+                              ;; might be awoken either from a (!) or timeout
+                              (if (= (queue-size mailbox) msg-q-size)
+                                  (raise mailbox-timeout-exception)
+                                  (loop)))))))))))

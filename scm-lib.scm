@@ -473,7 +473,6 @@
        (if (queue-elem? next)
            (queue-elem-prev-set! next prev)
            (queue-head-set! q prev))
-       (queue-size-set! q (1- (queue-size q)))
        val))
     (else (find-n-rem it pred (it el)))))
 

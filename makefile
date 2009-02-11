@@ -39,7 +39,7 @@ GAMBIT_LIB=$(PATH_TO_GAMBIT)/lib
 GAMBIT_INCLUDE=$(PATH_TO_GAMBIT)/include
 
 ## Some scheme libraries paths
-OOSYSYEM_PATH=$(HOME)/diro/ift6232/class
+OOSYSYEM_PATH=$(HOME)/projet/maitrise/class
 SCMLIB_PATH=$(HOME)/projet/maitrise/scm-lib
 
 

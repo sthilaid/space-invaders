@@ -117,7 +117,7 @@
 
 (define (current-sim-time)
   (cond ((timer? (timer))
-         (timer-time (timer)))
+         (* (timer-time (timer)) (timer-freq (timer))))
         (else (error "could not retrieve the simulation time"))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -461,7 +461,9 @@
            (corout-kont-set! corout k)
            (time-sleep-q-insert! (time-sleep-q) sleep-queue-node)
            ;; Here setting the node inside the sleeping? slot (for
-           ;; possible removal)...
+           ;; possible removal by msging system)...
+           ;; FIXME: here, this will make possible to wakeup a
+           ;; sleeping thread by sending it a msg...
            (corout-sleeping?-set! corout sleep-queue-node)
            #; (pp `(now is ,(current-sim-time) sleeping until ,wake-time))
            (resume-scheduling))))

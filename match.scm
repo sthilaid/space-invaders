@@ -66,9 +66,9 @@
                                (if (and (eq? (cadr clause) 'when)
                                         (pair? (cddr clause)))
                                    `(if ,(caddr clause)
-                                        ,(cadddr clause)
+                                        (begin ,@(cdddr clause))
                                         (,fn2))
-                                   (cadr clause))
+                                   `(begin ,@(cdr clause)))
                                `(,fn2))))
               fns
               (append (cdr fns) (list err))

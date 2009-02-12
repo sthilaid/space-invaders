@@ -305,11 +305,17 @@
 (define (empty-mailbox?)
   (empty-queue? (corout-mailbox (current-corout))))
 
-(define (? . opt-args)
-  (define timeout (let ((to (assq timeout: opt-args)))
-                    (if to
-                        (cadr to)
-                        'infinity)))
+;; Send a message to the givent destination coroutine object.
+(define (! dest-corout msg)
+  (enqueue! (corout-mailbox dest-corout) msg)
+  (if (corout-sleeping? dest-corout)
+      (begin
+        (if (time-sleep-q-node? (corout-sleeping? dest-corout))
+            (time-sleep-q-remove! (corout-sleeping? dest-corout)))
+        (corout-sleeping?-set! dest-corout #f)
+        (corout-enqueue! (q) dest-corout))))
+
+(define (? #!key (timeout 'infinity))
   (define mailbox (corout-mailbox (current-corout)))
   (if (empty-queue? mailbox)
       (if (number? timeout)
@@ -324,22 +330,7 @@
       (raise mailbox-timeout-exception)
       (dequeue! mailbox)))
 
-
-;; Send a message to the givent destination coroutine object.
-(define (! dest-corout msg)
-  (enqueue! (corout-mailbox dest-corout) msg)
-  (if (corout-sleeping? dest-corout)
-      (begin
-        (if (time-sleep-q-node? (corout-sleeping? dest-corout))
-            (time-sleep-q-remove! (corout-sleeping? dest-corout)))
-        (corout-sleeping?-set! dest-corout #f)
-        (corout-enqueue! (q) dest-corout))))
-
-(define (?? pred . opt-args)
-  (define timeout (let ((to (assq timeout: opt-args)))
-                    (if to
-                        (cadr to)
-                        'infinity)))
+(define (?? pred #!key (timeout 'infinity))
   (define mailbox (corout-mailbox (current-corout)))
   (let loop ()
     (cond ((queue-find-and-remove! pred mailbox)
@@ -797,10 +788,9 @@
   (let* ((c1 (new-corout 'c1 (lambda ()
                                (let loop ()
                                  (recv
-                                  (('ping (display 'ping) (loop))
-                                   ('pong (display 'pong) (loop))
-                                   (after 5 (display 'finished!)))))
-                               'done)))
+                                  ((ping (display 'ping) (loop))
+                                   (pong (display 'pong) (loop))
+                                   (after 0.1 (display 'finished!) 'done)))))))
          (c2 (new-corout 'c2 (lambda () (! c1 'pong))))
          (c3 (new-corout 'c2 (lambda () (! c1 'ping)))))
     (simple-boot c1 c2 c3)))

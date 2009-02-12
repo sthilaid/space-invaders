@@ -78,12 +78,20 @@
   (define (ast-eval-pattern x) (cdr x))
   (define (pattern->ast pat)
     (if (list? pat)
-        (make-ast `(,(car pat) #t)
-                  `(,(car pat) ,@(cdr pat)))))
+        (begin
+          (make-ast `(,(car pat) #t)
+                  `(,(car pat) ,@(cdr pat))))
+        (error "bad recv pattern format")))
   (define (generate-predicate asts)
-    `(lambda (msg) (match msg ,@(map ast-test-pattern asts))))
+    (let ((msg (gensym 'msg)))
+      `(lambda (,msg) (match ,msg
+                             ,@(map ast-test-pattern asts)
+                             (,(list 'unquote '_) #f)))))
   (define (generate-on-msg-found asts)
-    `(lambda (msg) (match msg ,@(map ast-eval-pattern asts))))
+    (let ((msg (gensym 'msg)))
+      `(lambda (,msg) (match ,msg
+                             ,@(map ast-eval-pattern asts)
+                             (,(list 'unquote '_) #f)))))
   (define (filter pred list)
     (cond
      ((not (pair? list)) '())
@@ -97,33 +105,34 @@
                           (cadar last-pat)
                           'infinity))
          (timeout-ret-val (if (eq? (caar last-pat) 'after)
-                              (caddar last-pat)
+                              (cddar last-pat)
                               '(raise mailbox-timeout-exception)))
          (cleaned-patterns (filter
                             (lambda (x) (match x
                                                ((after ,_ ,_) #f)
                                                (,_ #t)))
                                    pattern-list))
-         (asts (map pattern->ast cleaned-patterns)))
-    (list 'quote
-          `(let ((mailbox (corout-mailbox (current-corout))))
-             (let loop ()
-               (cond ((queue-find-and-remove!
-                       ,(generate-predicate asts)
-                       mailbox)
-                      => ,(generate-on-msg-found asts))
-                     (else
-                      ,(if (eq? timeout-val 'infinity)
-                           `(begin (continuation-capture
-                                    (lambda (k)
-                                      (let ((corout (current-corout)))
-                                        (corout-kont-set! corout k)
-                                        (corout-sleeping?-set! corout #t)
-                                        (resume-scheduling))))
-                                   (loop))
-                           `(let ((msg-q-size (queue-size mailbox)))
-                              (sleep-for timeout)
-                              ;; might be awoken either from a (!) or timeout
-                              (if (= (queue-size mailbox) msg-q-size)
-                                  (raise mailbox-timeout-exception)
-                                  (loop)))))))))))
+         (asts (map pattern->ast cleaned-patterns))
+         (loop (gensym 'loop))
+         (mailbox (gensym 'mailbox)))
+    `(let ((,mailbox (corout-mailbox (current-corout))))
+       (let ,loop ()
+            (cond ((queue-find-and-remove!
+                    ,(generate-predicate asts)
+                    ,mailbox)
+                   => ,(generate-on-msg-found asts))
+                  (else
+                   ,(if (eq? timeout-val 'infinity)
+                        `(begin (continuation-capture
+                                 (lambda (k)
+                                   (let ((corout (current-corout)))
+                                     (corout-kont-set! corout k)
+                                     (corout-sleeping?-set! corout #t)
+                                     (resume-scheduling))))
+                                (,loop))
+                        `(let ((msg-q-size (queue-size ,mailbox)))
+                           (sleep-for ,timeout-val)
+                           ;; might be awoken either from a (!) or timeout
+                           (if (= (queue-size ,mailbox) msg-q-size)
+                               (begin ,@timeout-ret-val)
+                               (,loop))))))))))

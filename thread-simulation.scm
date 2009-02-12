@@ -13,13 +13,16 @@
 ;; Timer
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define-type timer time freq paused? thread)
-(define (start-timer! freq)
-  (let* ((timer (make-timer 0 freq #f #f))
+(define-type timer time freq paused? thread time-multiplier)
+
+;; the timer uses an integer time value so that it will enable the use
+;; of bignums for precise long simulations. That's why the freq
+;; multiplier is applied to each current-sim-time calls.
+(define (start-timer! freq #!key (time-multiplier 1))
+  (let* ((timer (make-timer 0 freq #f #f time-multiplier))
          (thread (make-thread
                   (lambda ()
                     (let loop ()
-                      #;(pp `(time is at ,(timer-time timer)))
                       (if (not (timer-paused? timer))
                           (timer-time-set! timer (+ (timer-time timer) 1)))
                       (thread-sleep! (timer-freq timer))
@@ -116,9 +119,10 @@
 (define return-to-sched      (make-parameter unbound))
 
 (define (current-sim-time)
-  (cond ((timer? (timer))
-         (* (timer-time (timer)) (timer-freq (timer))))
-        (else (error "could not retrieve the simulation time"))))
+  (let ((t (timer)))
+   (cond ((timer? t)
+          (* (timer-time t) (timer-freq t) (timer-time-multiplier t)))
+         (else (error "could not retrieve the simulation time")))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; State management functionnalities
@@ -254,7 +258,9 @@
     (begin
       (let* ((next-wake-time
               (time-sleep-q-el-wake-time (time-sleep-q-peek? (time-sleep-q)))))
-        (thread-sleep! (- next-wake-time (current-sim-time))))
+        ;; sleeping for a scaled period of time
+        (thread-sleep! (/ (- next-wake-time (current-sim-time))
+                          (timer-time-multiplier (timer)))))
       (corout-scheduler)))
       
    ;; finish up the scheduling process by restoring the super

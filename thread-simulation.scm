@@ -1,6 +1,7 @@
 (include "test-macro.scm")
 (include "scm-lib-macro.scm")
 (include "thread-simulation-macro.scm")
+(include "match.scm")
 
 ;; FIXME: Load calls should be removed in the final compiled version
 (load "rbtree.scm")
@@ -798,7 +799,9 @@
 (define-test test-recv-ext "pong1pong2pong" 'ok
   (let* ((c1 (new-corout 'c1 (lambda ()
                                (let loop ()
-                                 (recv ((,from ping) (! from 'pong)))
+                                 (recv ((,from ping)
+                                        (where (corout? from))
+                                        (! from 'pong)))
                                  (loop)))))
          (c2 (new-corout 'c2 (lambda ()
                                (let loop ((n 1))

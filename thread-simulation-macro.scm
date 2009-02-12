@@ -64,6 +64,15 @@
               (continue-with-thunk! ,(composition (cdr thunks)))))))
   (composition thunks))
 
+(define-macro (spawn . body)
+  (let ((brother (gensym 'brother)))
+    `(let ((,brother (new-corout (gensym (symbol-append
+                                          (corout-id (current-corout))
+                                          '-child))
+                                 (lambda () ,@body))))
+       (spawn-brother ,brother)
+       ,brother)))
+
 (define-macro (timeout? toval . code)
   `(with-exception-catcher
     (lambda (e) (if (eq? e mailbox-timeout-exception)
@@ -73,15 +82,19 @@
 
 (define-macro (recv . pattern-list)
   (define (make-ast test-pattern eval-pattern)
-    (cons test-pattern eval-pattern))
-  (define (ast-test-pattern x) (car x))
-  (define (ast-eval-pattern x) (cdr x))
+    (vector test-pattern eval-pattern))
+  (define (ast-test-pattern x) (vector-ref x 0))
+  (define (ast-eval-pattern x) (vector-ref x 1))
   (define (pattern->ast pat)
-    (if (list? pat)
-        (begin
-          (make-ast `(,(car pat) #t)
-                  `(,(car pat) ,@(cdr pat))))
-        (error "bad recv pattern format")))
+    (if (and (list? pat) (>= (length pat) 2))
+        (match pat
+               ((,pattern (where ,@conds) ,@ret-val)
+                (make-ast `(,pattern when (and ,@conds) #t)
+                          `(,pattern when (and ,@conds) ,@ret-val)))
+               ((,pattern ,@ret-val)
+                (make-ast `(,pattern #t)
+                          `(,pattern ,@ret-val)))
+               (,_ (error "bad recv pattern format")))))
   (define (generate-predicate asts)
     (let ((msg (gensym 'msg)))
       `(lambda (,msg) (match ,msg

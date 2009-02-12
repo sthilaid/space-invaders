@@ -407,8 +407,8 @@
 
 
 ;;; Queue implementation
-(define-type queue head tail size)
-(define-type queue-elem prev next value)
+(define-type queue id: queue head tail size)
+(define-type queue-elem id: queue-elem prev next value)
 (define (new-queue) (make-queue #f #f 0))
 
 (define (enqueue! q val)
@@ -459,6 +459,8 @@
 (define (queue-rfoldl f acc q)
   (queue-abstract-foldl queue-elem-next f acc (queue-tail q)))
 
+(define (queue->list q) (queue-foldl rcons '() q))
+
 (define (queue-find-and-remove! pred q)
   (define (find-n-rem it pred el)
    (cond
@@ -477,7 +479,11 @@
        val))
     (else (find-n-rem it pred (it el)))))
 
-  (find-n-rem queue-elem-prev pred (queue-head q)))
+  (if (> (queue-size q) 0)
+      (find-n-rem queue-elem-prev pred (queue-head q))
+      #f))
+
+
 
 
 ;;; Sets

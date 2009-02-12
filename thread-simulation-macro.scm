@@ -71,7 +71,7 @@
                     (raise e)))
     (lambda () ,@code)))
 
-(define-macro (recv pattern-list)
+(define-macro (recv . pattern-list)
   (define (make-ast test-pattern eval-pattern)
     (cons test-pattern eval-pattern))
   (define (ast-test-pattern x) (car x))

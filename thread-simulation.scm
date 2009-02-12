@@ -17,7 +17,10 @@
 
 ;; the timer uses an integer time value so that it will enable the use
 ;; of bignums for precise long simulations. That's why the freq
-;; multiplier is applied to each current-sim-time calls.
+;; multiplier is applied to each current-sim-time calls. The
+;; time-multiplier is applied as a multiplier of the current
+;; simulation time. Thus a time-multiplier of 2 will have a simulation
+;; run 2 times faster.
 (define (start-timer! freq #!key (time-multiplier 1))
   (let* ((timer (make-timer 0 freq #f #f time-multiplier))
          (thread (make-thread
@@ -511,6 +514,28 @@
         (corout-enqueue! (q) corout-to-wake)))
   (sem-increase! sem)
   #; (pretty-print `(mutex-unlocked val: ,(sem-value sem))))
+
+
+
+;;; Messaging lists
+
+(define messaging-lists (make-table test: equal?))
+(define (get-msg-list list-id)
+  (table-ref messaging-lists list-id #f))
+(define (subscribe id agent)
+  (cond ((table-ref messaging-lists list-id #f)
+         => (lambda (lst) (cons agent lst)))
+        (else (table-set! messaging-lists list-id (list agent)))))
+(define (unsubscribe id agent)
+  (let ((msg-list (get-msg-list list-id)))
+    (and msg-list
+         (list-remove! msg-list agent))))
+(define (broadcast list-idmsg)
+  (let ((msg-list (get-msg-list list-id)))
+    (and msg-list
+         (for-each (lambda (subscriber) (! subscriber msg))
+                   msg-list))))
+
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

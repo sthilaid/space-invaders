@@ -1023,12 +1023,76 @@
 ;;
 ;;*****************************************************************************
 
-(define-macro (synchronized-thunk level action . actions)
-  `(dynamic-corout-extent
-    (lambda () (sem-lock! (level-mutex ,level)))
-    (lambda () ,action ,@actions)
-    (lambda () (sem-unlock! (level-mutex ,level)))))
+(define (invader level inv)
+  (define (main-state)
+    (recv
+     (move
+      (begin 
+        (move-object! level inv)
+        (! (find-barrier (invader-row-number inv)) 'moved)
+        (main-state)))
+     (wall-collision
+      (begin
+        (update! (game-object-speed inv) pos2d x (lambda (dx) (- dx)))
+        (pos2d-y-set! (game-object-speed inv) (- invader-y-movement-speed))
+        (move-object! level inv)
+        (pos2d-y-set! (game-object-speed inv) 0)
+        (! (find-barrier (invader-row-number inv)) 'moved)
+        (main-state)))
+     (player-explosion
+      (begin (player-expl-state)))
+     (game-paused
+      (begin (paused-state)))))
 
+  (define (player-expl-state)
+    (recv                     ; assuming that the expl obj gets paused
+     (game-paused (player-expl-state)) 
+     (player-explosion-end (main-state))))
+
+  (define (paused-state)
+    (recv ('game-unpaused (main-state))))
+
+  ;; init state
+  main-state)
+
+(define-class Barrier () (slot: agent-arrived))
+(define-class Inv-Controller (Barrier) (slot: row))
+(define-macro (define-wait-state state-name msg condition . barrier-open-code)
+  `(define (,state-name)
+     (recv (,msg
+            (begin
+              (update! self Barrier agent-arrived (lambda (n) (+ n 1)))
+              (if (>= (Barrier-agent-arrived self) ,condition)
+                  (begin
+                    (Barrier-agent-arrived-set! self 0)
+                    ,@barrier-open-code)
+                  (,state-name)))))))
+
+;; Problemes ici au niveau du redraw!! doit etre fait entre chaque etat...
+(define (invader-controller self)
+  (define (inv-nb) (row-size (Inv-Controller-row self)))
+  (define-wait-state main-state 'moved (inv-nb)
+    (recv 
+     (go-down-warning
+      (begin (Inv-Controller-warned?-set! self #f)
+             (broadcast (row-invaders (Inv-Controller-row self))
+                        'wall-collision)
+             (state2)))
+     ;; if no wall collision, then proceed to the next state
+     (after 0 (! redraw-agent `(redraw ,(Inv-Controller-row self))))))
+
+  main-state)
+
+(define (redraw-agent self)
+  (lambda ()
+    (let loop ()
+     (recv
+      ((redraw last-row)
+       (begin
+        (process-user-input)
+        (render current-level)
+        (broadcast (row-invaders (next-row last-row)) 'change-color)
+        (loop)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Start of game level animations

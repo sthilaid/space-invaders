@@ -1083,6 +1083,41 @@
 
   main-state)
 
+(define (process-user-input level)
+  (let ((player (level-player level))
+        (msg (thread-receive 0 #f)))
+    (if msg
+        (case msg
+          ((space)
+           (if (player-can-move?)
+               (shoot-laser! level
+                             make-player_laser
+                             (level-player level)
+                             player-laser-speed)))
+          ((right)
+           (if (player-can-move?)
+               (let ((new-speed (make-point player-movement-speed 0)))
+                 (game-object-speed-set! player new-speed)
+                 (move-object! level player))))
+          
+          ((left)
+           (if (player-can-move?)
+               (let ((new-speed (make-point (- player-movement-speed) 0)))
+                 (game-object-speed-set! player new-speed)
+                 (move-object! level player))))
+          
+          ((p)
+           (if game-paused?
+               (sem-unlock! (level-mutex level))
+               (sem-lock! (level-mutex level)))
+           (set! game-paused? (not game-paused?)))
+
+          ((r)
+           (stop-sfx 'all)
+           (super-kill-all! 'reset))
+
+          ((d) (error "DEBUG"))))))
+
 (define (redraw-agent self)
   (lambda ()
     (let loop ()
@@ -1882,7 +1917,7 @@
   (define (player-can-move?) (and (level-player level) (not game-paused?)))
   (lambda ()
     (let loop ()
-     (let ((player (level-player level))
+      (let ((player (level-player level))
            (msg (thread-receive 0 #f)))
        (if msg
            (case msg

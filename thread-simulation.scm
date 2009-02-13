@@ -452,11 +452,14 @@
 ;; Will spawn the brother coroutine into the scheduler of the
 ;; currently executing coroutine
 (define (spawn-brother corout)
-  (enqueue! (q) corout))
+  (enqueue! (q) corout)
+  corout)
 
 ;; Spawns an anonymous brother coroutine.
 (define (spawn-brother-thunk id thunk)
-  (enqueue! (q) (new-corout id thunk)))
+  (let ((c (new-corout id thunk)))
+    (enqueue! (q) (new-corout id thunk))
+    c))
 
 
 ;; Will put the current-corout to sleep for about "secs" seconds
@@ -492,7 +495,6 @@
 ;; event will be resumed when an unlock is performed.
 (define (sem-lock! sem)
   (while (sem-locked? sem)
-         #; (pretty-print `(sem-locked putting ,(corout-id (current-corout)) to sleep))
          (continuation-capture
           (lambda (k)
             (let ((corout (current-corout)))
@@ -500,10 +502,8 @@
               (enqueue! (sem-wait-queue sem) corout)
               (corout-sleeping?-set! corout #t)
               (resume-scheduling)))))
-  #; (pretty-print `(,(corout-id (current-corout)) took the lock!))
   ;; should be unqueued by the unlock call...
-  (sem-decrease! sem)
-  #; (pretty-print `(mutex-locked val: ,(sem-value sem))))
+  (sem-decrease! sem))
 
 (define (sem-unlock! sem)
   #;(pretty-print `(locked released by ,(corout-id (current-corout))))
@@ -522,18 +522,21 @@
 (define messaging-lists (make-table test: equal?))
 (define (get-msg-list list-id)
   (table-ref messaging-lists list-id #f))
-(define (subscribe id agent)
+(define (subscribe list-id agent)
   (cond ((table-ref messaging-lists list-id #f)
-         => (lambda (lst) (cons agent lst)))
+         => (lambda (lst) (table-set! messaging-lists list-id
+                                      (cons agent lst))))
         (else (table-set! messaging-lists list-id (list agent)))))
-(define (unsubscribe id agent)
+(define (unsubscribe list-id agent)
   (let ((msg-list (get-msg-list list-id)))
     (and msg-list
-         (list-remove! msg-list agent))))
-(define (broadcast list-idmsg)
+         (table-set! messaging-lists list-id
+                     (list-remove eq? agent msg-list)))))
+(define (broadcast list-id msg)
   (let ((msg-list (get-msg-list list-id)))
     (and msg-list
-         (for-each (lambda (subscriber) (! subscriber msg))
+         (for-each (lambda (subscriber)
+                     (! subscriber msg))
                    msg-list))))
 
 
@@ -826,7 +829,7 @@
                                   (pong (display 'pong) (loop))
                                   (after 0.1 (display 'finished!) 'done))))))
          (c2 (new-corout 'c2 (lambda () (! c1 'pong))))
-         (c3 (new-corout 'c2 (lambda () (! c1 'ping)))))
+         (c3 (new-corout 'c3 (lambda () (! c1 'ping)))))
     (simple-boot c1 c2 c3)))
 
 (define-test test-recv-ext "pong1pong2pong" 'ok
@@ -843,11 +846,29 @@
                                             (begin (! from `(ack ,n))
                                                    (loop (+ n 1)))
                                             (kill-all! 'ok))))))))
-         (c3 (new-corout 'c2 (lambda ()
+         (c3 (new-corout 'c3 (lambda ()
                                (let loop ()
                                  (! c1 `(,(current-corout) ping))
                                  (recv (pong (! c2 `(,(current-corout) inc))))
                                  (display 'pong)
                                  (recv ((ack ,n) (display n)))
                                  (loop))))))
+    (simple-boot c1 c2 c3)))
+
+(define-test test-msg-lists "alloallosalut" 'ok
+  (let ((c1 (new-corout 'c1 (lambda ()
+                              (subscribe 'toto (current-corout))
+                              (recv (,x (display x)))
+                              (unsubscribe 'toto (current-corout))
+                              (recv (,x (display x))))))
+        (c2 (new-corout 'c2 (lambda ()
+                              (subscribe 'toto (current-corout))
+                              (recv (,x (display x)))
+                              (recv (,x (display x))))))
+        (c3 (new-corout 'c3 (lambda ()
+                              (broadcast 'toto 'allo)
+                              (yield)
+                              (broadcast 'toto 'salut)
+                              (yield)
+                              'ok))))
     (simple-boot c1 c2 c3)))

@@ -2,6 +2,7 @@
 (include "scm-lib-macro.scm")
 (include "thread-simulation-macro.scm")
 (include "match.scm")
+(include "class.scm")
 
 ;; FIXME: Load calls should be removed in the final compiled version
 (load "rbtree.scm")
@@ -13,7 +14,12 @@
 ;; Timer
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define-type timer time freq paused? thread time-multiplier)
+(define-class timer ()
+  (slot: time)
+  (slot: freq)
+  (slot: paused?)
+  (slot: thread)
+  (slot: time-multiplier))
 
 ;; the timer uses an integer time value so that it will enable the use
 ;; of bignums for precise long simulations. That's why the freq
@@ -51,20 +57,32 @@
 ;; Data type definitions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define-type corout id kont mailbox (state unprintable:) prioritize?
-  sleeping? delta-t)
-
+(define-class corout ()
+  (slot: id)
+  (slot: kont)
+  (slot: mailbox)
+  (slot: state #;unprintable:)
+  (slot: prioritize?)
+  (slot: sleeping?)
+  (slot: delta-t))
 (define (mailbox-enqueue thrd msg)
   (enqueue! (corout-mailbox thrd) msg))
 (define (mailbox-dequeue thrd)
   (dequeue! (corout-mailbox thrd)))
 
-(define-type state
-  current-corout q timer time-sleep-q root-k return-value-handler
-  return-value return-to-sched
-  (parent-state unprintable:))
+(define-class state ()
+  (slot: current-corout)
+  (slot: q)
+  (slot: timer)
+  (slot: time-sleep-q)
+  (slot: root-k)
+  (slot: return-value-handler)
+  (slot: return-value)
+  (slot: return-to-sched)
+  (slot: parent-state #;unprintable:))
 
-(define-type sem value wait-queue)
+
+(define-class sem () (slot: value) (slot: wait-queue))
 
 ;; Must be used to enqueue a coroutine in the coroutine active
 ;; queue. The sleep queue *must not* use otherwise, it will result in
@@ -506,14 +524,11 @@
   (sem-decrease! sem))
 
 (define (sem-unlock! sem)
-  #;(pretty-print `(locked released by ,(corout-id (current-corout))))
   (if (not (empty-queue? (sem-wait-queue sem)))
       (let ((corout-to-wake (dequeue! (sem-wait-queue sem))))
-        #;(pretty-print `(waking up ,(corout-id corout-to-wake)))
         (corout-sleeping?-set! corout-to-wake #f)
         (corout-enqueue! (q) corout-to-wake)))
-  (sem-increase! sem)
-  #; (pretty-print `(mutex-unlocked val: ,(sem-value sem))))
+  (sem-increase! sem))
 
 
 

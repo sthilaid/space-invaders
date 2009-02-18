@@ -127,8 +127,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;; General game object description ;;;;
-(define-class game-object ()
-  (slot: id)
+(define-class game-object (corout)
+  ;; (slot: id) from corout
   (slot: pos)
   (slot: state)
   (slot: color)
@@ -137,6 +137,13 @@
   (class-slot: bbox)
   (class-slot: state-num)
   (class-slot: score-value))
+
+(define (new-object obj id thunk pos state color speed)
+  (init-corout! obj id thunk)
+  (game-object-pos-set! obj pos)
+  (game-object-state-set! obj state)
+  (game-object-color-set! obj color)
+  (game-object-speed-set! obj speed))
 
 (define (cycle-state! obj)
   (define current-state (game-object-state obj))

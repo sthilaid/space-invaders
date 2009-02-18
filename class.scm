@@ -58,16 +58,15 @@
         (symbol-append class-name '?))
       (define (class-desc-name  class-name)
         (symbol-append class-name '-class-descriptor))
-
+      (define (gen-instantiator-name name)
+        (symbol-append 'make- name '-instance))
 
       (define (gen-method-desc-name sign)
         (symbol-append (meth-name sign) '-meth-desc))
 
       (define (gen-method-table-name name)
         (symbol-append name '-meth-table))
-
       
-
 
       ;;;;;;;;;;;;;;; Data structure used ;;;;;;;;;;;;;;;
 
@@ -152,6 +151,8 @@
   (define obj (gensym 'obj))
   (define val (gensym 'val))
 
+  (define constructor-list '())
+
   (define (show . args)
     (for-each (lambda (x) (if (string? x) (display x) (write x))) args))
   (define-macro (to-string e1 . es)
@@ -160,25 +161,28 @@
   ;; puts the fields into the temp table. The class fields MUST be
   ;; processed AFTER that the super class's fields where processed.
   (define (process-field! field)
-    (cond
-     ((and (list? field)         ; FIXME: should this test be removed?
-           (>= (length field) 2))
-      (let ((slot-type (case (car field)
-                         ((slot: class-slot:) (car field))
-                         (else (error (to-string (show "Bad slot type: "
-                                                       (car field)))))))
-            (slot-name (cadr field))
-            (slot-options (cddr field)))
-        ;; If a field is already provided by a super class
-        ;; then the super class's is used ...
-        (if (not (table-ref temp-field-table slot-name #f))
-            (table-set! temp-field-table
-                        slot-name
-                        (make-slot slot-type
-                                   (next-desc-index)
-                                   slot-options)))))
-     (else (error (to-string (show "ill-formed slot declaration: "
-                                   field))))))
+    (if (not (list? field))
+        (else (error (to-string (show "ill-formed slot declaration: "
+                                      field))))
+        (case (car field)
+          ((slot: class-slot:)
+           (let ((slot-type (car field))
+                 (slot-name (cadr field))
+                 (slot-options (cddr field)))
+             ;; If a field is already provided by a super class
+             ;; then the super class's is used ...
+
+             (if (not (table-ref temp-field-table slot-name #f))
+                 (table-set! temp-field-table
+                             slot-name
+                             (make-slot slot-type
+                                        (next-desc-index)
+                                        slot-options)))))
+          ((constructor:)
+           (set! constructor-list (cons (cadr field) constructor-list)))
+
+          (else (error (to-string (show "ill-formed slot declaration: "
+                                        field)))))))
 
   (define (gen-accessors field-indices)
     (define (gen-accessor field slot-info)
@@ -304,6 +308,20 @@
        (map cdr field-indices))
       desc))
 
+  (define (gen-class-descriptor field-indices)
+    ;; Transforms a macro time vector to a vector runtime declaration
+    (define (vector->vector v)
+      (let ((code '())
+            (len  (vector-length v)))
+       (let loop ((i    (- (vector-length v) 1))
+                  (code '()))
+         (if (>= i 0)
+             (loop (- i 1) (cons `(quote ,(vector-ref v i)) code))
+             (cons 'vector code)))))
+    ;; Class descriptor is put in a global var
+    `(define ,(class-desc-name name)
+       ,(vector->vector (class-info-desc (table-ref mt-class-table name)))))
+
   ;; field-indices are expected to be sorted from lower index to
   ;; highest index
   (define (gen-instantiator field-indices)
@@ -312,22 +330,51 @@
       (filter (lambda (field-index)
                 (is-instance-slot? (cdr field-index)))
               field-indices))
-    ;; Transforms a macro time vector to a vector runtime declaration
-    (define (vector->vector v)
-      (let ((code '())
-            (len  (vector-length v)))
-       (let loop ((i (- (vector-length v) 1))
-                  (code '()))
-         (if (>= i 0)
-             (loop (- i 1) (cons `(quote ,(vector-ref v i)) code))
-             (cons 'vector code)))))
+    
     `(begin
-       ;; Class descriptor is put in a global var
-       (define ,(class-desc-name name)
-         ,(vector->vector (class-info-desc (table-ref mt-class-table name))))
+       ;; Usual make-[classname] 'a la' define-type constructor
        (define (,(symbol-append 'make- name) ,@(map car instance-field-indices))
          (vector ,(class-desc-name name)
-                 ,@(map car instance-field-indices)))))
+                 ,@(map car instance-field-indices)))
+       ;; The instantiator creates an un-initialized instance
+       (define (,(gen-instantiator-name name))
+         (vector ,(class-desc-name name)
+                 ,@(map (lambda (x)
+                          (list 'quote
+                                (list 'quote
+                                      (symbol-append 'un-initialized-
+                                                     name
+                                                     '-field))))
+                        instance-field-indices)))
+       ;; init! instances used as construtors for intitializing instances
+       ,@(if (null? constructor-list)
+             (list
+              `(define-method (init! (obj ,name)
+                                     ,@(map car instance-field-indices))
+                 ,@(map (lambda (fi)
+                          `(,(gen-setter-name name (car fi))
+                            obj
+                            ,(car fi)))
+                        instance-field-indices)
+                 obj))
+             (map (lambda (constructor)
+                    ;; parse the constructor so that it is a lambda
+                    ;; expression of at least one var:
+                    ;; (lambda (obj-arg . args) . body)
+                    (cond ((and (list? constructor)
+                                (>= (length constructor) 3)
+                                (eq? (car constructor) 'lambda)
+                                (list? (cadr constructor))
+                                (>= (length (cadr constructor)) 1))
+                           (let* ((cons-obj-arg (caadr constructor))
+                                  (const-args (cdadr constructor))
+                                  (const-body (cddr constructor)))
+                             `(define-method (init! (,cons-obj-arg ,name)
+                                                    ,@const-args)
+                                ,@const-body
+                                ,cons-obj-arg)))
+                          (else (error "Ill-formed constructor"))))
+                  constructor-list))))
 
   (define (gen-predicate)
     (define obj (gensym 'obj))
@@ -362,77 +409,84 @@
     (quick-sort (indice-comp <) (indice-comp =) (indice-comp >)
                 field-indices))
 
-  ;; Process the super classes' slots
-  (for-each
-   (lambda (super)
-     (let ((super-field-indices
-            (cond
-             ((table-ref mt-class-table super #f) =>
-              (lambda (desc) (class-info-fi desc)))
-             (else (error
-                    (to-string
-                     (show "Inexistant super class: " super)))))))
-       (for-each
-        (lambda (field-index)
-          (if (not (table-ref temp-field-table (car field-index) #f))
-              (table-set! temp-field-table
-                          (car field-index) (cdr field-index))
-              (error
-               (to-string
-                (show "Field already defined: " (car field-index))))))
-        super-field-indices)))
-   supers)
+  (begin ; body
+    
+   ;; Process the super classes' slots
+   (for-each
+    (lambda (super)
+      (let ((super-field-indices
+             (cond
+              ((table-ref mt-class-table super #f) =>
+               (lambda (desc) (class-info-fi desc)))
+              (else (error
+                     (to-string
+                      (show "Inexistant super class: " super)))))))
+        (for-each
+         (lambda (field-index)
+           (if (not (table-ref temp-field-table (car field-index) #f))
+               (table-set! temp-field-table
+                           (car field-index) (cdr field-index))
+               (error
+                (to-string
+                 (show "Field already defined: " (car field-index))))))
+         super-field-indices)))
+    supers)
 
-  ;; Process this class's slots
-  (for-each process-field! fields)
+   ;; Process this class's slots
+   (for-each process-field! fields)
 
-  (let* ((field-indices (sort-field-indices (table->list temp-field-table)))
+   (let* ((field-indices (sort-field-indices (table->list temp-field-table)))
          (class-desc (gen-descriptor field-indices)))
 
     (table-set! mt-class-table name (make-class-info field-indices class-desc))
-    `(begin ,@(gen-accessors field-indices)
+    `(begin ,(gen-class-descriptor field-indices)
+            ,@(gen-accessors field-indices)
             ,@(gen-setters field-indices)
             ,(gen-predicate)
-            ,(gen-instantiator field-indices)
             ;; here the class descriptor is put in a global table
             ;; but it is also available via its variable ,(class-desc-name name)
             (table-set! rt-class-table
                         ',name
                         ,(class-desc-name name))
-            ;; Create a generi print utility (must be at the end)
-            ,(gen-printfun field-indices))))
+            ;; Generic function that are generated must come after the
+            ;; descriptor was put into the runtime class table!
+            ,(gen-instantiator field-indices)
+            ,(gen-printfun field-indices)))))
 
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Generic constructors (new)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(define-macro (new class-name . params)
+  `(init! (,(gen-instantiator-name class-name)) ,@params))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Generic methods
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define-macro (define-generic signature)
-  (define name (meth-name signature))
-  (define (parse-arg arg)
-    (cond ((and (list? arg) (symbol? (car arg)) (symbol? (cadr arg)))
-           (car arg))
-          (else arg)))
-
-  (let ((args (map parse-arg (cdr signature))))
+(define-macro (define-generic name)
+  (let ((args 'toto))
     (table-set! mt-meth-table name (make-mt-generic-function name args))
     `(begin
        (define ,(gen-method-table-name name)
          (make-generic-function ',name ',args))
-       (define (,name ,@args #!key (cast #f))
+       (define (,name #!key (cast #f) #!rest args)
+         ;; the retrieval of types is slower then when the number of
+         ;; parameters was constant. Now (map get-class-id...) is
+         ;; performed at runtime.
          (let ((types
                 (if cast
-                    (assert-cast (##list ,@args) cast)
-                    (##list ,@(map (lambda (arg) `(get-class-id ,arg))
-                                   args)))))
+                    (assert-cast args cast)
+                    (map get-class-id args))))
            (cond
             ((or (generic-function-get-instance ,(gen-method-table-name name)
                                                 types)
                  (find-polymorphic-instance? ,(gen-method-table-name name)
                                              types))
              => (lambda (method)
-                  ((method-body method) ,@args)))
+                  (apply (method-body method) args)))
             (else
              (error (string-append
                      "Unknown method: "
@@ -440,8 +494,6 @@
                        ""
                        (lambda ()
                          (pretty-print `(,',name ,@types)))))))))))))
-
-
 
 (define-macro (define-method signature bod . bods)
   (define (show . args)
@@ -478,8 +530,10 @@
                     ,(gen-method-table-name (name))
                     (make-method ',(name) ',types
                                  (lambda ,args ,bod ,@bods))))))
-      (else (raise unknown-meth-error))))))
-
+      (else
+       `(begin
+          (define-generic ,(name))
+          (define-method ,signature ,bod ,@bods)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Utilities
@@ -490,6 +544,19 @@
    `(let ((,objval ,obj))
       (,(gen-setter-name class field) ,objval
        (,f (,(gen-accessor-name class field) ,objval))))))
+
+(define-macro (set-fields! obj class field-val-list)
+  (let ((obj-ptr (gensym 'obj)))
+    `(let ((,obj-ptr ,obj))
+       ,@(map (lambda (field-val)
+                (if (not (and (list? field-val)
+                              (= (length field-val) 2)))
+                    (error "invalid set-fields! field syntax"))
+                (let ((field-name (car field-val))
+                      (val        (cadr field-val)))
+                  `(,(gen-setter-name class field-name) ,obj-ptr ,val)))
+              field-val-list)
+       ,obj-ptr)))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;; Runtime stuff ;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -569,14 +636,16 @@
     (for-each (lambda (x) (if (string? x) (display x) (write x))) args))
   (define-macro (to-string e1 . es)
     `(with-output-to-string "" (lambda () ,e1 ,@es)))
-
+  (define error-str )
+  (if (not (= (length args) (length types)))
+      (error (string-append "Cannot perform cast: actual parameter number "
+                            "differs from cast types number.")))
   (for-each
    (lambda (arg type)
      (let ((class-id (get-class-id arg)))
        (if (not (is-subclass? class-id type))
-           (error
-            (to-string (show "Cannot perform cast: "
-                             class-id " is not a sublclass of " type))))))
+           (error (to-string (show "Cannot perform cast: "
+                                   class-id " is not a sublclass of " type))))))
    args
    types)
   types)
@@ -605,15 +674,13 @@
        (table-ref rt-class-table class-id (gensym))))
 
 (define (is-subclass? class-id super-id)
-  (and (not (eq? class-id 'any-type))
-       ;; (or (and (eq? class-id super-id) class-id)
-       ;;  before, but not sure why... eh
-       (or (eq? class-id super-id)
-           (eq? super-id 'any-type)
-           (and (memq super-id
-                      (class-desc-supers
-                       (table-ref rt-class-table class-id)))
-                #t))))
+  (or (eq? class-id super-id)
+      (eq? super-id 'any-type)
+      (and (not (eq? class-id 'any-type))
+           (memq super-id
+                 (class-desc-supers
+                  (table-ref rt-class-table class-id)))
+           #t)))
 
 (define (get-super-numbers type)
     (if (eq? type 'any-type)
@@ -633,22 +700,25 @@
                 (method-comparator <)
                 method-lst))
 
-;; Will find the "best" or most specific instance of the generic
-;; function genfun that corresponds to the actual parameter's types
-(define (find-polymorphic-instance? genfun types)
-  (define (equivalent-types? instance-types param-types)
+(define (equivalent-types? instance-types param-types)
     (if (pair? instance-types)
         (and (is-subclass? (car param-types) (car instance-types))
              (equivalent-types? (cdr instance-types) (cdr param-types)))
         #t))
 
-  (let ((sorted-instances (generic-function-sorted-instances genfun)))
+;; Will find the "best" or most specific instance of the generic
+;; function genfun that corresponds to the actual parameter's types
+(define (find-polymorphic-instance? genfun types)
+  (let ((args-nb (length types))
+        (sorted-instances (generic-function-sorted-instances genfun)))
     (exists (lambda (method) (equivalent-types? (method-types method)
                                                 types))
-            sorted-instances)))
+            (filter (lambda (i) (= (length (method-types i)) args-nb))
+             sorted-instances))))
 
 
-(define-generic (describe obj))
+(define-generic describe)
+(define-generic init!)
 
 ;; A usefull function provided by Marc :)
 (define (add-pp-method! type-predicate transformer)

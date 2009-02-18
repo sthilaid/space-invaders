@@ -61,10 +61,31 @@
   (slot: id)
   (slot: kont)
   (slot: mailbox)
-  (slot: state #;unprintable:)
+  (slot: state) ;; should be unprintable
   (slot: prioritize?)
   (slot: sleeping?)
-  (slot: delta-t))
+  (slot: delta-t)
+  (constructor: (lambda (obj id thunk)
+                  (set-fields! obj corout
+                    ((id          id)
+                     (kont        (lambda (dummy) (terminate-corout (thunk))))
+                     (mailbox     (new-queue))
+                     (state       #f)
+                     (prioritize? #f)
+                     (sleeping?   #f)
+                     (delta-t     #f))))))
+
+(define (init-corout! corout id thunk)
+  (corout-id-set! corout id)
+  (corout-kont-set! corout (lambda (dummy) (terminate-corout (thunk))))
+  (corout-mailbox-set! corout (new-queue))
+  (corout-state-set! corout #f)
+  (corout-prioritize?-set! corout #f)
+  (corout-sleeping?-set! corout #f)
+  (corout-delta-t-set! corout #f)
+  corout)
+
+
 (define (mailbox-enqueue thrd msg)
   (enqueue! (corout-mailbox thrd) msg))
 (define (mailbox-dequeue thrd)
@@ -316,13 +337,7 @@
 ;; Creation of a new coroutine object with id as it's identifier
 ;; (mostly used for debugging and the given thunk as its body.
 (define (new-corout id thunk)
-  (make-corout id
-               ;; here the terminate-corout call is added to ensure that
-               ;; the thread will terminate cleanly.
-               (lambda (dummy) (terminate-corout (thunk)))
-               (new-queue) #f #f
-               #f ; not sleeping
-               #f))
+  (init-corout! (make-corout #f #f #f #f #f #f #f) id thunk))
 
 
 ;;; Mailbox system
@@ -452,8 +467,7 @@
 ;; scheduler.
 (define (kill-all! exit-val)
   ;; first do all the requester actions on exit
-  (let ((finish-scheduling (root-k))
-        #; (ret-val (return-value)))
+  (let ((finish-scheduling (root-k)))
     (restore-state (parent-state))
     (continuation-return finish-scheduling exit-val)))
 
@@ -475,8 +489,8 @@
 
 ;; Spawns an anonymous brother coroutine.
 (define (spawn-brother-thunk id thunk)
-  (let ((c (new-corout id thunk)))
-    (enqueue! (q) (new-corout id thunk))
+  (let ((c (new corout id thunk)))
+    (enqueue! (q) (new corout id thunk))
     c))
 
 
@@ -593,12 +607,12 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define-test simple-test "A1B2" 3
-  (let ((c1 (new-corout 'c1 (lambda ()
+  (let ((c1 (new corout 'c1 (lambda ()
                               (display 'A)
                               (yield)
                               (display 'B)
                               (terminate-corout 'C))))
-        (c2 (new-corout 'c2 (lambda ()
+        (c2 (new corout 'c2 (lambda ()
                               (display 1)
                               (yield)
                               (display 2)
@@ -606,29 +620,29 @@
     (simple-boot c1 c2)))
 
 (define-test test-kill-all "12" 'killed-all
-  (let ((c1 (new-corout 'c1 (lambda ()
+  (let ((c1 (new corout 'c1 (lambda ()
                               (for i 0 (< i 3)
                                    (begin (if (= i 1)
                                               (kill-all! 'killed-all))
                                           (display 1)
                                           (yield))))))
-        (c2 (new-corout 'c2 (lambda ()
+        (c2 (new corout 'c2 (lambda ()
                               (for i 0 (< i 3) (begin (display 2)
                                                       (yield)))))))
     (simple-boot c1 c2)))
 
 (define-test test-ret-val-handler "A1aB2" 6
-  (let ((c1 (new-corout 'c1 (lambda () (begin (display 'A)
+  (let ((c1 (new corout 'c1 (lambda () (begin (display 'A)
                                               (yield)
                                               (display 'B)
                                               1))))
-        (c2 (new-corout 'c2 (lambda () (begin (display 1)
+        (c2 (new corout 'c2 (lambda () (begin (display 1)
                                               (yield)
                                               (display 2)
                                               2))))
         ;; here terminate-corout is used to shortcircuit the flow of
         ;; the thunk and finish earlier this thread.
-        (c3 (new-corout 'c3 (lambda () (begin (display #\a)
+        (c3 (new corout 'c3 (lambda () (begin (display #\a)
                                               (terminate-corout 3)
                                               (yield)
                                               (display #\b)))))
@@ -644,73 +658,73 @@
                  "(c1 received allo)\n"
                  "(c1 received salut)\n")
   'done
-  (letrec ((c1 (new-corout 'c1 (lambda ()
+  (letrec ((c1 (new corout 'c1 (lambda ()
                                  (pretty-print `(c1 received ,(?)))
                                  (pretty-print `(c1 received ,(?)))
                                  'done)))
-           (c2 (new-corout 'c2 (lambda ()
+           (c2 (new corout 'c2 (lambda ()
                                  (pretty-print 'sending-data-from-c2)
                                  (! c1 'allo))))
-           (c3 (new-corout 'c3 (lambda ()
+           (c3 (new corout 'c3 (lambda ()
                                  (pretty-print 'sending-data-from-c3)
                                  (! c1 'salut)))))
     (simple-boot c1 c2 c3)))
 
 
 (define-test test-recursive-sim "A12BA12BA12B" 'meta-12-done!
-  (let* ((sA (new-corout 'sA (lambda () (for i 0 (< i 3)
+  (let* ((sA (new corout 'sA (lambda () (for i 0 (< i 3)
                                              (begin (display 'A)
                                                     (super-yield)
                                                     (yield))))))
-         (sB (new-corout 'sB (lambda () (for i 0 (< i 3)
+         (sB (new corout 'sB (lambda () (for i 0 (< i 3)
                                              (begin (display 'B)
                                                     (yield)))
                                      (terminate-corout 'sB))))
-         (s1 (new-corout 's1 (lambda () (for i 0 (< i 3)
+         (s1 (new corout 's1 (lambda () (for i 0 (< i 3)
                                              (begin (display 1)
                                                     (yield))))))
-         (s2 (new-corout 's2 (lambda () (for i 0 (< i 3)
+         (s2 (new corout 's2 (lambda () (for i 0 (< i 3)
                                              (begin (display 2)
                                                     (super-yield)
                                                     (yield))))))
          (meta-AB
-          (new-corout 'meta-AB
+          (new corout 'meta-AB
                       (lambda ()
                         (simple-boot sA sB)
                         'meta-AB-done!)))
          (meta-12
-          (new-corout 'meta-12
+          (new corout 'meta-12
                       (lambda ()
                         (simple-boot s1 s2)
                         'meta-12-done!))))
     (simple-boot meta-AB meta-12)))
 
 (define-test test-kill-all-rec "A1B2ABAB" 'meta-AB-done!
-  (let* ((sA (new-corout 'sA (lambda () (for i 0 (< i 3)
+  (let* ((sA (new corout 'sA (lambda () (for i 0 (< i 3)
                                              (begin (display 'A)
                                                     (super-yield)
                                                     (yield))))))
-         (sB (new-corout 'sB (lambda () (for i 0 (< i 3)
+         (sB (new corout 'sB (lambda () (for i 0 (< i 3)
                                              (begin (display 'B)
                                                     (super-yield)
                                                     (yield))))))
-         (s1 (new-corout 's1 (lambda () (for i 0 (< i 3)
+         (s1 (new corout 's1 (lambda () (for i 0 (< i 3)
                                              (begin (if (= i 1)
                                                         (kill-all! 'over))
                                                     (display 1)
                                                     (super-yield)
                                                     (yield))))))
-         (s2 (new-corout 's2 (lambda () (for i 0 (< i 3)
+         (s2 (new corout 's2 (lambda () (for i 0 (< i 3)
                                              (begin (display 2)
                                                     (super-yield)
                                                     (yield))))))
          (meta-AB
-          (new-corout 'meta-AB
+          (new corout 'meta-AB
                       (lambda ()
                         (simple-boot sA sB)
                         'meta-AB-done!)))
          (meta-12
-          (new-corout 'meta-12
+          (new corout 'meta-12
                       (lambda ()
                         (simple-boot s1 s2)
                         'meta-12-done!))))
@@ -724,11 +738,11 @@
                  "bonne-aprem\n"
                  "bonne-nuit\n")
   'dont-care
-  (let ((c1 (new-corout 'c1 (lambda ()
+  (let ((c1 (new corout 'c1 (lambda ()
                               (sleep-for 0.2)
                               (pretty-print 'bonne-nuit))))
-        (c2 (new-corout 'c2 (lambda () (pretty-print 'bon-matin))))
-        (c3 (new-corout 'c3 (lambda ()
+        (c2 (new corout 'c2 (lambda () (pretty-print 'bon-matin))))
+        (c3 (new corout 'c3 (lambda ()
                               (sleep-for 0.1)
                               (pretty-print 'bonne-aprem)))))
     (simple-boot c1 c2 c3)
@@ -736,33 +750,33 @@
 
 (define-test test-mutex "4123" 'done
   (let* ((mut (new-mutex))
-         (c1 (new-corout 'c1 (lambda () (critical-section! mut
+         (c1 (new corout 'c1 (lambda () (critical-section! mut
                                                            (yield)
                                                            (display "1")))))
-         (c2 (new-corout 'c2 (lambda () (critical-section! mut
+         (c2 (new corout 'c2 (lambda () (critical-section! mut
                                                            (yield)
                                                            (display "2")))))
-         (c3 (new-corout 'c3 (lambda () (critical-section! mut
+         (c3 (new corout 'c3 (lambda () (critical-section! mut
                                                            (yield)
                                                            (display "3")))))
-         (c4 (new-corout 'c4 (lambda () (display "4")))))
+         (c4 (new corout 'c4 (lambda () (display "4")))))
     (simple-boot c1 c2 c3 c4)
     'done))
 
 (define-test test-continuation "210" 'done
-  (let* ((c1 (new-corout 'c1 (lambda () (display "1")
+  (let* ((c1 (new corout 'c1 (lambda () (display "1")
                                      (continue-with-thunk!
                                       (lambda () (display "0") 'done)))))
-         (c2 (new-corout 'c2 (lambda () (display "2")
+         (c2 (new corout 'c2 (lambda () (display "2")
                                      (continue-with c1)))))
     (simple-boot c2)))
 
 (define-test test-prioritized-cont "2431" 'done
-  (let* ((c1 (new-corout 'c1 (lambda () (display "1"))))
-         (c2 (new-corout 'c2 (lambda () (display "2")
+  (let* ((c1 (new corout 'c1 (lambda () (display "1"))))
+         (c2 (new corout 'c2 (lambda () (display "2")
                                      (continue-with c1))))
-         (c3 (new-corout 'c3 (lambda () (display "3"))))
-         (c4 (new-corout 'c4 (lambda () (display "4")
+         (c3 (new corout 'c3 (lambda () (display "3"))))
+         (c4 (new corout 'c4 (lambda () (display "4")
                                      (prioritized-continuation c3)))))
     (simple-boot c2 c4)
     'done))
@@ -771,14 +785,14 @@
   (let* ((t1 (lambda () (display "1")))
          (t2 (lambda () (display "2")))
          (t3 (lambda () (display "3") 'ok))
-         (c1 (new-corout
+         (c1 (new corout
               'c1 (compose-thunks t1 t2 t3))))
     (simple-boot c1)))
 
 (define-test test-spawning "CABD" 'done
-  (let* ((c1 (new-corout 'c1 (lambda () (display 'A))))
+  (let* ((c1 (new corout 'c1 (lambda () (display 'A))))
          (t2 (lambda () (display 'B) (yield) 'done))
-         (c3 (new-corout 'c3 (lambda () (display 'C)
+         (c3 (new corout 'c3 (lambda () (display 'C)
                                      (spawn-brother c1)
                                      (spawn-brother-thunk 'c2 t2)
                                      (yield)
@@ -791,13 +805,13 @@
                  "c3-sent-data\n"
                  "3\n")
   2
-  (let* ((c1 (new-corout 'c1 (lambda ()
+  (let* ((c1 (new corout 'c1 (lambda ()
                                (pretty-print (?? odd?))
                                (?))))
-         (c2 (new-corout 'c2 (lambda ()
+         (c2 (new corout 'c2 (lambda ()
                                (! c1 2)
                                (pretty-print 'c2-sent-data))))
-         (c3 (new-corout 'c3 (lambda ()
+         (c3 (new corout 'c3 (lambda ()
                                (pretty-print 'c3-sleeps)
                                (sleep-for 0.2)
                                (! c1 3)
@@ -805,27 +819,27 @@
     (simple-boot c1 c2 c3)))
 
 (define-test test-timeout-? "1ok" 'done
-  (let* ((c1 (new-corout 'c1 (lambda () (with-exception-catcher
+  (let* ((c1 (new corout 'c1 (lambda () (with-exception-catcher
                                          (lambda (e) (display 'ok))
                                          (lambda ()
                                            (display (?))
                                            (display (? timeout: 0.1))))
                                      'done)))
-         (c2 (new-corout 'c2 (lambda () (! c1 1)))))
+         (c2 (new corout 'c2 (lambda () (! c1 1)))))
     (simple-boot c1 c2)))
 
 (define-test test-timeout-?? "3ok" 'done
-  (let* ((c1 (new-corout 'c1 (lambda () (with-exception-catcher
+  (let* ((c1 (new corout 'c1 (lambda () (with-exception-catcher
                                          (lambda (e) (display 'ok))
                                          (lambda ()
                                            (display (?? odd? timeout: 1))
                                            (display (?? odd? timeout: 0.2))))
                                      'done)))
-         (c2 (new-corout 'c2 (lambda () (! c1 2) (yield) (! c1 3)))))
+         (c2 (new corout 'c2 (lambda () (! c1 2) (yield) (! c1 3)))))
     (simple-boot c1 c2)))
 
 (define-test test-timeout-extended "allogot-nothing" 'done
-  (let* ((c1 (new-corout 'c1 (lambda ()
+  (let* ((c1 (new corout 'c1 (lambda ()
                                (cond ((timeout? #f (? timeout: 0))
                                       => (lambda (x) (display x)))
                                      (else (display 'got-nothing)))
@@ -833,35 +847,35 @@
                                       => (lambda (x) (display x)))
                                      (else (display 'got-nothing)))
                                'done)))
-         (c2 (new-corout 'c2 (lambda () (! c1 'allo)))))
+         (c2 (new corout 'c2 (lambda () (! c1 'allo)))))
     (simple-boot c1 c2)))
 
 (define-test test-recv "pongpingfinished!" 'done
-  (let* ((c1 (new-corout 'c1 (lambda ()
+  (let* ((c1 (new corout 'c1 (lambda ()
                                (let loop ()
                                  (recv
                                   (ping (display 'ping) (loop))
                                   (pong (display 'pong) (loop))
                                   (after 0.1 (display 'finished!) 'done))))))
-         (c2 (new-corout 'c2 (lambda () (! c1 'pong))))
-         (c3 (new-corout 'c3 (lambda () (! c1 'ping)))))
+         (c2 (new corout 'c2 (lambda () (! c1 'pong))))
+         (c3 (new corout 'c3 (lambda () (! c1 'ping)))))
     (simple-boot c1 c2 c3)))
 
 (define-test test-recv-ext "pong1pong2pong" 'ok
-  (let* ((c1 (new-corout 'c1 (lambda ()
+  (let* ((c1 (new corout 'c1 (lambda ()
                                (let loop ()
                                  (recv ((,from ping)
                                         (where (corout? from))
                                         (! from 'pong)))
                                  (loop)))))
-         (c2 (new-corout 'c2 (lambda ()
+         (c2 (new corout 'c2 (lambda ()
                                (let loop ((n 1))
                                  (recv ((,from inc)
                                         (if (< n 3)
                                             (begin (! from `(ack ,n))
                                                    (loop (+ n 1)))
                                             (kill-all! 'ok))))))))
-         (c3 (new-corout 'c3 (lambda ()
+         (c3 (new corout 'c3 (lambda ()
                                (let loop ()
                                  (! c1 `(,(current-corout) ping))
                                  (recv (pong (! c2 `(,(current-corout) inc))))
@@ -871,16 +885,16 @@
     (simple-boot c1 c2 c3)))
 
 (define-test test-msg-lists "alloallosalut" 'ok
-  (let ((c1 (new-corout 'c1 (lambda ()
+  (let ((c1 (new corout 'c1 (lambda ()
                               (subscribe 'toto (current-corout))
                               (recv (,x (display x)))
                               (unsubscribe 'toto (current-corout))
                               (recv (,x (display x))))))
-        (c2 (new-corout 'c2 (lambda ()
+        (c2 (new corout 'c2 (lambda ()
                               (subscribe 'toto (current-corout))
                               (recv (,x (display x)))
                               (recv (,x (display x))))))
-        (c3 (new-corout 'c3 (lambda ()
+        (c3 (new corout 'c3 (lambda ()
                               (broadcast 'toto 'allo)
                               (yield)
                               (broadcast 'toto 'salut)

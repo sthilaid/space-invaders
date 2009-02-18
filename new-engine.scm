@@ -136,14 +136,17 @@
   (class-slot: sprite-id)
   (class-slot: bbox)
   (class-slot: state-num)
-  (class-slot: score-value))
-
-(define (new-object obj id thunk pos state color speed)
-  (init-corout! obj id thunk)
-  (game-object-pos-set! obj pos)
-  (game-object-state-set! obj state)
-  (game-object-color-set! obj color)
-  (game-object-speed-set! obj speed))
+  (class-slot: score-value)
+  (constructor: (lambda (obj id pos state color speed)
+                  (init! cast: '(corout * *) obj
+                         id
+                         (lambda ()
+                           (error "this object should not be used directly.")))
+                  (set-fields! obj game-object
+                    ((pos pos)
+                     (state state)
+                     (color color)
+                     (speed speed))))))
 
 (define (cycle-state! obj)
   (define current-state (game-object-state obj))
@@ -194,7 +197,16 @@
 ;;;; Specific game object descriptions ;;;;
 
 ;; Evil Invaders!
-(define-class invader-ship (game-object sprite-obj) (slot: row) (slot: col))
+(define-class invader-ship (game-object sprite-obj) (slot: row) (slot: col)
+  (constructor:
+   ;; This constructor should be accessible to child classes through
+   ;; polymorphism of the init! genfun.
+   (lambda (obj id pos state color speed row col)
+     (init! cast: '(game-object * * * * * *) obj id pos state color speed)
+     (set-fields! obj invader-ship
+       ((kont invader-behaviour)
+        (row row)
+        (col col))))))
 (define-class easy-invader   (invader-ship))
 (define-class medium-invader (invader-ship))
 (define-class hard-invader   (invader-ship))
@@ -219,7 +231,13 @@
 (setup-static-fields! laserC 'laserC (make-rect 1 0 1 7) 4 0)
 (setup-static-fields! player_laser 'player_laser (make-rect 0 0 1 7) 1 0)
 
-(define-class shield       (game-object) (slot: particles))
+(define-class shield       (game-object) (slot: particles)
+  (constructor:
+   (lambda (obj id pos state color speed particles)
+     (init! cast: '(game-object * * * * * *) obj id pos state color speed)
+     (set-fields! obj invader-ship
+       ((kont ????)
+        (particles particles))))))
 (setup-static-fields! shield 'shield (make-rect 0 0 22 16) 1 0)
 
 (define-class explosion    (game-object sprite-obj))

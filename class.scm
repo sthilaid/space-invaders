@@ -29,25 +29,12 @@
       (define (meth-name sign) (if (not (list? sign))
                                    (error 'bad-signature-syntax)
                                    (car sign)))
-      (define any-type 'any-type)
+      (define any-type '*)
 
       (define (symbol-append s1 . ss)
           (string->symbol (apply string-append
                                  (symbol->string s1)
                                  (map symbol->string ss))))
-
-      ;; Returns the super-class id, if found.
-      (define (macro-is-subclass? class-id super-id)
-        ;; Warning: This might return true even if its not a subclass if
-        ;; an old superclass as been redefined...
-        (and (not (eq? class-id 'any-type))
-             (or (and (eq? class-id super-id) class-id)
-                 (memq super-id
-                       (class-desc-supers
-                        (class-info-desc
-                         (table-ref mt-class-table class-id))))
-                 (eq? super-id any-type))))
-
 
       ;;;;;;;;;;;;;;; Naming convention abstractions ;;;;;;;;;;;;;;;
       (define (gen-accessor-name class-name var)
@@ -513,7 +500,6 @@
   (define (parse-args args) (map-values parse-arg args))
   (with-exception-catcher
    (lambda (e)
-     (pp `(received error: ,e))
      (if (eq? e unknown-meth-error)
          (error (to-string (show "Generic method was not defined: " (name))))
          (raise e)))
@@ -619,6 +605,8 @@
 (define (method-types meth) (vector-ref meth 1))
 (define (method-body meth) (vector-ref meth 2))
 
+(define any-type '*)
+(define (any-type? ty) (eq? ty any-type))
 
 ;; Runtime class table
 (define rt-class-table (make-table test: eq?))
@@ -637,6 +625,7 @@
   (define-macro (to-string e1 . es)
     `(with-output-to-string "" (lambda () ,e1 ,@es)))
   (define error-str )
+
   (if (not (= (length args) (length types)))
       (error (string-append "Cannot perform cast: actual parameter number "
                             "differs from cast types number.")))
@@ -654,7 +643,7 @@
 (define (get-class-id obj)
   (cond
    ((instance-object? obj) (class-desc-id (instance-class-descriptor obj)))
-   (else 'any-type)))
+   (else any-type)))
 
 ;; This produces a "light" copy because the fiels are simply
 ;; copied by value, not deeply replicated. Thus a pointer to a
@@ -675,15 +664,15 @@
 
 (define (is-subclass? class-id super-id)
   (or (eq? class-id super-id)
-      (eq? super-id 'any-type)
-      (and (not (eq? class-id 'any-type))
+      (any-type? super-id)
+      (and (not (any-type? class-id))
            (memq super-id
                  (class-desc-supers
                   (table-ref rt-class-table class-id)))
            #t)))
 
 (define (get-super-numbers type)
-    (if (eq? type 'any-type)
+    (if (any-type? type)
         0
         (length (class-desc-supers (find-class? type)))))
 

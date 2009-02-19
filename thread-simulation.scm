@@ -65,6 +65,7 @@
   (slot: prioritize?)
   (slot: sleeping?)
   (slot: delta-t)
+  (slot: msg-lists)
   (constructor: (lambda (obj id thunk)
                   (set-fields! obj corout
                     ((id          id)
@@ -73,17 +74,30 @@
                      (state       #f)
                      (prioritize? #f)
                      (sleeping?   #f)
-                     (delta-t     #f))))))
+                     (delta-t     #f)
+                     (msg-lists   (empty-set)))))))
 
-(define (init-corout! corout id thunk)
-  (corout-id-set! corout id)
-  (corout-kont-set! corout (lambda (dummy) (terminate-corout (thunk))))
-  (corout-mailbox-set! corout (new-queue))
-  (corout-state-set! corout #f)
-  (corout-prioritize?-set! corout #f)
-  (corout-sleeping?-set! corout #f)
-  (corout-delta-t-set! corout #f)
-  corout)
+(define (sleeping-on-mutex)    
+  'sleeping-on-mutex)
+(define (sleeping-on-msg)    
+  'sleeping-on-msg)
+(define (sleeping-over-time node interruptible?)
+  (cons node interruptible?))
+(define (sleeping-on-msg? c)
+  (eq? (corout-sleeping? c) 'sleeping-on-msg))
+(define (sleeping-over-time? c)
+  (let ((sleeping? (corout-sleeping? c)))
+    (and (pair? sleeping?)
+         (time-sleep-q-node? (car sleeping?)))))
+(define (interruptible? c)
+  (let ((sleeping? (corout-sleeping? c)))
+    (and (pair? sleeping?) (cdr sleeping?))))
+(define (sleeping-over-time?->node c)
+  (let ((sleeping? (corout-sleeping? c)))
+    (and (pair? sleeping?) (car sleeping?))))
+(define (sleeping-on-mutex? c)    
+  (eq? (corout-sleeping? c) 'sleeping-on-mutex))
+
 
 
 (define (mailbox-enqueue thrd msg)
@@ -100,7 +114,7 @@
   (slot: return-value-handler)
   (slot: return-value)
   (slot: return-to-sched)
-  (slot: parent-state #;unprintable:))
+  (slot: parent-state)) ;unprintable:
 
 
 (define-class sem () (slot: value) (slot: wait-queue))
@@ -151,6 +165,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define current-corout       (make-parameter unbound))
+(define self                 current-corout) ; variable alias
 (define q                    (make-parameter unbound))
 (define timer                (make-parameter unbound))
 (define time-sleep-q         (make-parameter unbound))
@@ -351,23 +366,25 @@
 ;; Send a message to the givent destination coroutine object.
 (define (! dest-corout msg)
   (enqueue! (corout-mailbox dest-corout) msg)
-  (if (corout-sleeping? dest-corout)
-      (begin
-        (if (time-sleep-q-node? (corout-sleeping? dest-corout))
-            (time-sleep-q-remove! (corout-sleeping? dest-corout)))
-        (corout-sleeping?-set! dest-corout #f)
-        (corout-enqueue! (q) dest-corout))))
+  (cond ((sleeping-on-msg? dest-corout)
+         (corout-sleeping?-set! dest-corout #f)
+         (corout-enqueue! (q) dest-corout))
+        ((and (sleeping-over-time? dest-corout)
+              (interruptible? dest-corout))
+         (time-sleep-q-remove! (sleeping-over-time?->node dest-corout))
+         (corout-sleeping?-set! dest-corout #f)
+         (corout-enqueue! (q) dest-corout))))
 
 (define (? #!key (timeout 'infinity))
   (define mailbox (corout-mailbox (current-corout)))
   (if (empty-queue? mailbox)
       (if (number? timeout)
-          (sleep-for timeout)
+          (sleep-for timeout interruptible?: #t)
           (continuation-capture
            (lambda (k)
              (let ((corout (current-corout)))
                (corout-kont-set! corout k)
-               (corout-sleeping?-set! corout #t)
+               (corout-sleeping?-set! corout (sleeping-on-msg))
                (resume-scheduling))))))
   (if (empty-queue? mailbox)
       (raise mailbox-timeout-exception)
@@ -381,7 +398,7 @@
           (else
            (if (number? timeout)
                (let ((msg-q-size (queue-size mailbox)))
-                 (sleep-for timeout)
+                 (sleep-for timeout interruptible?: #t)
                  ;; might be awoken either from a (!) or timeout
                  (if (= (queue-size mailbox) msg-q-size)
                      (raise mailbox-timeout-exception)
@@ -390,7 +407,7 @@
                        (lambda (k)
                          (let ((corout (current-corout)))
                            (corout-kont-set! corout k)
-                           (corout-sleeping?-set! corout #t)
+                           (corout-sleeping?-set! corout (sleeping-on-msg))
                            (resume-scheduling))))
                       (loop)))))))
 
@@ -422,7 +439,8 @@
 ;; Terminates early the calculation of the current coroutine and
 ;; returns with the givent ret-val.
 (define (terminate-corout exit-val)
-  ;; first do all the requester actions on exit
+  (for-each (lambda (msg-list) (unsubscribe msg-list (self)))
+            (corout-msg-lists (self)))
   (current-corout exit-val)
   (resume-scheduling))
 
@@ -495,7 +513,7 @@
 
 
 ;; Will put the current-corout to sleep for about "secs" seconds
-(define (sleep-for secs)
+(define (sleep-for secs #!key (interruptible? #f))
   (if (>= secs 0)
       (continuation-capture
        (lambda (k)
@@ -508,7 +526,9 @@
            ;; possible removal by msging system)...
            ;; FIXME: here, this will make possible to wakeup a
            ;; sleeping thread by sending it a msg...
-           (corout-sleeping?-set! corout sleep-queue-node)
+           (corout-sleeping?-set! corout
+                                  (sleeping-over-time sleep-queue-node
+                                                      interruptible?))
            #; (pp `(now is ,(current-sim-time) sleeping until ,wake-time))
            (resume-scheduling))))
       (yield)))
@@ -532,7 +552,7 @@
             (let ((corout (current-corout)))
               (corout-kont-set! corout k)
               (enqueue! (sem-wait-queue sem) corout)
-              (corout-sleeping?-set! corout #t)
+              (corout-sleeping?-set! corout (sleeping-on-mutex))
               (resume-scheduling)))))
   ;; should be unqueued by the unlock call...
   (sem-decrease! sem))
@@ -553,14 +573,18 @@
   (table-ref messaging-lists list-id #f))
 (define (subscribe list-id agent)
   (cond ((table-ref messaging-lists list-id #f)
-         => (lambda (lst) (table-set! messaging-lists list-id
-                                      (cons agent lst))))
-        (else (table-set! messaging-lists list-id (list agent)))))
+         => (lambda (lst)
+              (table-set! messaging-lists list-id (set-add eq? agent lst))))
+        (else (table-set! messaging-lists list-id (make-set agent))))
+  (update! agent corout msg-lists
+           (lambda (lists) (set-add eq? list-id lists))))
 (define (unsubscribe list-id agent)
   (let ((msg-list (get-msg-list list-id)))
     (and msg-list
+         (update! agent corout msg-lists
+                  (lambda (lists) (set-remove eq? list-id lists)))
          (table-set! messaging-lists list-id
-                     (list-remove eq? agent msg-list)))))
+                     (set-remove eq? agent msg-list)))))
 (define (broadcast list-id msg)
   (let ((msg-list (get-msg-list list-id)))
     (and msg-list
@@ -884,7 +908,7 @@
                                  (loop))))))
     (simple-boot c1 c2 c3)))
 
-(define-test test-msg-lists "alloallosalut" 'ok
+(define-test test-msg-lists "alloallosalut#tallo" 'salut
   (let ((c1 (new corout 'c1 (lambda ()
                               (subscribe 'toto (current-corout))
                               (recv (,x (display x)))
@@ -894,10 +918,17 @@
                               (subscribe 'toto (current-corout))
                               (recv (,x (display x)))
                               (recv (,x (display x))))))
+        (c4 (new corout 'c4 (lambda ()
+                              (subscribe 'toto (current-corout))
+                              ;; ensure not woken up
+                              (let ((t (current-sim-time)))
+                                (sleep-for 0.5)
+                                (display (>= (- (current-sim-time) t) 0.4))
+                                (display (?))
+                                (?)))))
         (c3 (new corout 'c3 (lambda ()
                               (broadcast 'toto 'allo)
                               (yield)
                               (broadcast 'toto 'salut)
-                              (yield)
-                              'ok))))
-    (simple-boot c1 c2 c3)))
+                              (yield)))))
+    (simple-boot c1 c2 c4 c3)))

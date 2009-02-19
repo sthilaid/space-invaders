@@ -133,20 +133,21 @@
   (slot: state)
   (slot: color)
   (slot: speed)
+  (slot: level)
   (class-slot: sprite-id)
   (class-slot: bbox)
   (class-slot: state-num)
   (class-slot: score-value)
-  (constructor: (lambda (obj id pos state color speed)
+  (constructor: (lambda (obj id pos state color speed level)
                   (init! cast: '(corout * *) obj
                          id
-                         (lambda ()
-                           (error "this object should not be used directly.")))
+                         (lambda () (behaviour (self))))
                   (set-fields! obj game-object
                     ((pos pos)
                      (state state)
                      (color color)
-                     (speed speed))))))
+                     (speed speed)
+                     (level level))))))
 
 (define (cycle-state! obj)
   (define current-state (game-object-state obj))
@@ -199,14 +200,11 @@
 ;; Evil Invaders!
 (define-class invader-ship (game-object sprite-obj) (slot: row) (slot: col)
   (constructor:
-   ;; This constructor should be accessible to child classes through
-   ;; polymorphism of the init! genfun.
-   (lambda (obj id pos state color speed row col)
-     (init! cast: '(game-object * * * * * *) obj id pos state color speed)
-     (set-fields! obj invader-ship
-       ((kont invader-behaviour)
-        (row row)
-        (col col))))))
+   (lambda (obj id pos state color speed level row col)
+     (init! cast: '(game-object * * * * * *)
+            obj id pos state color speed level)
+     (set-fields! obj invader-ship ((row row) (col col))))))
+
 (define-class easy-invader   (invader-ship))
 (define-class medium-invader (invader-ship))
 (define-class hard-invader   (invader-ship))
@@ -445,7 +443,8 @@
 
 ;; Level utilitary functions
 (define (level-add-object! lvl obj)
-  (table-set! (level-object-table lvl) (game-object-id obj) obj))
+  (table-set! (level-object-table lvl) (game-object-id obj) obj)
+  (spawn-brother obj))
 
 (define (level-remove-object! lvl obj)
   (table-set! (level-object-table lvl) (game-object-id obj)))
@@ -913,12 +912,23 @@
   (lambda ()
     (broadcast '(invader-row 1) 'move)))
 
-(define (invader-behaviour level inv)
+
+(define-generic behaviour)
+
+(define-method (behaviour (obj game-object))
+  (recv (die (level-remove-object! obj)
+             (terminate-corout 'died))
+        ;;maybe add pause here?
+        (,msg (pp `(,(corout-id (self)) received unknown msg: ,msg))
+              ;; loop back to the most specific instance of behaviour!
+              (behaviour obj))))
+
+(define-method (behaviour (inv invader-ship))
   (define (main-state)
     (recv
      (move
       (begin 
-        (move-object! level inv)
+        (move-object! inv)
         (! (find-barrier (invader-row-number inv)) 'moved)
         (main-state)))
      (wall-collision

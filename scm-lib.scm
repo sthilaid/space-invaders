@@ -515,6 +515,9 @@
           (empty-set)
           list))
 
+(define (make-set . values)
+  (list->set eq? values))
+
 ;; Randomize current mrg's seed
 (random-source-randomize! default-random-source)
 

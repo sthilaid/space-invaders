@@ -504,7 +504,8 @@
   (table-set! (level-object-table lvl) (game-object-id obj) obj))
 
 (define (level-remove-object! lvl obj)
-  (table-set! (level-object-table lvl) (game-object-id obj)))
+  (table-set! (level-object-table lvl) (game-object-id obj))
+  (! obj 'die!))
 
 (define (level-exists lvl obj-id)
   (table-ref (level-object-table lvl) obj-id #f))

@@ -140,11 +140,12 @@
                                  (lambda (k)
                                    (let ((corout (current-corout)))
                                      (corout-kont-set! corout k)
-                                     (corout-sleeping?-set! corout #t)
+                                     (corout-sleeping?-set! corout
+                                                            (sleeping-on-msg))
                                      (resume-scheduling))))
                                 (,loop))
                         `(let ((msg-q-size (queue-size ,mailbox)))
-                           (sleep-for ,timeout-val)
+                           (sleep-for ,timeout-val interruptible?: #t)
                            ;; might be awoken either from a (!) or timeout
                            (if (= (queue-size ,mailbox) msg-q-size)
                                (begin ,@timeout-ret-val)

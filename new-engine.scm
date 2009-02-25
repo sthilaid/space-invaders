@@ -204,7 +204,7 @@
 (define-class invader-ship (game-object sprite-obj) (slot: row) (slot: col)
   (constructor:
    (lambda (obj pos state color speed row col)
-     (init! cast: '(game-object * * * * * *)
+     (init! cast: '(game-object * * * * *)
             obj(gensym 'invader) pos state color speed)
      (set-fields! obj invader-ship ((row row) (col col))))))
 
@@ -223,7 +223,7 @@
             (state 0)
             (speed (new point 0 0))
             (player-ship (new player-ship)))
-       (init! cast: '(game-object * * * * * *)
+       (init! cast: '(game-object * * * * *)
               obj 'player pos state 'green speed)
        (level-add-object! level obj)))))
 (setup-static-fields! player-ship 'player (new rect 0 0 13 8) 1 0)
@@ -231,7 +231,7 @@
 (define-class mothership   (game-object sprite-obj)
   (constructor:
    (lambda (obj pos state color speed)
-     (init! cast: '(game-object * * * * * *)
+     (init! cast: '(game-object * * * * *)
             obj 'mothership pos state color speed))))
 (setup-static-fields! mothership 'mothership (new rect 0 0 16 7) 1 100)
 
@@ -248,7 +248,7 @@
 (define-class shield       (game-object) (slot: particles)
   (constructor:
    (lambda (obj id pos state color speed particles)
-     (init! cast: '(game-object * * * * * *)
+     (init! cast: '(game-object * * * * *)
             obj id pos state color speed)
      (set-fields! obj shield ((particles particles))))))
 (setup-static-fields! shield 'shield (new rect 0 0 22 16) 1 0)
@@ -271,7 +271,11 @@
 (setup-static-fields!
  mothership_explosion 'mothership_explosion (new rect 0 0 21 8) 1 0)
 
-(define-class message-obj  (game-object) (slot: text))
+(define-class message-obj  (game-object) (slot: text)
+  (constructor:
+   (lambda (obj id pos state color speed text)
+     (init! cast: '(game-object * * * * *) obj id pos state color speed)
+     (message-obj-text-set! obj text))))
 (setup-static-fields! message-obj 'message (new rect 0 0 0 0) 0 0)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -413,7 +417,7 @@
 ;;;; Wall or game boundary structure ;;;;
 (define-class wall () (slot: rect) (slot: id)
   (constructor: (lambda (obj x y width height id)
-                  (set-fields! wall
+                  (set-fields! obj wall
                                ((rect (new rect x y width height))
                                 (id id))))))
 
@@ -618,7 +622,9 @@
          (init-corouts
           (list level-setup-corout
                 redraw-corout)))
-    
+
+    ;; TODO: abstract redraw agent into a subclass of corout?
+    (subscribe 'redraw-agent redraw-corout)
     (add-global-score-messages! level)
     (for-each (lambda (s) (level-add-object! level s)) shields)
     (level-init-corouts-set! level init-corouts)
@@ -888,16 +894,15 @@
     (let* ((x (+ x-offset (* col invader-spacing)))
            (y (+ y-offset (* row invader-spacing)))
            (pos (new point x y))
-           (current-type-instantiator (determine-type-id row))
            (state 1)
            (speed (new point invader-x-movement-speed 0))
            (inv
             (cond ((< col 2) (new easy-invader
-                                  id pos state 'white speed level row col))
+                                  pos state 'white speed row col))
                   ((< col 4) (new medium-invader
-                                  id pos state 'white speed level row col))
+                                  pos state 'white speed row col))
                   (else      (new hard-invader
-                                  id pos state 'white speed level row col)))))
+                                  pos state 'white speed row col)))))
       (level-add-object! level inv)
       (spawn-brother inv)
       (subscribe `(invader-row ,row) inv)))
@@ -1014,7 +1019,9 @@
         (case msg
           ((space)
            (if (player-can-move?)
-               (shoot-laser! level
+               'todo
+               ;; TODO: adapt to new language features..
+               #;(shoot-laser! level
                              new player_laser
                              (level-player level)
                              player-laser-speed)))
@@ -1042,15 +1049,16 @@
 
           ((d) (error "DEBUG"))))))
 
-(define (redraw-agent)
-  (let loop ()
-    (recv
-     ((redraw last-row)
-      (begin
-        (process-user-input)
-        (render current-level)
-        (broadcast `(invader-row ,(next-row last-row)) 'move)
-        (loop))))))
+(define (redraw-agent level)
+  (lambda ()
+   (let loop ()
+     (recv
+      ((redraw last-row)
+       (begin
+         (process-user-input)
+         (render current-level)
+         (broadcast `(invader-row ,(next-row last-row)) 'move)
+         (loop)))))))
 
 
 ;;*****************************************************************************

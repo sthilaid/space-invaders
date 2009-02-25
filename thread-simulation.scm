@@ -114,7 +114,8 @@
   (slot: return-value-handler)
   (slot: return-value)
   (slot: return-to-sched)
-  (slot: parent-state)) ;unprintable:
+  (slot: parent-state) ;unprintable:
+  (slot: dynamic-handlers)) 
 
 
 (define-class sem () (slot: value) (slot: wait-queue))
@@ -174,6 +175,7 @@
 (define return-value         (make-parameter unbound))
 (define parent-state         (make-parameter unbound))
 (define return-to-sched      (make-parameter unbound))
+(define dynamic-handlers     (make-parameter unbound))
 
 (define (current-sim-time)
   (let ((t (timer)))
@@ -193,7 +195,8 @@
                (unbound? (time-sleep-q))
                (unbound? (root-k))
                (unbound? (return-value-handler))
-               (unbound? (return-value))))
+               (unbound? (return-value))
+               (unbound? (dynamic-handlers))))
       
       (make-state (current-corout)
                   (q)
@@ -203,7 +206,8 @@
                   (return-value-handler)
                   (return-value)
                   (return-to-sched)
-                  (parent-state))
+                  (parent-state)
+                  (dynamic-handlers))
       #f))
 
 ;; Restores the givent state object into the environment
@@ -218,7 +222,8 @@
         (return-value-handler (state-return-value-handler state))
         (return-value         (state-return-value state))
         (return-to-sched      (state-return-to-sched state))
-        (parent-state         (state-parent-state state)))
+        (parent-state         (state-parent-state state))
+        (dynamic-handlers     (state-dynamic-handlers state)))
 
       ;; un-initializing the global simulation state
       (begin
@@ -230,7 +235,8 @@
         (return-value-handler unbound)
         (return-value         unbound)
         (return-to-sched      unbound)
-        (parent-state         unbound))))
+        (parent-state         unbound)
+        (dynamic-handlers     unbound))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -474,6 +480,7 @@
          (time-sleep-q         (make-time-sleep-q))
          (return-value-handler return-handler)
          (return-value         #f)
+         (dynamic-handlers     '())
          (if fresh-start? (parent-state #f)))
        (for-each (lambda (c) (corout-enqueue! (q) c))
                  (cons c1 cs))
@@ -932,3 +939,21 @@
                               (broadcast 'toto 'salut)
                               (yield)))))
     (simple-boot c1 c2 c4 c3)))
+
+(define-test test-dynamic-handlers "allonotutu" 'ok
+  (let ((c1 (new corout 'c1 (lambda ()
+                                  (! (self) 'allo)
+                                  (! (self) 'allo)
+                                  (! (self) 'tutu)
+                                  (with-dynamic-handlers
+                                   ((allo (display 'allo)))
+                                   (recv (toto (display 'toto))
+                                         (after 0.02 (display 'no))))
+                                  (recv (toto (display 'toto))
+                                        (after 0.02 (display 'no)))
+                                  (with-dynamic-handlers
+                                   ((tutu (display 'allo)))
+                                   (recv (tutu (display 'tutu))
+                                         (after 0.02 (display 'no))))
+                                   'ok))))
+        (simple-boot c1)))

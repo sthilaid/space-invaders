@@ -66,10 +66,10 @@
 
 (define-macro (spawn . body)
   (let ((brother (gensym 'brother)))
-    `(let ((,brother (new-corout (gensym (symbol-append
+    `(let ((,brother (new corout (gensym (symbol-append
                                           (corout-id (current-corout))
                                           '-child))
-                                 (lambda () ,@body))))
+                          (lambda () ,@body))))
        (spawn-brother ,brother)
        ,brother)))
 
@@ -80,6 +80,18 @@
                     (raise e)))
     (lambda () ,@code)))
 
+(define-macro (with-dynamic-handlers handlers . bodys)
+  (let ((false (gensym 'false)))
+    `(parameterize ((dynamic-handlers
+                     (cons (lambda ()
+                             (let ((found?
+                                    (recv ,@handlers (after 0 ',false))))
+                               (if (eq? found? ',false)
+                                   #f
+                                   (box found?))))
+                           (dynamic-handlers))))
+       ,@bodys)))
+
 (define-macro (recv . pattern-list)
   (define (make-ast test-pattern eval-pattern)
     (vector test-pattern eval-pattern))
@@ -89,8 +101,8 @@
     (if (and (list? pat) (>= (length pat) 2))
         (match pat
                ((,pattern (where ,@conds) ,@ret-val)
-                (make-ast `(,pattern when (and ,@conds) #t)
-                          `(,pattern when (and ,@conds) ,@ret-val)))
+                (make-ast `(,pattern when: (and ,@conds) #t)
+                          `(,pattern when: (and ,@conds) ,@ret-val)))
                ((,pattern ,@ret-val)
                 (make-ast `(,pattern #t)
                           `(,pattern ,@ret-val)))
@@ -124,7 +136,7 @@
                             (lambda (x) (match x
                                                ((after ,_ ,_) #f)
                                                (,_ #t)))
-                                   pattern-list))
+                            pattern-list))
          (asts (map pattern->ast cleaned-patterns))
          (loop (gensym 'loop))
          (mailbox (gensym 'mailbox)))
@@ -134,6 +146,9 @@
                     ,(generate-predicate asts)
                     ,mailbox)
                    => ,(generate-on-msg-found asts))
+                  ((find-value (lambda (pred) (pred))
+                                 (dynamic-handlers))
+                   => (lambda (res) (unbox res)))
                   (else
                    ,(if (eq? timeout-val 'infinity)
                         `(begin (continuation-capture

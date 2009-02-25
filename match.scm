@@ -11,6 +11,7 @@
            `(if (null? ,var) ,oui ,non))
           ((or (symbol? gab) 
 							 (boolean? gab)
+               (keyword? gab)
 							 (char? gab))
            `(if (eq? ,var ',gab) ,oui ,non))
           ((number? gab)
@@ -63,7 +64,7 @@
                 `(define (,fn1)
                    ,(if-equal? var
                                (car clause)
-                               (if (and (eq? (cadr clause) 'when)
+                               (if (and (eq? (cadr clause) when:)
                                         (pair? (cddr clause)))
                                    `(if ,(caddr clause)
                                         (begin ,@(cdddr clause))

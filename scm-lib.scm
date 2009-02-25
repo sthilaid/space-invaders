@@ -114,6 +114,14 @@
    ((pred (car list)) (car list))
    (else  (exists pred (cdr list)))))
 
+;; returns the first result of the application of pred to a list
+;; element that is not #f.
+(define (find-value pred list)
+  (cond
+   ((not (pair? list)) #f)
+   ((pred (car list)) => (lambda (x) x))
+   (else  (exists pred (cdr list)))))
+
 (define (forall pred list)
   (cond
    ((not (pair? list)) #t)
@@ -437,6 +445,11 @@
               (queue-head-set! q new-head)))
         (queue-size-set! q (1- (queue-size q)))
         val)))))
+
+(define (queue-peek q)
+  (if (zero? (queue-size q))
+      #f
+      (queue-elem-value (queue-head q))))
 
 
 (define (queue-push! q val)

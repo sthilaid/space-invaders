@@ -167,7 +167,8 @@
                                (,loop))))))))))
 
 (define-macro (clean-mailbox pattern)
-  (let ((loop (gensym 'loop)))
-   `(let ,loop ()
-      (recv (,pattern (,loop))
-            (after 0 'cleaned-mailbox)))))
+  (let ((loop (gensym 'loop))
+        (counter (gensym 'counter)))
+   `(let ,loop ((,counter 0))
+      (recv (,pattern (,loop (+ ,counter 1)))
+            (after 0 ,counter)))))

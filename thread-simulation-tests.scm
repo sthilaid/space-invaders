@@ -332,13 +332,13 @@
                                    'ok))))
         (simple-boot c1)))
 
-(define-test test-msg-box-cleaning "allo" 'ok
+(define-test test-msg-box-cleaning "allo" 3
   (let ((c1 (new corout 'c1 (lambda ()
                               (subscribe 'toto (current-corout))
                               (recv (allo (display 'allo)))
-                              (clean-mailbox allo)
-                              (recv (allo (display 'no))
-                                    (after 0 'ok)))))
+                              (let ((x (clean-mailbox allo)))
+                                (recv (allo (display 'no))
+                                      (after 0 x))))))
         (c2 (new corout 'c2 (lambda ()
                               (broadcast 'toto 'allo)
                               (broadcast 'toto 'allo)

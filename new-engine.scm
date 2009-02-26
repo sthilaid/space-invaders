@@ -1,6 +1,7 @@
 (include "class.scm")
 (include "scm-lib-macro.scm")
 (include "thread-simulation-macro.scm")
+(include "match.scm")
 
 ;; FIXME!! Not ideal, but class system does not support inter-module usage
 (include "thread-simulation.scm")
@@ -118,7 +119,7 @@
   (sqrt (+ (expt (- (point-x p1) (point-x p2)) 2)
            (expt (- (point-y p1) (point-y p2)) 2))))
 
-(define (point-complexify p) (new rectangular (point-x p) (point-y p)))
+(define (point-complexify p) (make-rectangular (point-x p) (point-y p)))
 
 (define (point= p1 p2)
   (and (= (point-x p1) (point-x p2))
@@ -141,10 +142,10 @@
   (class-slot: bbox)
   (class-slot: state-num)
   (class-slot: score-value)
-  (constructor: (lambda (obj id pos state color speed)
+  (constructor: (lambda (obj id pos state color speed level)
                   (init! cast: '(corout * *) obj
                          id
-                         (lambda () (behaviour (self))))
+                         (lambda () (behaviour (self) level)))
                   (set-fields! obj game-object
                     ((pos pos)
                      (state state)
@@ -203,9 +204,9 @@
 ;; Evil Invaders!
 (define-class invader-ship (game-object sprite-obj) (slot: row) (slot: col)
   (constructor:
-   (lambda (obj pos state color speed row col)
-     (init! cast: '(game-object * * * * *)
-            obj(gensym 'invader) pos state color speed)
+   (lambda (obj pos state color speed row col level)
+     (init! cast: '(game-object * * * * * *)
+            obj (gensym 'invader) pos state color speed)
      (set-fields! obj invader-ship ((row row) (col col))))))
 
 (define-class easy-invader   (invader-ship))
@@ -223,16 +224,16 @@
             (state 0)
             (speed (new point 0 0))
             (player-ship (new player-ship)))
-       (init! cast: '(game-object * * * * *)
-              obj 'player pos state 'green speed)
+       (init! cast: '(game-object * * * * * *)
+              obj 'player pos state 'green speed level)
        (level-add-object! level obj)))))
 (setup-static-fields! player-ship 'player (new rect 0 0 13 8) 1 0)
 
 (define-class mothership   (game-object sprite-obj)
   (constructor:
-   (lambda (obj pos state color speed)
-     (init! cast: '(game-object * * * * *)
-            obj 'mothership pos state color speed))))
+   (lambda (obj pos state color speed level)
+     (init! cast: '(game-object * * * * * *)
+            obj 'mothership pos state color speed level))))
 (setup-static-fields! mothership 'mothership (new rect 0 0 16 7) 1 100)
 
 (define-class laser-obj    (game-object sprite-obj))
@@ -247,9 +248,9 @@
 
 (define-class shield       (game-object) (slot: particles)
   (constructor:
-   (lambda (obj id pos state color speed particles)
-     (init! cast: '(game-object * * * * *)
-            obj id pos state color speed)
+   (lambda (obj id pos state color speed particles level)
+     (init! cast: '(game-object * * * * * *)
+            obj id pos state color speed level)
      (set-fields! obj shield ((particles particles))))))
 (setup-static-fields! shield 'shield (new rect 0 0 22 16) 1 0)
 
@@ -273,8 +274,9 @@
 
 (define-class message-obj  (game-object) (slot: text)
   (constructor:
-   (lambda (obj id pos state color speed text)
-     (init! cast: '(game-object * * * * *) obj id pos state color speed)
+   (lambda (obj id pos state color speed level text)
+     (init! cast: '(game-object * * * * * * )
+            obj id pos state color speed level)
      (message-obj-text-set! obj text))))
 (setup-static-fields! message-obj 'message (new rect 0 0 0 0) 0 0)
 
@@ -773,7 +775,7 @@
 ;; depending on the laser type, might re-scheduled a new laser shot.
 (define (destroy-laser! level laser-obj)
   (level-remove-object! level laser-obj)
-  (if (not (eq? (game-object-sprite-id laser-obj) 'player_laser))
+  #;(if (not (eq? (game-object-sprite-id laser-obj) 'player_laser))
       (spawn-brother-thunk
        'inv-laser (compose-thunks
                    (lambda () (sleep-for next-invader-laser-interval))
@@ -786,42 +788,42 @@
   (invader-ship? inv) 
   (level-increase-score! level inv)
   (destroy-laser! level laser)
-  (explode-invader! level inv))
+  #;(explode-invader! level inv))
 
 (define-method (resolve-collision! level (laser1 laser-obj) (laser2 laser-obj))
   (let ((inv-laser (if (player_laser? laser1) laser2 laser1)))
-    (explode-laser! level inv-laser)
+    #;(explode-laser! level inv-laser)
     (destroy-laser! level inv-laser)))
 
 (define-method (resolve-collision! level (laser laser-obj) (expl explosion))
-  (explode-laser! level laser)
+  #;(explode-laser! level laser)
   (destroy-laser! level laser))
 
 (define-method (resolve-collision! level (laser laser-obj) (player player-ship))
-  (spawn-brother-thunk 'player-explosion-anim
+  #;(spawn-brother-thunk 'player-explosion-anim
                        (lambda () (explode-player! level player)))
   (destroy-laser! level laser))
 
 (define-method (resolve-collision! level (laser laser-obj) (shield shield))
   (let ((penetrated-pos (get-laser-penetration-pos laser)))
     (game-object-pos-set! laser penetrated-pos)
-    (explode-laser! level laser)
+    #;(explode-laser! level laser)
     (shield-explosion! shield laser))
   (destroy-laser! level laser))
 
 (define-method (resolve-collision! level (laser laser-obj) (mother mothership))
   (destroy-laser! level laser)
-  (explode-mothership! level mother)
+  #;(explode-mothership! level mother)
   (level-increase-score! level mother)
   (let ((delta-t (mothership-random-delay)))
     (spawn-brother-thunk
      'mothership (compose-thunks
                   (lambda () (sleep-for delta-t))
-                  (create-new-mothership level)))))
+                  #;(create-new-mothership level)))))
 
 (define-method (resolve-collision! level (laser laser-obj) (wall wall))
   (damage-wall! level laser)
-  (explode-laser! level laser)
+  #;(explode-laser! level laser)
   (destroy-laser! level laser))
 
 ;; Invader Collision ;;
@@ -851,9 +853,10 @@
 (define-method (resolve-collision! level
                                    (player player-ship)
                                    (inv    invader-ship))
-  (spawn-brother-thunk 'player-explosion
+  'todo
+  #;(spawn-brother-thunk 'player-explosion
                        (lambda () (explode-player! level player)))
-  (explode-invader! level inv))
+  #;(explode-invader! level inv))
 
 (define-method (resolve-collision! level (player player-ship) (laser laser-obj))
   (resolve-collision! level laser player))
@@ -867,7 +870,7 @@
     (spawn-brother-thunk 'mothership
                          (compose-thunks
                           (lambda () (sleep-for delta-t))
-                          (create-new-mothership level)))))
+                          #;(create-new-mothership level)))))
 
 (define-method (resolve-collision! level (mother mothership) (laser laser-obj))
   (resolve-collision! level laser mother))
@@ -898,11 +901,11 @@
            (speed (new point invader-x-movement-speed 0))
            (inv
             (cond ((< col 2) (new easy-invader
-                                  pos state 'white speed row col))
+                                  pos state 'white speed row col level))
                   ((< col 4) (new medium-invader
-                                  pos state 'white speed row col))
+                                  pos state 'white speed row col level))
                   (else      (new hard-invader
-                                  pos state 'white speed row col)))))
+                                  pos state 'white speed row col level)))))
       (level-add-object! level inv)
       (spawn-brother inv)
       (subscribe `(invader-row ,row) inv)))
@@ -935,7 +938,7 @@
 (define-generic behaviour)
 
 ;; TODO: Add this to the dynamic behaviour of all game objects
-(define-method (behaviour (obj game-object))
+(define-method (behaviour (obj game-object) level)
   (recv (die (level-remove-object! obj)
              (terminate-corout 'died))
         ;;maybe add pause here?
@@ -943,21 +946,23 @@
               ;; loop back to the most specific instance of behaviour!
               (behaviour obj))))
 
-(define-method (behaviour (inv invader-ship))
+(define-method (behaviour (inv invader-ship) level)
+  (define (find-controler row)
+    (vector-ref (level-controllers level) row))
   (define (main-state)
     (recv
      (move
       (begin 
-        (move-object! inv)
-        (! (find-barrier (invader-row-number inv)) 'moved)
+        (move-object! (self))
+        (! (find-controler (invader-row-number (self))) 'moved)
         (main-state)))
      (wall-collision
       (begin
-        (update! (game-object-speed inv) pos2d x (lambda (dx) (- dx)))
-        (pos2d-y-set! (game-object-speed inv) (- invader-y-movement-speed))
-        (move-object! level inv)
-        (pos2d-y-set! (game-object-speed inv) 0)
-        (! (find-barrier (invader-row-number inv)) 'moved)
+        (update! (game-object-speed (self)) pos2d x (lambda (dx) (- dx)))
+        (pos2d-y-set! (game-object-speed (self)) (- invader-y-movement-speed))
+        (move-object! level (self))
+        (pos2d-y-set! (game-object-speed (self)) 0)
+        (! (find-controler (invader-row-number (self))) 'moved)
         (main-state)))
      (player-explosion
       (begin (player-expl-state)))
@@ -981,38 +986,47 @@
                          (gensym 'barrier)
                          thunk)
                   (Barrier-agent-arrived-set! obj 0))))
-(define-class Inv-Controller (Barrier) (slot: row)
+(define-class Inv-Controller (Barrier) (slot: row) (slot: warned?)
   (constructor: (lambda (obj row)
                   (init! cast: '(Barrier *) obj invader-controller)
-                  (Invader-Controller-id-set! obj (gensym 'Inv-Controller))
-                  (Invader-Controller-row-set! obj row))))
+                  (set-fields! obj Inv-Controller
+                               ((id (gensym 'Inv-Controller))
+                                (row row)
+                                (warned? #f))))))
 (define-macro (define-wait-state state-name msg condition . barrier-open-code)
   `(define (,state-name)
      (recv (,msg
             (begin
-              (update! self Barrier agent-arrived (lambda (n) (+ n 1)))
-              (if (>= (Barrier-agent-arrived self) ,condition)
+              (update! (self) Barrier agent-arrived (lambda (n) (+ n 1)))
+              (if (>= (Barrier-agent-arrived (self)) ,condition)
                   (begin
-                    (Barrier-agent-arrived-set! self 0)
+                    (Barrier-agent-arrived-set! (self) 0)
                     ,@barrier-open-code)
                   (,state-name)))))))
 
 ;; Problemes ici au niveau du redraw!! doit etre fait entre chaque etat...
-(define (invader-controller self)
-  (define (inv-nb) (row-size (Inv-Controller-row self)))
+(define (invader-controller)
+  (define (inv-nb)
+    (broadcast `(row-invaders ,(Inv-Controller-row (self))) 'ping)
+    (clean-mailbox pong))
   (define-wait-state main-state 'moved (inv-nb)
     (recv 
      (go-down-warning
-      (begin (Inv-Controller-warned?-set! self #f)
-             (broadcast (row-invaders (Inv-Controller-row self))
+      (begin (Inv-Controller-warned?-set! (self) #f)
+             (broadcast `(row-invaders ,(Inv-Controller-row (self)))
                         'wall-collision)
-             (state2)))
+             (main-state)))
      ;; if no wall collision, then proceed to the next state
-     (after 0 (! redraw-agent `(redraw ,(Inv-Controller-row self))))))
+     (after 0
+            (! redraw-agent `(redraw ,(Inv-Controller-row (self))))
+            (main-state))))
 
   main-state)
 
 (define (process-user-input level)
+  (define game-paused? #f)
+  (define (player-can-move?) (and (level-player level) (not game-paused?)))
+  
   (let ((player (level-player level))
         (msg (thread-receive 0 #f)))
     (if msg
@@ -1050,13 +1064,26 @@
           ((d) (error "DEBUG"))))))
 
 (define (redraw-agent level)
+  ;; FIXME: Probably not the most efficient way, but is it worst than
+  ;; scanning all the invader instances?
+  (define (next-row previous-row)
+    (define (inc x) (modulo (+ x 1) invader-row-number))
+    (let ((first-row (inc previous-row)))
+     (let loop ((r first-row))
+       (if (= r first-row)
+           (error "could not find the next row of invaders...")
+           (begin
+             (broadcast `(row-invaders ,r) 'ping)
+             (yield)
+             (recv (pong (clean-mailbox pong) r)
+                 (after 0 (loop (inc r)))))))))
   (lambda ()
    (let loop ()
      (recv
-      ((redraw last-row)
+      ((redraw ,last-row)
        (begin
          (process-user-input)
-         (render current-level)
+         (render level)
          (broadcast `(invader-row ,(next-row last-row)) 'move)
          (loop)))))))
 

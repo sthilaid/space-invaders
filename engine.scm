@@ -1070,7 +1070,7 @@
                   (,state-name)))))))
 
 ;; Problemes ici au niveau du redraw!! doit etre fait entre chaque etat...
-(define (invader-controller self)
+(define (invader-controller level)
   (define (inv-nb) (row-size (Inv-Controller-row self)))
   (define-wait-state main-state 'moved (inv-nb)
     (recv 
@@ -1119,7 +1119,7 @@
 
           ((d) (error "DEBUG"))))))
 
-(define (redraw-agent self)
+(define (redraw-agent level)
   (lambda ()
     (let loop ()
      (recv

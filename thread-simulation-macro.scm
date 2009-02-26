@@ -165,3 +165,9 @@
                            (if (= (queue-size ,mailbox) msg-q-size)
                                (begin ,@timeout-ret-val)
                                (,loop))))))))))
+
+(define-macro (clean-mailbox pattern)
+  (let ((loop (gensym 'loop)))
+   `(let ,loop ()
+      (recv (,pattern (,loop))
+            (after 0 'cleaned-mailbox)))))

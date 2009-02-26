@@ -1,8 +1,9 @@
-;;(include "class.scm")
 
 ;; FIXME: Load calls should be removed in the final compiled version
-;; (load "rbtree.scm")
-;; (load "scm-lib")
+
+(include "class.scm")
+(load "rbtree.scm")
+(load "scm-lib")
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -593,7 +594,6 @@
          (for-each (lambda (subscriber)
                      (! subscriber msg))
                    msg-list))))
-
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

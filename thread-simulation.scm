@@ -57,7 +57,7 @@
   (slot: id)
   (slot: kont)
   (slot: mailbox)
-  (slot: state) ;; should be unprintable
+  (slot: state-env) ;; should be unprintable
   (slot: prioritize?)
   (slot: sleeping?)
   (slot: delta-t)
@@ -67,7 +67,7 @@
                     ((id          id)
                      (kont        (lambda (dummy) (terminate-corout (thunk))))
                      (mailbox     (new-queue))
-                     (state       #f)
+                     (state-env       #f)
                      (prioritize? #f)
                      (sleeping?   #f)
                      (delta-t     #f)
@@ -274,9 +274,9 @@
        ;; if it is a statefull coroutine
        ;; (executing a scheduler) then restore its
        ;; environnement
-       (if (corout-state (current-corout))
+       (if (corout-state-env (current-corout))
            (let ((state (save-state)))
-             (restore-state (corout-state (current-corout)))
+             (restore-state (corout-state-env (current-corout)))
              (parent-state state)))
        ;; run the coroutine
        (if (procedure? kontinuation)
@@ -434,7 +434,7 @@
            ;; current-corout should be restored on the parent's
            ;; level. It just thus be defined as the new coroutine
            ;; system's coroutine.
-           (corout-state-set! (current-corout) state)
+           (corout-state-env-set! (current-corout) state)
            (corout-kont-set! (current-corout) k)
            (resume-scheduling))))))
 

@@ -43,5 +43,6 @@
 (define-symmetric-font "player_explosion" 16 8 static)
 
 (define-symmetric-font "bb_fonts" 8 8 static)
- ;;(define-symmetric-font "f_operationwolf" 8 8)
+
+;;(define-symmetric-font "f_operationwolf" 8 8)
 ;;(define-symmetric-font "f_syvalion" 16 16)

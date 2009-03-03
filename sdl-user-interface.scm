@@ -334,7 +334,6 @@
 ;;   (set! test-chunk2 (SDL::Mix::load-wav
 ;;                      "sounds/32562_FreqMan_chronosphere_ish.wav"))
   (set! star-wars-chunk (SDL::Mix::load-wav "sounds/starwars.wav"))
-  
   (let ( (screen (SDL::set-video-mode
                     screen-max-x screen-max-y 32
                     (bitwise-ior  SDL::opengl SDL::resizable))) )
@@ -373,50 +372,51 @@
 
 ;; Main function which only sets up and starts the game threads
 (define (main)
-  (define (start)
-    (SDL::within-sdl-lifetime SDL::init-everything
+  (SDL::within-sdl-lifetime SDL::init-everything
                               redraw-loop))
 
-  ;; Start a debug/developpement repl in a seperate thread
-  ;;   (thread-start! (make-thread (lambda () (##repl))))
-  (cond
-   ((eqv? (length (command-line)) 1) (start))
-   (else
-    (display usage-message))))
+;; temporary fix
+(define files
+  (list "opengl" "glu" "rbtree" "scm-lib" "scm-lib-macro" "stats" "ppm-reader" "texture" "sprite" "font"
+        "user-interface-images" "sdl-interface"
+        ;;"sdl-user-interface"
+        ))
+(for-each (lambda (lib) (load lib)) files)
 
 
 ;; (include "statprof.scm")
 ;; (profile-start!)
-(main)
+;; (main)
 ;; (profile-stop!)
 
 ;; (write-profile-report "profiling")
 
 
 ;; Creation of histogram data
-(let ((histo-size 30))
-  (set! fps-set   (drop-right fps-set   1))
-  (set! GC-dt-set (drop-right GC-dt-set 1))
-  (set! draw-set  (drop-right draw-set  1))
-  (with-output-to-file "histo-fps.csv"
-    (lambda () (generate-histogram
-                "fps"
-                histo-size
-                `(("Framerate" . ,fps-set)))))
-  (with-output-to-file "histo-render.csv"
-    (lambda () (generate-histogram
-                "rendering"
-                histo-size
-                `(("time to render all of a frame" .
-                   ,(map (lambda (x) (/ 1 x)) fps-set))
-                  ("time to draw a frame" . ,draw-set))
-                0.001)))
-  (with-output-to-file "histo-gc.csv"
-    (lambda () (generate-histogram
-                "gc"
-                histo-size
-                `(("Garbage collection time" . ,GC-dt-set))
-                0.001))))
 
-(if trace-coroutines?
-    (output-corout-tracing-results))
+;; (let ((histo-size 30))
+;;   (set! fps-set   (drop-right fps-set   1))
+;;   (set! GC-dt-set (drop-right GC-dt-set 1))
+;;   (set! draw-set  (drop-right draw-set  1))
+;;   (with-output-to-file "histo-fps.csv"
+;;     (lambda () (generate-histogram
+;;                 "fps"
+;;                 histo-size
+;;                 `(("Framerate" . ,fps-set)))))
+;;   (with-output-to-file "histo-render.csv"
+;;     (lambda () (generate-histogram
+;;                 "rendering"
+;;                 histo-size
+;;                 `(("time to render all of a frame" .
+;;                    ,(map (lambda (x) (/ 1 x)) fps-set))
+;;                   ("time to draw a frame" . ,draw-set))
+;;                 0.001)))
+;;   (with-output-to-file "histo-gc.csv"
+;;     (lambda () (generate-histogram
+;;                 "gc"
+;;                 histo-size
+;;                 `(("Garbage collection time" . ,GC-dt-set))
+;;                 0.001))))
+
+;; (if trace-coroutines?
+;;     (output-corout-tracing-results))

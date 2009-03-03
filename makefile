@@ -55,10 +55,14 @@ INCLUDE_OPTIONS=-I$(GAMBIT_INCLUDE) -I$(GL_INCLUDE) $(ALL_SDL_INCLUDE)
 .SUFFIXES: .c .scm .o .o1 .m
 .PHONY: all clean shared-objects tarball welcome
 
-all: welcome run-invaders finished
+all: welcome run-invaders 
 
 
-run-invaders: $(GL_FILES:.scm=.o1) $(SPACE_INVADERS_FILES:.scm=.o1) $(UI_FILES:.scm=.o1) 
+run-invaders: $(GL_FILES:.scm=.o1) $(SPACE_INVADERS_FILES:.scm=.o1) $(UI_FILES:.scm=.o1)
+	@echo "*** Compilation Finished ***"
+	@echo
+	@echo "Starting Space Invaders...."
+	@echo
 	gsi $(GL_FILES:.scm=.o1) $(SPACE_INVADERS_FILES:.scm=.o1) $(UI_FILES:.scm=.o1) -e '(main)'
 
 ## "included" macro dependant scheme source files
@@ -111,10 +115,7 @@ ifeq ($(UI), sdl)
 	@echo PATH_TO_SDL_mixer=$(PATH_TO_SDL_mixer)
 endif
 	@echo
-	@echo "*** Beginning compilation ***"
-
-finished:
-	@echo done.
+	@echo "*** Beginning Compilation ***"
 
 ALL_SCM = $(wildcard *.scm)
 clean:

@@ -1,3 +1,9 @@
+(declare (safe)
+         (inlining-limit 150) ; avoids code exploooosion!
+         (block)
+         (standard-bindings)
+         (extended-bindings))
+
 (include "class.scm")
 (include "scm-lib-macro.scm")
 (include "thread-simulation-macro.scm")
@@ -206,7 +212,7 @@
   (constructor:
    (lambda (obj pos state color speed row col level)
      (init! cast: '(game-object * * * * * *)
-            obj (gensym 'invader) pos state color speed)
+            obj (gensym 'invader) pos state color speed level)
      (set-fields! obj invader-ship ((row row) (col col))))))
 
 (define-class easy-invader   (invader-ship))
@@ -275,7 +281,7 @@
 (define-class message-obj  (game-object) (slot: text)
   (constructor:
    (lambda (obj id pos state color speed level text)
-     (init! cast: '(game-object * * * * * * )
+     (init! cast: '(game-object * * * * * *)
             obj id pos state color speed level)
      (message-obj-text-set! obj text))))
 (setup-static-fields! message-obj 'message (new rect 0 0 0 0) 0 0)
@@ -346,7 +352,7 @@
 
 
 ;;;; Shields ;;;;
-(define (generate-shields)
+(define (generate-shields level)
   (define speed (new point 0 0))
   (define (generate-particles)
     (map (lambda (p) (new point (pos2d-x p) (pos2d-y p)))
@@ -355,13 +361,13 @@
           rgb-threshold?)))
 
   (list (new shield 'shield1 (new point  36 40) 0 'green
-                     speed (generate-particles))
+                     speed (generate-particles) level)
         (new shield 'shield2 (new point  81 40) 0 'green
-                     speed (generate-particles))
+                     speed (generate-particles) level)
         (new shield 'shield3 (new point 126 40) 0 'green
-                     speed (generate-particles))
+                     speed (generate-particles) level)
         (new shield 'shield4 (new point 171 40) 0 'green
-                     speed (generate-particles))))
+                     speed (generate-particles) level)))
 
 ;; Get particle cloud associated with a certain colliding object.
 (define (get-explosion-particles colliding-obj)
@@ -556,16 +562,16 @@
    (append 
     (list
      (new message-obj 'top-banner (new point 2 y) state 'white speed
-                       "SCORE<1>  HI-SCORE  SCORE<2>")
+          level "SCORE<1>  HI-SCORE  SCORE<2>")
      (new message-obj 'hi-score-msg
           (new point 95 (- y 17)) state 'white speed
-          (get-score-string hi-score)))
+          level (get-score-string hi-score)))
     (if (game-level? level)
         (list
          (new message-obj 'player2-score-msg 
-                           (new point 175 (- y 17)) state 'white speed "")
+                           (new point 175 (- y 17)) state 'white speed level "")
          (new message-obj 'player1-score-msg 
-                           (new point 15 (- y 17)) state 'white speed ""))
+                           (new point 15 (- y 17)) state 'white speed level ""))
         '()))))
 
 ;; New game level generation. Works for both single and 2 player
@@ -573,7 +579,6 @@
 (define (new-level init-score hi-score number-of-players player-id)
   (let* ((walls (generate-walls))
          (wall-damage '())
-         (shields (generate-shields))
          (init-corouts 'unbound)
          (lives 3)
          (wall-collision-detected? #f)
@@ -602,10 +607,11 @@
           (new corout
                'game-initialisation
                (compose-thunks
+                (lambda () (pp 'toto!))
                 ;; Intro anim
                 #;(start-of-game-animation level)
                 (invader-generator level)
-
+                (lambda () (pp 'generation-finie!))
                 ;; Setup level and start primordial game corouts
                 (lambda ()
                   (new player-ship level)
@@ -628,7 +634,7 @@
     ;; TODO: abstract redraw agent into a subclass of corout?
     (subscribe 'redraw-agent redraw-corout)
     (add-global-score-messages! level)
-    (for-each (lambda (s) (level-add-object! level s)) shields)
+    (for-each (lambda (s) (level-add-object! level s)) (generate-shields level))
     (level-init-corouts-set! level init-corouts)
     (subscribe 'redraw redraw-corout)
     level))
@@ -713,7 +719,7 @@
                      (wall-rect wall)))
 
 (define-method (detect-collision? (obj game-object) (shield shield))
-  (if (detect-collision? obj shield cast: '(game-object game-object))
+  (if (detect-collision? cast: '(game-object game-object) obj shield)
       (let* ((pos (game-object-pos shield)))
         (exists (lambda (particle)
                   (detect-collision? (point-add pos particle)
@@ -927,7 +933,8 @@
                         (spawn-brother (new Inv-Controller row))))
                   (yield)
                   (loop (+ row 1) (cons controller controllers))))
-          (level-controllers-set! level (apply vector (reverse controllers)))))
+          (game-level-controllers-set! level (apply vector (reverse controllers)))))
+    (thread-send user-interface-thread `(redraw ,level))
     (sleep-for animation-delay)))
 
 (define (start-game! level)
@@ -948,7 +955,7 @@
 
 (define-method (behaviour (inv invader-ship) level)
   (define (find-controler row)
-    (vector-ref (level-controllers level) row))
+    (vector-ref (game-level-controllers level) row))
   (define (main-state)
     (recv
      (move
@@ -1083,7 +1090,7 @@
       ((redraw ,last-row)
        (begin
          (process-user-input)
-         (render level)
+         (thread-send user-interface-thread `(redraw ,level))
          (broadcast `(invader-row ,(next-row last-row)) 'move)
          (loop)))))))
 
@@ -1129,6 +1136,7 @@
       ;; return the hi-score of the last played game.
       (let inf-loop ((hi-score init-high-score)
                      (result 'restart!))
+        (pp 'looping!)
         (cond
          ((and (number? result) (> result hi-score))
           (save-hi-score result)
@@ -1188,7 +1196,7 @@
   (for-each render (level-all-objects level)))
 
 (define-method (render (level game-level))
-  (render level cast: '(level))
+  (render cast: '(level) level)
   
   (glBlendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA)
 

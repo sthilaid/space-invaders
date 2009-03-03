@@ -123,7 +123,7 @@
      ((pred (car list)) (cons (car list) (filter pred (cdr list))))
      (else (filter pred (cdr list)))))
   (include "match.scm")
-  (load "scm-lib")
+  ;(load "scm-lib")
 
   (let* ((last-pat (take-right pattern-list 1))
          (timeout-val (if (eq? (caar last-pat) 'after)

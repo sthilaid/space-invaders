@@ -151,7 +151,7 @@
   (constructor: (lambda (obj id pos state color speed level)
                   (init! cast: '(corout * *) obj
                          id
-                         (lambda () (behaviour (self) level)))
+                         (lambda () (behaviour obj level)))
                   (set-fields! obj game-object
                     ((pos pos)
                      (state state)
@@ -607,32 +607,29 @@
           (new corout
                'game-initialisation
                (compose-thunks
-                (lambda () (pp 'toto!))
                 ;; Intro anim
                 #;(start-of-game-animation level)
                 (invader-generator level)
-                (lambda () (pp 'generation-finie!))
                 ;; Setup level and start primordial game corouts
                 (lambda ()
                   (new player-ship level)
-                  #;(spawn-brother-thunk
-                  'invader-laser-corout
-                  (compose-thunks
-                  (lambda () (sleep-for 1))
-                  (create-invader-laser level)))
-                  #;(spawn-brother-thunk
-                  'mother-ship-corout
-                  (compose-thunks
-                  (lambda () (sleep-for (mothership-random-delay)))
-                  (create-new-mothership level))))
+;;                   (spawn-brother-thunk
+;;                    'invader-laser-corout
+;;                    (compose-thunks
+;;                     (lambda () (sleep-for 1))
+;;                     (create-invader-laser level)))
+;;                   (spawn-brother-thunk
+;;                    'mother-ship-corout
+;;                    (compose-thunks
+;;                     (lambda () (sleep-for (mothership-random-delay)))
+;;                     (create-new-mothership level)))
+                  )
                 (start-game! level))))
-         (redraw-corout (new corout 'redraw (redraw-agent level)))
+         (redraw-corout (new corout 'redraw (lambda () (redraw-agent level))))
          (init-corouts
           (list level-setup-corout
                 redraw-corout)))
 
-    ;; TODO: abstract redraw agent into a subclass of corout?
-    (subscribe 'redraw-agent redraw-corout)
     (add-global-score-messages! level)
     (for-each (lambda (s) (level-add-object! level s)) (generate-shields level))
     (level-init-corouts-set! level init-corouts)
@@ -913,7 +910,6 @@
                   (else      (new hard-invader
                                   pos state 'white speed row col level)))))
       (level-add-object! level inv)
-      (spawn-brother inv)
       (subscribe `(invader-row ,row) inv)))
                          
   (lambda ()
@@ -921,6 +917,7 @@
       (if (< row invader-row-number)
           (if (< col invader-col-number)
               (begin (generate-inv! row col)
+                     (thread-send user-interface-thread `(redraw ,level))
                      (sleep-for animation-delay)
                      (loop row (+ col 1)))
               (begin
@@ -931,8 +928,9 @@
       (if (< row invader-row-number)
           (begin (let ((controller
                         (spawn-brother (new Inv-Controller row))))
-                  (yield)
-                  (loop (+ row 1) (cons controller controllers))))
+                   (subscribe `(row-controller ,row) controller)
+                   (yield)
+                   (loop (+ row 1) (cons controller controllers))))
           (game-level-controllers-set! level (apply vector (reverse controllers)))))
     (thread-send user-interface-thread `(redraw ,level))
     (sleep-for animation-delay)))
@@ -954,14 +952,17 @@
               (behaviour obj))))
 
 (define-method (behaviour (inv invader-ship) level)
-  (define (find-controler row)
+  (define (find-controller row)
     (vector-ref (game-level-controllers level) row))
   (define (main-state)
+    (pp `(invader ,(invader-ship-id (self)) in main state!))
     (recv
      (move
-      (begin 
-        (move-object! (self))
-        (! (find-controler (invader-row-number (self))) 'moved)
+      (begin
+        (pp 'moving!)
+        (move-object! level (self))
+        ;;(! (find-controller (invader-ship-row (self))) 'moved)
+        (broadcast `(row-controller ,(invader-ship-row (self))) 'moved)
         (main-state)))
      (wall-collision
       (begin
@@ -969,7 +970,7 @@
         (pos2d-y-set! (game-object-speed (self)) (- invader-y-movement-speed))
         (move-object! level (self))
         (pos2d-y-set! (game-object-speed (self)) 0)
-        (! (find-controler (invader-row-number (self))) 'moved)
+        (! (find-controller (invader-ship-row (self))) 'moved)
         (main-state)))
      (player-explosion
       (begin (player-expl-state)))
@@ -985,7 +986,7 @@
     (recv ('game-unpaused (main-state))))
 
   ;; init state
-  main-state)
+  (main-state))
 
 (define-class Barrier (corout) (slot: agent-arrived)
   (constructor: (lambda (obj thunk)
@@ -1004,6 +1005,7 @@
   `(define (,state-name)
      (recv (,msg
             (begin
+              (pp 'test)
               (update! (self) Barrier agent-arrived (lambda (n) (+ n 1)))
               (if (>= (Barrier-agent-arrived (self)) ,condition)
                   (begin
@@ -1016,7 +1018,8 @@
   (define (inv-nb)
     (broadcast `(row-invaders ,(Inv-Controller-row (self))) 'ping)
     (clean-mailbox pong))
-  (define-wait-state main-state 'moved (inv-nb)
+  (define-wait-state main-state moved (inv-nb)
+    (pp 'barrier-opened)
     (recv 
      (go-down-warning
       (begin (Inv-Controller-warned?-set! (self) #f)
@@ -1025,10 +1028,10 @@
              (main-state)))
      ;; if no wall collision, then proceed to the next state
      (after 0
-            (! redraw-agent `(redraw ,(Inv-Controller-row (self))))
+            (broadcast 'redraw `(redraw ,(Inv-Controller-row (self))))
             (main-state))))
 
-  main-state)
+  (main-state))
 
 (define (process-user-input level)
   (define game-paused? #f)
@@ -1084,15 +1087,14 @@
              (yield)
              (recv (pong (clean-mailbox pong) r)
                  (after 0 (loop (inc r)))))))))
-  (lambda ()
-   (let loop ()
-     (recv
-      ((redraw ,last-row)
-       (begin
-         (process-user-input)
-         (thread-send user-interface-thread `(redraw ,level))
-         (broadcast `(invader-row ,(next-row last-row)) 'move)
-         (loop)))))))
+  (let loop ()
+    (recv
+     ((redraw ,last-row)
+      (begin
+        (process-user-input level)
+        (thread-send user-interface-thread `(redraw ,level))
+        (broadcast `(invader-row ,(next-row last-row)) 'move)
+        (loop))))))
 
 
 ;;*****************************************************************************

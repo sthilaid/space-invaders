@@ -375,14 +375,6 @@
   (SDL::within-sdl-lifetime SDL::init-everything
                               redraw-loop))
 
-;; temporary fix
-(define files
-  (list "opengl" "glu" "rbtree" "scm-lib" "scm-lib-macro" "stats" "ppm-reader" "texture" "sprite" "font"
-        "user-interface-images" "sdl-interface"
-        ;;"sdl-user-interface"
-        ))
-(for-each (lambda (lib) (load lib)) files)
-
 
 ;; (include "statprof.scm")
 ;; (profile-start!)

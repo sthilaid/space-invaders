@@ -574,6 +574,9 @@
 (define messaging-lists (make-table test: equal?))
 (define (get-msg-list list-id)
   (table-ref messaging-lists list-id #f))
+(define (msg-list-size list-id)
+  (length (get-msg-list list-id)))
+
 (define (subscribe list-id agent)
   (cond ((table-ref messaging-lists list-id #f)
          => (lambda (lst)
@@ -590,10 +593,18 @@
                      (set-remove eq? agent msg-list)))))
 (define (broadcast list-id msg)
   (let ((msg-list (get-msg-list list-id)))
-    (and msg-list
-         (for-each (lambda (subscriber)
-                     (! subscriber msg))
-                   msg-list))))
+    (if (not msg-list)
+        (error (to-string
+                (show "could not broadcast message to list " list-id
+                      ": list does not exists")))
+        (if (not (> (length msg-list) 0))
+            (error (to-string
+                    (show "could not broadcast message to list " list-id
+                          ": list is empty!")))
+            (for-each (lambda (subscriber) (! subscriber msg))
+                      msg-list)))
+    (symbol-append 'message-sent-to- (string->symbol
+                                      (to-string (show list-id))))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

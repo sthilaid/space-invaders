@@ -166,6 +166,12 @@
                                (begin ,@timeout-ret-val)
                                (,loop))))))))))
 
+(define-macro (recv-only . pattern-list)
+  `(recv ,@pattern-list
+         (,(list 'unquote 'msg)
+          (error (to-string (show "received unexpected-message: "
+                                  msg))))))
+
 (define-macro (clean-mailbox pattern)
   (let ((loop (gensym 'loop))
         (counter (gensym 'counter)))

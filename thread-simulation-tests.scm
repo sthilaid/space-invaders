@@ -7,6 +7,7 @@
 ;; copied the thread-simulation package load requirements and include it...
 (load "rbtree.scm")
 (load "scm-lib")
+(include "scm-lib-macro.scm")
 (include "thread-simulation.scm")
 
 ;;(load "thread-simulation.scm")

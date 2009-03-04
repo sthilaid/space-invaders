@@ -3,9 +3,10 @@ FONT_FILES = $(wildcard fonts/*.ppm) $(wildcard fonts/*.scm)
 DOC_FILES = $(wildcard doc/*.ppm)
 SOUND_FILES = $(wildcard sounds/*.wav)
 
-GL_FILES = opengl.scm glu.scm 
-SPACE_INVADERS_FILES =  rbtree.scm scm-lib.scm scm-lib-macro.scm stats.scm ppm-reader.scm texture.scm sprite.scm font.scm new-engine.scm user-interface-images.scm 
-
+GL_FILES = opengl.scm glu.scm
+UI_FILES = sdl-interface.scm sdl-user-interface.scm
+DEVEL_FILES = $(GL_FILES) rbtree.scm scm-lib.scm scm-lib-macro.scm stats.scm ppm-reader.scm texture.scm sprite.scm font.scm user-interface-images.scm $(UI_FILES)
+SPACE_INVADERS_FILES =  $(DEVEL_FILES) new-engine.scm
 
 ## compilers
 GSC=$(PATH_TO_GAMBIT)/bin/gsc -:=$(PATH_TO_GAMBIT) -debug
@@ -26,7 +27,7 @@ UI=sdl
 OS=linux
 VERSION=1.0
 
-UI_FILES = sdl-interface.scm sdl-user-interface.scm
+
 LD_OPTIONS_LIN = -lutil -lSDL -lSDL_mixer -lglut
 LD_OPTIONS_COMMON =-L$(GAMBIT_LIB) -L$(GL_LIB) -L$(SDL_LIB) -L$(SDL_mixer_LIB) -lgambc 
 
@@ -57,13 +58,15 @@ INCLUDE_OPTIONS=-I$(GAMBIT_INCLUDE) -I$(GL_INCLUDE) $(ALL_SDL_INCLUDE)
 
 all: welcome run-invaders 
 
+devel: $(DEVEL_FILES:.scm=.o1)
+	gsi -:dar start.scm
 
-run-invaders: $(GL_FILES:.scm=.o1) $(SPACE_INVADERS_FILES:.scm=.o1) $(UI_FILES:.scm=.o1)
+run-invaders: $(SPACE_INVADERS_FILES:.scm=.o1)
 	@echo "*** Compilation Finished ***"
 	@echo
 	@echo "Starting Space Invaders...."
 	@echo
-	gsi $(GL_FILES:.scm=.o1) $(SPACE_INVADERS_FILES:.scm=.o1) $(UI_FILES:.scm=.o1) -e '(main)'
+	gsi $(SPACE_INVADERS_FILES:.scm=.o1) -e '(main)'
 
 ## "included" macro dependant scheme source files
 user-interface-images.c: user-interface-images.scm texture-macro.scm font-macro.scm scm-lib-macro.scm

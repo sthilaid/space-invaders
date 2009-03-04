@@ -534,7 +534,9 @@
    (table-ref (level-object-table lvl) 'mothership #f))
 
 (define (play-level level)
-  (apply simple-boot (level-init-corouts level)))
+  (let ((sim-res (apply simple-boot (level-init-corouts level))))
+    (pp `(sim-res ,sim-res))
+    sim-res))
 
 (define (get-score-string score)
   (cond ((= score 0) "0000")
@@ -778,13 +780,14 @@
 ;; depending on the laser type, might re-scheduled a new laser shot.
 (define (destroy-laser! level laser-obj)
   (level-remove-object! level laser-obj)
-  #;(if (not (eq? (game-object-sprite-id laser-obj) 'player_laser))
-      (spawn-brother-thunk
-       'inv-laser (compose-thunks
-                   (lambda () (sleep-for next-invader-laser-interval))
-                   (create-invader-laser level)))
-      (set! player-laser-last-destruction-time
-            (time->seconds (current-time)))))
+;;   (if (not (eq? (game-object-sprite-id laser-obj) 'player_laser))
+;;       (spawn-brother-thunk
+;;        'inv-laser (compose-thunks
+;;                    (lambda () (sleep-for next-invader-laser-interval))
+;;                    (create-invader-laser level)))
+;;       (set! player-laser-last-destruction-time
+;;             (time->seconds (current-time))))
+  )
 
 ;; Laser collisions ;;
 (define-method (resolve-collision! level (laser laser-obj) (inv invader-ship))
@@ -873,7 +876,8 @@
     (spawn-brother-thunk 'mothership
                          (compose-thunks
                           (lambda () (sleep-for delta-t))
-                          #;(create-new-mothership level)))))
+                          ;;(create-new-mothership level)
+                          ))))
 
 (define-method (resolve-collision! level (mother mothership) (laser laser-obj))
   (resolve-collision! level laser mother))
@@ -937,7 +941,7 @@
 
 (define (start-game! level)
   (lambda ()
-    (broadcast '(invader-row 1) 'move)))
+    (broadcast '(row-controller 0) 'init)))
 
 
 (define-generic behaviour)
@@ -1005,7 +1009,6 @@
   `(define (,state-name)
      (recv (,msg
             (begin
-              (pp 'test)
               (update! (self) Barrier agent-arrived (lambda (n) (+ n 1)))
               (if (>= (Barrier-agent-arrived (self)) ,condition)
                   (begin
@@ -1013,25 +1016,50 @@
                     ,@barrier-open-code)
                   (,state-name)))))))
 
-;; Problemes ici au niveau du redraw!! doit etre fait entre chaque etat...
 (define (invader-controller)
+  ;; Utilitaries
+  (define (next-row previous-row)
+    (define (inc x) (modulo (+ x 1) invader-row-number))
+    (let loop ((r (inc previous-row)))
+      (cond
+       ((= r previous-row)
+        (error "could not find the next row of invaders..."))
+       ((not (zero? (msg-list-size `(invader-row ,r))))
+        r)
+       (else (loop (inc r))))))
+
   (define (inv-nb)
-    (broadcast `(row-invaders ,(Inv-Controller-row (self))) 'ping)
-    (clean-mailbox pong))
-  (define-wait-state main-state moved (inv-nb)
+    (msg-list-size `(invader-row ,(Inv-Controller-row (self)))))
+
+  ;; States
+  (define (init-state)
+    (pp 'init-state)
+    (recv-only
+     (init
+      (pp `(initiating row ,(Inv-Controller-row (self))))
+      (broadcast `(invader-row ,(Inv-Controller-row (self)))
+                 'move)
+      (wait-state))))
+  (define-wait-state wait-state moved (inv-nb)
     (pp 'barrier-opened)
     (recv 
      (go-down-warning
       (begin (Inv-Controller-warned?-set! (self) #f)
-             (broadcast `(row-invaders ,(Inv-Controller-row (self)))
+             (broadcast `(invader-row ,(Inv-Controller-row (self)))
                         'wall-collision)
-             (main-state)))
+             (wait-state)))
      ;; if no wall collision, then proceed to the next state
      (after 0
-            (broadcast 'redraw `(redraw ,(Inv-Controller-row (self))))
-            (main-state))))
+            ;; FIXME: Use a sync call here?
+            (broadcast 'redraw 'redraw)
 
-  (main-state))
+            (broadcast `(row-controller
+                         ,(next-row (Inv-Controller-row (self))))
+                       'init)
+            (init-state))))
+
+  ;; initialization
+  (init-state))
 
 (define (process-user-input level)
   (define game-paused? #f)
@@ -1045,10 +1073,11 @@
            (if (player-can-move?)
                'todo
                ;; TODO: adapt to new language features..
-               #;(shoot-laser! level
-                             new player_laser
-                             (level-player level)
-                             player-laser-speed)))
+;;                (shoot-laser! level
+;;                              new player_laser
+;;                              (level-player level)
+;;                              player-laser-speed)
+               ))
           ((right)
            (if (player-can-move?)
                (let ((new-speed (new point player-movement-speed 0)))
@@ -1076,24 +1105,16 @@
 (define (redraw-agent level)
   ;; FIXME: Probably not the most efficient way, but is it worst than
   ;; scanning all the invader instances?
-  (define (next-row previous-row)
-    (define (inc x) (modulo (+ x 1) invader-row-number))
-    (let ((first-row (inc previous-row)))
-     (let loop ((r first-row))
-       (if (= r first-row)
-           (error "could not find the next row of invaders...")
-           (begin
-             (broadcast `(row-invaders ,r) 'ping)
-             (yield)
-             (recv (pong (clean-mailbox pong) r)
-                 (after 0 (loop (inc r)))))))))
   (let loop ()
     (recv
-     ((redraw ,last-row)
+     (redraw
       (begin
         (process-user-input level)
+        ;; FIXME: It would be better to either copy the level obj
+        ;; before passing it to redraw or do a syncronous remote call
+        ;; (in the termite !? style)
+        ;; Could also be done within this thread...
         (thread-send user-interface-thread `(redraw ,level))
-        (broadcast `(invader-row ,(next-row last-row)) 'move)
         (loop))))))
 
 

@@ -3,7 +3,13 @@
 (include "class.scm")
 (include "match.scm")
 
-(load "thread-simulation.scm")
+;; Usage of load is better but cannot because of the oo system. Here
+;; copied the thread-simulation package load requirements and include it...
+(load "rbtree.scm")
+(load "scm-lib")
+(include "thread-simulation.scm")
+
+;;(load "thread-simulation.scm")
 (load "test")
 
 
@@ -346,3 +352,13 @@
                               (broadcast 'toto 'allo)))))
     (simple-boot c1 c2)))
 
+(define-test test-after0 "noallo" 'done
+  (let ((c1 (new corout 'c1 (lambda ()
+                              (! (self) 'salut)
+                              (recv (allo (display 'allo))
+                                    (after 0 (display 'no)))
+                              (! (self) 'allo)
+                              (recv (allo (display 'allo))
+                                    (after 0 (display 'no)))
+                              'done))))
+    (simple-boot c1)))

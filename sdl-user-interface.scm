@@ -45,15 +45,15 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;; Sound rendering functions ;;;;;;;;;;;;;;;;;;;;;;;
 
-(define (play-sfx sfx)
-  (case sfx
-    [(mothership-sfx)
-     (when test-chunk2 (SDL::Mix::play-channel 0 test-chunk2 4))]
-    [(star-wars-op)
-     (when star-wars-chunk (SDL::Mix::play-channel 0 star-wars-chunk 0))]))
+;; (define (play-sfx sfx)
+;;   (case sfx
+;;     [(mothership-sfx)
+;;      (when test-chunk2 (SDL::Mix::play-channel 0 test-chunk2 4))]
+;;     [(star-wars-op)
+;;      (when star-wars-chunk (SDL::Mix::play-channel 0 star-wars-chunk 0))]))
 
-(define (stop-sfx sfx)
-  (SDL::Mix::halt-channel -1))
+;; (define (stop-sfx sfx)
+;;   (SDL::Mix::halt-channel -1))
 
 
 
@@ -324,19 +324,19 @@
 (define (redraw-loop)
   (SDL::set-window-caption "Space Invaders" "Space Invaders")
   (SDL::set-window-icon (SDL::load-bmp-file "sprites/medium1.bmp") #f)
-  (let ((audio-rate 22050)
-        (audio-format SDL::Mix::AUDIO_S16SYS)
-        (audio-channels 2)
-        (audio-buffers 4096))
-    (SDL::Mix::open-audio audio-rate audio-format
-                          audio-channels audio-buffers))
+;;   (let ((audio-rate 22050)
+;;         (audio-format SDL::Mix::AUDIO_S16SYS)
+;;         (audio-channels 2)
+;;         (audio-buffers 4096))
+;;     (SDL::Mix::open-audio audio-rate audio-format
+;;                           audio-channels audio-buffers))
 ;;   (set! test-chunk (SDL::Mix::load-wav "sounds/25753_FreqMan_raygun01.wav"))
 ;;   (set! test-chunk2 (SDL::Mix::load-wav
 ;;                      "sounds/32562_FreqMan_chronosphere_ish.wav"))
-  (set! star-wars-chunk (SDL::Mix::load-wav "sounds/starwars.wav"))
+;;   (set! star-wars-chunk (SDL::Mix::load-wav "sounds/starwars.wav"))
   (let ( (screen (SDL::set-video-mode
-                    screen-max-x screen-max-y 32
-                    (bitwise-ior  SDL::opengl SDL::resizable))) )
+                  screen-max-x screen-max-y 32
+                  (bitwise-ior  SDL::opengl SDL::resizable))) )
       (if screen
           (call/cc
            (lambda (k)
@@ -354,9 +354,9 @@
                  [(redraw)
                   (let ((level (cadr msg)))
                     (render-scene screen level))]
-                 [(play-sfx)
-                  (let ((sfx (cadr msg)))
-                    (play-sfx sfx))]
+;;                  [(play-sfx)
+;;                   (let ((sfx (cadr msg)))
+;;                     (play-sfx sfx))]
                  )
                (loop (thread-receive)))))
           (display "Could not set SDL screen")))

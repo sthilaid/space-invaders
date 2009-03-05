@@ -94,7 +94,12 @@
 (define (sleeping-on-mutex? c)    
   (eq? (corout-sleeping? c) 'sleeping-on-mutex))
 
-
+(define (corout-set-sleeping-mode! corout mode)
+  (begin
+    (corout-sleeping?-set! corout mode)
+    (if mode
+        (sleeping-coroutines (+ (sleeping-coroutines) 1))
+        (sleeping-coroutines (- (sleeping-coroutines) 1)))))
 
 (define (mailbox-enqueue thrd msg)
   (enqueue! (corout-mailbox thrd) msg))
@@ -111,7 +116,8 @@
   (slot: return-value)
   (slot: return-to-sched)
   (slot: parent-state) ;unprintable:
-  (slot: dynamic-handlers)) 
+  (slot: dynamic-handlers)
+  (slot: sleeping-coroutines))
 
 
 (define-class sem () (slot: value) (slot: wait-queue))
@@ -172,6 +178,7 @@
 (define parent-state         (make-parameter unbound))
 (define return-to-sched      (make-parameter unbound))
 (define dynamic-handlers     (make-parameter unbound))
+(define sleeping-coroutines  (make-parameter unbound))
 
 (define (current-sim-time)
   (let ((t (timer)))
@@ -192,7 +199,8 @@
                (unbound? (root-k))
                (unbound? (return-value-handler))
                (unbound? (return-value))
-               (unbound? (dynamic-handlers))))
+               (unbound? (dynamic-handlers))
+               (unbound? (sleeping-coroutines))))
       
       (make-state (current-corout)
                   (q)
@@ -203,7 +211,8 @@
                   (return-value)
                   (return-to-sched)
                   (parent-state)
-                  (dynamic-handlers))
+                  (dynamic-handlers)
+                  (sleeping-coroutines))
       #f))
 
 ;; Restores the givent state object into the environment
@@ -219,7 +228,8 @@
         (return-value         (state-return-value state))
         (return-to-sched      (state-return-to-sched state))
         (parent-state         (state-parent-state state))
-        (dynamic-handlers     (state-dynamic-handlers state)))
+        (dynamic-handlers     (state-dynamic-handlers state))
+        (sleeping-coroutines  (state-sleeping-coroutines state)))
 
       ;; un-initializing the global simulation state
       (begin
@@ -232,7 +242,8 @@
         (return-value         unbound)
         (return-to-sched      unbound)
         (parent-state         unbound)
-        (dynamic-handlers     unbound))))
+        (dynamic-handlers     unbound)
+        (sleeping-coroutines  unbound))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -263,7 +274,7 @@
                     now))
            (let ((corout-to-wake (time-sleep-q-el-corout
                                   (time-sleep-q-dequeue! (time-sleep-q)))))
-             (corout-sleeping?-set! corout-to-wake #f)
+             (corout-set-sleeping-mode! corout-to-wake #f)
              (corout-enqueue! (q) corout-to-wake)))))
 
 (define (resume-coroutine)
@@ -327,6 +338,9 @@
    (else
     (let ((finish-scheduling (root-k))
           (ret-val (return-value)))
+      (if (> (sleeping-coroutines) 0)
+          (error "Deadlock detected in coroutine system..."))
+      (pp (sleeping-coroutines))
       (restore-state (parent-state))
       (continuation-return finish-scheduling ret-val)))))
 
@@ -351,12 +365,6 @@
 ;; External definitions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Creation of a new coroutine object with id as it's identifier
-;; (mostly used for debugging and the given thunk as its body.
-(define (new-corout id thunk)
-  (init-corout! (make-corout #f #f #f #f #f #f #f) id thunk))
-
-
 ;;; Mailbox system
 
 (define mailbox-timeout-exception 'mailbox-timeout-exception)
@@ -369,12 +377,12 @@
 (define (! dest-corout msg)
   (enqueue! (corout-mailbox dest-corout) msg)
   (cond ((sleeping-on-msg? dest-corout)
-         (corout-sleeping?-set! dest-corout #f)
+         (corout-set-sleeping-mode! dest-corout #f)
          (corout-enqueue! (q) dest-corout))
         ((and (sleeping-over-time? dest-corout)
               (interruptible? dest-corout))
          (time-sleep-q-remove! (sleeping-over-time?->node dest-corout))
-         (corout-sleeping?-set! dest-corout #f)
+         (corout-set-sleeping-mode! dest-corout #f)
          (corout-enqueue! (q) dest-corout))))
 
 (define (? #!key (timeout 'infinity))
@@ -386,7 +394,7 @@
            (lambda (k)
              (let ((corout (current-corout)))
                (corout-kont-set! corout k)
-               (corout-sleeping?-set! corout (sleeping-on-msg))
+               (corout-set-sleeping-mode! corout (sleeping-on-msg))
                (resume-scheduling))))))
   (if (empty-queue? mailbox)
       (raise mailbox-timeout-exception)
@@ -409,7 +417,7 @@
                        (lambda (k)
                          (let ((corout (current-corout)))
                            (corout-kont-set! corout k)
-                           (corout-sleeping?-set! corout (sleeping-on-msg))
+                           (corout-set-sleeping-mode! corout (sleeping-on-msg))
                            (resume-scheduling))))
                       (loop)))))))
 
@@ -477,6 +485,7 @@
          (return-value-handler return-handler)
          (return-value         #f)
          (dynamic-handlers     '())
+         (sleeping-coroutines  0)
          (if fresh-start? (parent-state #f)))
        (for-each (lambda (c) (corout-enqueue! (q) c))
                  (cons c1 cs))
@@ -529,9 +538,9 @@
            ;; possible removal by msging system)...
            ;; FIXME: here, this will make possible to wakeup a
            ;; sleeping thread by sending it a msg...
-           (corout-sleeping?-set! corout
-                                  (sleeping-over-time sleep-queue-node
-                                                      interruptible?))
+           (corout-set-sleeping-mode! corout
+                                      (sleeping-over-time sleep-queue-node
+                                                          interruptible?))
            #; (pp `(now is ,(current-sim-time) sleeping until ,wake-time))
            (resume-scheduling))))
       (yield)))
@@ -555,7 +564,7 @@
             (let ((corout (current-corout)))
               (corout-kont-set! corout k)
               (enqueue! (sem-wait-queue sem) corout)
-              (corout-sleeping?-set! corout (sleeping-on-mutex))
+              (corout-set-sleeping-mode! corout (sleeping-on-mutex))
               (resume-scheduling)))))
   ;; should be unqueued by the unlock call...
   (sem-decrease! sem))
@@ -563,7 +572,7 @@
 (define (sem-unlock! sem)
   (if (not (empty-queue? (sem-wait-queue sem)))
       (let ((corout-to-wake (dequeue! (sem-wait-queue sem))))
-        (corout-sleeping?-set! corout-to-wake #f)
+        (corout-set-sleeping-mode! corout-to-wake #f)
         (corout-enqueue! (q) corout-to-wake)))
   (sem-increase! sem))
 
@@ -603,8 +612,9 @@
                           ": list is empty!")))
             (for-each (lambda (subscriber) (! subscriber msg))
                       msg-list)))
-    (symbol-append 'message-sent-to- (string->symbol
-                                      (to-string (show list-id))))))
+    (string-append (to-string (show msg))
+                   " was sent to "
+                   (to-string (show list-id)))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

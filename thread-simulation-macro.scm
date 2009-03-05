@@ -155,8 +155,9 @@
                                  (lambda (k)
                                    (let ((corout (current-corout)))
                                      (corout-kont-set! corout k)
-                                     (corout-sleeping?-set! corout
-                                                            (sleeping-on-msg))
+                                     (corout-set-sleeping-mode!
+                                      corout
+                                      (sleeping-on-msg))
                                      (resume-scheduling))))
                                 (,loop))
                         `(let ((msg-q-size (queue-size ,mailbox)))

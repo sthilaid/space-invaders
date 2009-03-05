@@ -5,8 +5,8 @@
 
 ;; Usage of load is better but cannot because of the oo system. Here
 ;; copied the thread-simulation package load requirements and include it...
-(load "rbtree.scm")
-(load "scm-lib")
+;; (load "rbtree.scm")
+;; (load "scm-lib")
 (include "scm-lib-macro.scm")
 (include "thread-simulation.scm")
 
@@ -301,7 +301,8 @@
                               (subscribe 'toto (current-corout))
                               (recv (,x (display x)))
                               (unsubscribe 'toto (current-corout))
-                              (recv (,x (display x))))))
+                              (recv (,x (display x))
+                                    (after 0.1 'no)))))
         (c2 (new corout 'c2 (lambda ()
                               (subscribe 'toto (current-corout))
                               (recv (,x (display x)))
@@ -363,3 +364,9 @@
                                     (after 0 (display 'no)))
                               'done))))
     (simple-boot c1)))
+
+(define-test test-deadlock-detection "" 'ok
+  (let ((c1 (new corout 'c1 (lambda () (?))))
+        (c2 (new corout 'c2 (lambda () 'allo))))
+    (with-exception-catcher (lambda (e) 'ok)
+                            (lambda () (simple-boot c1 c2)))))

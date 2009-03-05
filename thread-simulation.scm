@@ -340,7 +340,6 @@
           (ret-val (return-value)))
       (if (> (sleeping-coroutines) 0)
           (error "Deadlock detected in coroutine system..."))
-      (pp (sleeping-coroutines))
       (restore-state (parent-state))
       (continuation-return finish-scheduling ret-val)))))
 

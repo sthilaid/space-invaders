@@ -382,29 +382,26 @@
 ;; Damage the givent shield such that all the particles inside the
 ;; colliding-obj are removed from the shield's particles.
 (define (shield-explosion! shield colliding-obj)
-  (define explosion-particles (get-explosion-particles colliding-obj))
-  (define explosion-pos (game-object-pos colliding-obj))
-  (define explosion-speed (game-object-speed colliding-obj))
-  (define shield-pos (game-object-pos shield))
-  (define particles (shield-particles shield))
-  
-  (define relative-expl-particles
-    (let ((relative-expl-pos (point-sub explosion-pos
-                                        shield-pos)))
-      (map (lambda (ex-part) (point-add ex-part relative-expl-pos))
-         explosion-particles)))
-  
   (define (particle-member p p-list)
     (if (not (pair? p-list))
         #f
         (if (point= p (car p-list))
             p-list
             (particle-member p (cdr p-list)))))
-  
-  (define new-particles
-    (filter (lambda (p) (not (particle-member p relative-expl-particles)))
-            particles))
-  (shield-particles-set! shield new-particles))
+  (let* ((explosion-particles (get-explosion-particles colliding-obj))
+         (explosion-pos       (game-object-pos colliding-obj))
+         (explosion-speed     (game-object-speed colliding-obj))
+         (shield-pos          (game-object-pos shield))
+         (particles           (shield-particles shield))
+         (relative-expl-particles
+          (let ((relative-expl-pos (point-sub explosion-pos
+                                              shield-pos)))
+            (map (lambda (ex-part) (point-add ex-part relative-expl-pos))
+                 explosion-particles)))
+         (new-particles
+          (filter (lambda (p) (not (particle-member p relative-expl-particles)))
+                  particles)))
+    (shield-particles-set! shield new-particles)))
 
 
 ;;;; Wall ;;;;

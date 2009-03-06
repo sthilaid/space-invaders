@@ -151,7 +151,7 @@
   (constructor: (lambda (obj id pos state color speed level)
                   (init! cast: '(corout * *) obj
                          id
-                         (lambda () (behaviour obj level)))
+                         (behaviour obj level))
                   (set-fields! obj game-object
                     ((pos pos)
                      (state state)
@@ -616,11 +616,7 @@
                 ;; Setup level and start primordial game corouts
                 (lambda ()
                   (new player-ship level)
-;;                   (spawn-brother-thunk
-;;                    'invader-laser-corout
-;;                    (compose-thunks
-;;                     (lambda () (sleep-for 1))
-;;                     (create-invader-laser level)))
+                  (spawn-brother (new spawner-agent level))
 ;;                   (spawn-brother-thunk
 ;;                    'mother-ship-corout
 ;;                    (compose-thunks
@@ -628,7 +624,7 @@
 ;;                     (create-new-mothership level)))
                   )
                 (start-game! level))))
-         (redraw-corout (new corout 'redraw (lambda () (redraw-agent level))))
+         (redraw-corout (new redraw-agent level))
          (init-corouts
           (list level-setup-corout
                 redraw-corout)))
@@ -955,12 +951,13 @@
 
 ;; TODO: Add this to the dynamic behaviour of all game objects
 (define-method (behaviour (obj game-object) level)
-  (recv (die (level-remove-object! obj)
-             (terminate-corout 'died))
-        ;;maybe add pause here?
-        (,msg (pp `(,(corout-id (self)) received unknown msg: ,msg))
-              ;; loop back to the most specific instance of behaviour!
-              (behaviour obj))))
+  (define (toto)
+   (recv (die (level-remove-object! obj)
+              (terminate-corout 'died))
+         ;;maybe add pause here?
+         (,msg (pp `(,(corout-id (self)) received unknown msg: ,msg))
+               (toto))))
+  toto)
 
 (define-method (behaviour (inv invader-ship) level)
   (define (find-controller row)
@@ -995,7 +992,7 @@
     (recv-only ('game-unpaused (main-state))))
 
   ;; init state
-  (main-state))
+  main-state)
 
 (define-class Barrier (corout) (slot: agent-arrived)
   (constructor: (lambda (obj thunk)
@@ -1010,6 +1007,17 @@
                                ((id (gensym 'Inv-Controller))
                                 (row row))))))
 
+(define-class redraw-agent (Barrier)
+  (constructor: (lambda (obj level)
+                  (init! cast: '(Barrier *) obj (behaviour obj level)))))
+
+(define-class spawner-agent (corout)
+  (constructor: (lambda (obj level)
+                  (init! cast: '(corout * *)
+                         obj (gensym 'spawner-agent) (behaviour obj level)))))
+
+;; Condition is actively tested, i.e. that it is executed each time a
+;; message is received. This enables the use of dynamic barriers.
 (define-macro (define-wait-state state-name msg condition . barrier-open-code)
   `(define (,state-name)
      (recv (,msg
@@ -1020,6 +1028,11 @@
                     (Barrier-agent-arrived-set! (self) 0)
                     ,@barrier-open-code)
                   (,state-name)))))))
+
+(define instant-components 'instant-components)
+(define (wait-for-next-instant)
+  (broadcast 'redraw 'redraw)
+  (recv-only (next-instant 'ok)))
 
 (define (invader-controller)
   ;; Utilitaries
@@ -1040,6 +1053,7 @@
   (define (init-state)
     (recv-only
      (init
+      (subscribe instant-components (self))
       (broadcast `(invader-row ,(Inv-Controller-row (self)))
                  'move)
       (wait-state))))
@@ -1051,16 +1065,91 @@
              (wait-state)))
      ;; if no wall collision, then proceed to the next state
      (after 0
-            ;; FIXME: Use a sync call here?
-            (broadcast 'redraw 'redraw)
-
+            (wait-for-next-instant)
             (broadcast `(row-controller
                          ,(next-row (Inv-Controller-row (self))))
                        'init)
+            (unsubscribe instant-components (self))
             (init-state))))
 
   ;; initialization
   (init-state))
+
+(define (shoot-laser! level laser-instance-creator shooter-obj dy)
+  (define is-player-laser?
+    (eq? laser-instance-creator make-player_laser-instance))
+  ;; if the shot laser is a player laser, there must not be another
+  ;; player laser in the game or the player-laser-refresh-constraint
+  ;; must be elabsed before shooting a new one.
+  (if (not (and is-player-laser?
+                (or (level-player-laser level)
+                    (< (- (time->seconds (current-time))
+                          player-laser-last-destruction-time)
+                       player-laser-refresh-constraint))))
+                    
+      (let* ((laser-obj (laser-instance-creator))
+             (shooter-x (point-x (game-object-pos shooter-obj)))
+             (shooter-y (point-y (game-object-pos shooter-obj)))
+             (x         (+ shooter-x (floor (/ (type-width shooter-obj) 2))))
+             (y         (if (< dy 0)
+                            (- shooter-y
+                               (type-height laser-obj )
+                               invader-y-movement-speed)
+                            (+ shooter-y (type-height shooter-obj))))
+             (laser-id  (if is-player-laser? 'player-laser (gensym 'laser))))
+
+        ;;(id pos state color speed level)
+        (init! laser-obj laser-id (make-point x y) 0 'white (make-point 0 dy)
+               level)
+        (level-add-object! level laser-obj))))
+
+(define (find-shooter-candidates level)
+  (define (rect-inv-collision? rect)
+    (lambda (inv)
+      (let* ((pos (game-object-pos inv))
+             (width (type-width inv))
+             (heigth (type-height inv))
+             (inv-rect (make-rect (point-x pos) (point-y pos) width heigth)))
+        (detect-collision? rect inv-rect))))
+
+  (define (bottom-invader? inv)
+    (let* ((pos (game-object-pos inv))
+           (rect (make-rect (point-x pos)        ;; x
+                            (- (point-y pos) 1)  ;; y
+                            (type-width inv)     ;; width
+                            (- (point-y pos))))) ;; height
+      (not (exists (rect-inv-collision? rect) (level-invaders level)))))
+
+  ;; FIXME: Inefficient or bottleneck??
+  (filter bottom-invader? (level-invaders level)))
+
+(define-method (behaviour (obj laser-obj) level)
+  (define (init-state)
+    (subscribe instant-components (self))
+    (main-state))
+  (define (main-state)
+    (move-object! level (self))
+    (wait-for-next-instant)
+    (main-state))
+  init-state)
+
+(define-method (behaviour (obj spawner-agent) level)
+  (define (random-access lst) (list-ref lst (random-integer (length lst))))
+  (define creators (list make-laserA-instance make-laserB-instance
+                         make-laserC-instance))
+  (define (shoot-invader-laser!)
+   
+    (let* ((laser-creator  (random-access creators))
+           (shooter        (random-access (find-shooter-candidates level))))
+      (shoot-laser! level laser-creator shooter (- invader-laser-speed))))
+  (define (main-state)
+    (sleep-for next-invader-laser-interval)
+    (shoot-invader-laser!)
+    (main-state))
+  main-state)
+
+
+;;; Redraw agent
 
 (define (process-user-input level)
   (define game-paused? #f)
@@ -1072,12 +1161,10 @@
         (case msg
           ((space)
            (if (player-can-move?)
-               'todo
-               ;; TODO: adapt to new language features..
-;;                (shoot-laser! level
-;;                              new player_laser
-;;                              (level-player level)
-;;                              player-laser-speed)
+               (shoot-laser! level
+                             make-player_laser-instance
+                             (level-player level)
+                             player-laser-speed)
                ))
           ((right)
            (if (player-can-move?)
@@ -1103,20 +1190,21 @@
 
           ((d) (error "DEBUG"))))))
 
-(define (redraw-agent level)
-  ;; FIXME: Probably not the most efficient way, but is it worst than
-  ;; scanning all the invader instances?
-  (let loop ()
-    (recv-only
-     (redraw
-      (begin
+(define-method (behaviour (obj redraw-agent) level)
+  (define-wait-state main-state redraw
+    (msg-list-size instant-components)
+    (begin
         (process-user-input level)
         ;; FIXME: It would be better to either copy the level obj
         ;; before passing it to redraw or do a syncronous remote call
         ;; (in the termite !? style)
         ;; Could also be done within this thread...
         (thread-send user-interface-thread `(redraw ,level))
-        (loop))))))
+        (broadcast instant-components 'next-instant)
+        (main-state)))
+  main-state)
+
+
 
 
 ;;*****************************************************************************

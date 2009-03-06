@@ -168,10 +168,20 @@
                                (,loop))))))))))
 
 (define-macro (recv-only . pattern-list)
-  `(recv ,@pattern-list
-         (,(list 'unquote 'msg)
-          (error (to-string (show "received unexpected-message: "
-                                  msg))))))
+  (let* ((error-pattern
+          `(,(list 'unquote 'msg)
+            (error (to-string (show "received unexpected-message: " msg)))))
+         (last-pat (car (take-right pattern-list 1)))
+         (timeout-pattern (and (eq? (car last-pat) 'after)
+                               last-pat)))
+    ;; Must extract the timeout pattern and re-insert at the end of
+    ;; the generated recv sequence
+    (if timeout-pattern
+        `(recv ,@(drop-right pattern-list 1)
+               ,error-pattern
+               ,timeout-pattern)
+        `(recv ,@pattern-list
+               ,error-pattern))))
 
 (define-macro (clean-mailbox pattern)
   (let ((loop (gensym 'loop))

@@ -367,6 +367,22 @@
 
 (define-test test-deadlock-detection "" 'ok
   (let ((c1 (new corout 'c1 (lambda () (?))))
-        (c2 (new corout 'c2 (lambda () 'allo))))
+        (c2 (new corout 'c2 (lambda () 'allo (yield) 'allo))))
+    (with-exception-catcher (lambda (e) 'ok)
+                            (lambda () (simple-boot c1 c2)))))
+
+;; Test the reception of correct message, of timeout and of unexpected msg
+(define-test test-recv-only "allono" 'ok
+  (let* ((c1 (new corout 'c1 (lambda ()
+                               (recv-only (allo (display 'allo))
+                                          (after 0.05 (display 'no)))
+                               (recv-only (allo (display 'allo))
+                                          (after 0.05 (display 'no)))
+                               (recv-only (allo (dispay 'allo))
+                                          (after 0.05 (display 'no))))))
+        (c2 (new corout 'c2 (lambda ()
+                              (! c1 'allo)
+                              (sleep-for 0.1)
+                              (! c1 'toto!)))))
     (with-exception-catcher (lambda (e) 'ok)
                             (lambda () (simple-boot c1 c2)))))

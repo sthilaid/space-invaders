@@ -579,6 +579,7 @@
 
 ;;; Messaging lists
 
+(define messaging-lists-debug #f)
 (define messaging-lists (make-table test: equal?))
 (define (get-msg-list list-id)
   (table-ref messaging-lists list-id #f))
@@ -611,9 +612,12 @@
                           ": list is empty!")))
             (for-each (lambda (subscriber) (! subscriber msg))
                       msg-list)))
-    (string-append (to-string (show msg))
-                   " was sent to "
-                   (to-string (show list-id)))))
+    ;; the result here is only for debug purpose
+    (let ((res (string-append (to-string (show msg))
+                              " was sent to "
+                              (to-string (show list-id)))))
+      (if messaging-lists-debug (pp res))
+      res)))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

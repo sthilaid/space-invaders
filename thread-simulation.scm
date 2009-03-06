@@ -584,7 +584,9 @@
 (define (get-msg-list list-id)
   (table-ref messaging-lists list-id #f))
 (define (msg-list-size list-id)
-  (length (get-msg-list list-id)))
+  (cond
+   ((get-msg-list list-id) => length)
+   (else (error (to-string (show "Could not retrieve msg list: " list-id))))))
 
 (define (subscribe list-id agent)
   (cond ((table-ref messaging-lists list-id #f)

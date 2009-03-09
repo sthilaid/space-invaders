@@ -782,13 +782,12 @@
 ;;        'inv-laser (compose-thunks
 ;;                    (lambda () (sleep-for next-invader-laser-interval))
 ;;                    (create-invader-laser level)))
-;;       (set! player-laser-last-destruction-time
-;;             (time->seconds (current-time))))
+  (set! player-laser-last-destruction-time
+        (time->seconds (current-time)))
   )
 
 ;; Laser collisions ;;
 (define-method (resolve-collision! level (laser laser-obj) (inv invader-ship))
-  (invader-ship? inv) 
   (level-increase-score! level inv)
   (destroy-laser! level laser)
   ;;(explode-invader! level inv)
@@ -1124,6 +1123,16 @@
   (filter bottom-invader? (level-invaders level)))
 
 (define-method (behaviour (obj laser-obj) level)
+  (define (init-state)
+    (subscribe instant-components (self))
+    (main-state))
+  (define (main-state)
+    (move-object! level (self))
+    (wait-for-next-instant)
+    (main-state))
+  init-state)
+
+(define-method (behaviour (obj player_laser) level)
   (define (init-state)
     (subscribe instant-components (self))
     (main-state))

@@ -58,7 +58,7 @@ INCLUDE_OPTIONS=-I$(GAMBIT_INCLUDE) -I$(GL_INCLUDE) $(ALL_SDL_INCLUDE)
 
 all: welcome run-invaders 
 
-devel: $(DEVEL_FILES:.scm=.o1)
+devel: $(DEVEL_FILES:.scm=.o1) new-engine.scm
 	gsi -:dar start.scm
 
 run-invaders: $(SPACE_INVADERS_FILES:.scm=.o1)
@@ -81,6 +81,8 @@ sdl-user-interface.c: sdl-user-interface.scm scm-lib-macro.scm opengl-header.scm
 new-engine.c: new-engine.scm thread-simulation-macro.scm class.scm thread-simulation.scm
 	$(GSC) -c new-engine.scm
 
+# rule used for 'make devel'
+new-engine.scm: thread-simulation-macro.scm class.scm thread-simulation.scm
 
 # Opengl interface interdependance
 opengl.c: opengl.scm opengl-header.scm

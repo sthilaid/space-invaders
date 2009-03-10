@@ -85,14 +85,17 @@
     `(parameterize ((dynamic-handlers
                      (cons (lambda ()
                              (let ((found?
-                                    (recv ,@handlers (after 0 ',false))))
+                                    ;; here the dynamic handlers *must
+                                    ;; not* be used to avoid inf loop
+                                    (recv use-dynamic-handlers?: #f
+                                          ,@handlers (after 0 ',false))))
                                (if (eq? found? ',false)
                                    #f
                                    (box found?))))
                            (dynamic-handlers))))
        ,@bodys)))
 
-(define-macro (recv . pattern-list)
+(define-macro (recv #!key (use-dynamic-handlers? #t) #!rest pattern-list)
   (define (make-ast test-pattern eval-pattern)
     (vector test-pattern eval-pattern))
   (define (ast-test-pattern x) (vector-ref x 0))
@@ -146,9 +149,11 @@
                     ,(generate-predicate asts)
                     ,mailbox)
                    => ,(generate-on-msg-found asts))
-                  ((find-value (lambda (pred) (pred))
-                                 (dynamic-handlers))
-                   => (lambda (res) (unbox res)))
+                  ,(if use-dynamic-handlers?
+                       `((find-value (lambda (pred) (pred))
+                                     (dynamic-handlers))
+                         => (lambda (res) (unbox res)))
+                       `(#f 'i-hope-this-is-optimized...))
                   (else
                    ,(if (eq? timeout-val 'infinity)
                         `(begin (continuation-capture

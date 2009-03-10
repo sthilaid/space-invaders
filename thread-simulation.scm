@@ -579,7 +579,7 @@
 
 ;;; Messaging lists
 
-(define messaging-lists-debug #t)
+(define messaging-lists-debug #f)
 (define messaging-lists (make-table test: equal?))
 (define (get-msg-list list-id)
   (table-ref messaging-lists list-id #f))
@@ -591,17 +591,17 @@
 (define (subscribe list-id agent)
   (cond ((table-ref messaging-lists list-id #f)
          => (lambda (lst)
-              (table-set! messaging-lists list-id (set-add eq? agent lst))))
+              (table-set! messaging-lists list-id (set-add equal? agent lst))))
         (else (table-set! messaging-lists list-id (make-set agent))))
   (update! agent corout msg-lists
-           (lambda (lists) (set-add eq? list-id lists))))
+           (lambda (lists) (set-add equal? list-id lists))))
 (define (unsubscribe list-id agent)
   (let ((msg-list (get-msg-list list-id)))
     (and msg-list
          (update! agent corout msg-lists
-                  (lambda (lists) (set-remove eq? list-id lists)))
+                  (lambda (lists) (set-remove equal? list-id lists)))
          (table-set! messaging-lists list-id
-                     (set-remove eq? agent msg-list)))))
+                     (set-remove equal? agent msg-list)))))
 (define (broadcast list-id msg)
   (let ((msg-list (get-msg-list list-id)))
     (if (not msg-list)

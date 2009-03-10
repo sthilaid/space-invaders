@@ -88,17 +88,17 @@
                                     ;; here the dynamic handlers *must
                                     ;; not* be used to avoid inf loop
                                     (recv use-dynamic-handlers?: #f
-                                          poll-only?: #t
-                                          ,@handlers
-                                          (after 0 ',false))))
+                                          poll-only?: (box ',false)
+                                          ,@handlers)))
                                (if (eq? found? ',false)
                                    #f
                                    (box found?))))
                            (dynamic-handlers))))
        ,@bodys)))
 
-;; poll-only will ensure that the corout is not put to sleep if no msg
-;; is matched, except if a timeout was specified...
+;; poll-only? will ensure that the corout is not put to sleep if no
+;; msg is matched. The *unboxed* value of poll-only? will be used to
+;; return from recv...
 (define-macro (recv #!key (use-dynamic-handlers? #t) (poll-only? #f)
                     #!rest pattern-list)
   (define (make-ast test-pattern eval-pattern)
@@ -161,6 +161,8 @@
                        `(#f 'i-hope-this-is-optimized...))
                   (else
                    ,(cond
+                     (poll-only?
+                      `(begin (unbox ,poll-only?)))
                      ((eq? timeout-val 'infinity)
                       `(begin (continuation-capture
                                  (lambda (k)
@@ -171,8 +173,6 @@
                                       (sleeping-on-msg))
                                      (resume-scheduling))))
                                 (,loop)))
-                     (poll-only?
-                      `(begin ,@timeout-ret-val))
                      (else
                       `(let ((msg-q-size (queue-size ,mailbox)))
                          (sleep-for ,timeout-val interruptible?: #t)

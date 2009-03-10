@@ -88,14 +88,19 @@
                                     ;; here the dynamic handlers *must
                                     ;; not* be used to avoid inf loop
                                     (recv use-dynamic-handlers?: #f
-                                          ,@handlers (after 0 ',false))))
+                                          poll-only?: #t
+                                          ,@handlers
+                                          (after 0 ',false))))
                                (if (eq? found? ',false)
                                    #f
                                    (box found?))))
                            (dynamic-handlers))))
        ,@bodys)))
 
-(define-macro (recv #!key (use-dynamic-handlers? #t) #!rest pattern-list)
+;; poll-only will ensure that the corout is not put to sleep if no msg
+;; is matched, except if a timeout was specified...
+(define-macro (recv #!key (use-dynamic-handlers? #t) (poll-only? #f)
+                    #!rest pattern-list)
   (define (make-ast test-pattern eval-pattern)
     (vector test-pattern eval-pattern))
   (define (ast-test-pattern x) (vector-ref x 0))
@@ -155,8 +160,9 @@
                          => (lambda (res) (unbox res)))
                        `(#f 'i-hope-this-is-optimized...))
                   (else
-                   ,(if (eq? timeout-val 'infinity)
-                        `(begin (continuation-capture
+                   ,(cond
+                     ((eq? timeout-val 'infinity)
+                      `(begin (continuation-capture
                                  (lambda (k)
                                    (let ((corout (current-corout)))
                                      (corout-kont-set! corout k)
@@ -164,13 +170,16 @@
                                       corout
                                       (sleeping-on-msg))
                                      (resume-scheduling))))
-                                (,loop))
-                        `(let ((msg-q-size (queue-size ,mailbox)))
-                           (sleep-for ,timeout-val interruptible?: #t)
-                           ;; might be awoken either from a (!) or timeout
-                           (if (= (queue-size ,mailbox) msg-q-size)
-                               (begin ,@timeout-ret-val)
-                               (,loop))))))))))
+                                (,loop)))
+                     (poll-only?
+                      `(begin ,@timeout-ret-val))
+                     (else
+                      `(let ((msg-q-size (queue-size ,mailbox)))
+                         (sleep-for ,timeout-val interruptible?: #t)
+                         ;; might be awoken either from a (!) or timeout
+                         (if (= (queue-size ,mailbox) msg-q-size)
+                             (begin ,@timeout-ret-val)
+                             (,loop)))))))))))
 
 (define-macro (recv-only . pattern-list)
   (let* ((error-pattern

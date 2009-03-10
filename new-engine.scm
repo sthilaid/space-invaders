@@ -151,7 +151,13 @@
   (constructor: (lambda (obj id pos state color speed level)
                   (init! cast: '(corout * *) obj
                          id
-                         (behaviour obj level))
+;;                          (behaviour obj level)
+                         (lambda ()
+                           (with-dynamic-handlers
+                            ((pause (pause obj))
+                             (die   (die   obj)))
+                            ((behaviour obj level))))
+                         )
                   (set-fields! obj game-object
                     ((pos pos)
                      (state state)
@@ -948,15 +954,11 @@
 
 (define-generic behaviour)
 
-;; TODO: Add this to the dynamic behaviour of all game objects
-(define-method (behaviour (obj game-object) level)
-  (define (toto)
-   (recv (die (level-remove-object! obj)
-              (terminate-corout 'died))
-         ;;maybe add pause here?
-         (,msg (pp `(,(corout-id (self)) received unknown msg: ,msg))
-               (toto))))
-  toto)
+(define-method (behaviour (obj corout) level)
+  (pretty-print (to-string
+                 (show "Warning: no behaviour defined for object of type "
+                       (get-class-id obj))))
+  (recv (wait-forever....! (error 'should-no-go-here))))
 
 (define-method (behaviour (inv invader-ship) level)
   (define (find-controller row)
@@ -966,7 +968,6 @@
      (move
       (begin
         (move-object! level (self))
-        ;;(! (find-controller (invader-ship-row (self))) 'moved)
         (broadcast `(row-controller ,(invader-ship-row (self))) 'moved)
         (main-state)))
      (wall-collision
@@ -975,7 +976,8 @@
         (point-y-set! (game-object-speed (self)) (- invader-y-movement-speed))
         (move-object! level (self))
         (point-y-set! (game-object-speed (self)) 0)
-        (! (find-controller (invader-ship-row (self))) 'moved)
+        (broadcast `(row-controller ,(invader-ship-row (self))) 'moved)
+;;         (! (find-controller (invader-ship-row (self))) 'moved)
         (main-state)))
      (player-explosion
       (begin (player-expl-state)))
@@ -1153,8 +1155,9 @@
       (shoot-laser! level laser-creator shooter (- invader-laser-speed))))
   (define (main-state)
     (sleep-for next-invader-laser-interval)
-    (shoot-invader-laser!)
-    (main-state))
+    ;; (shoot-invader-laser!)
+    ;; (main-state)
+    )
   main-state)
 
 

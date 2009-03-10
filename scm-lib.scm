@@ -120,7 +120,7 @@
   (cond
    ((not (pair? list)) #f)
    ((pred (car list)) => (lambda (x) x))
-   (else  (exists pred (cdr list)))))
+   (else  (find-value pred (cdr list)))))
 
 (define (forall pred list)
   (cond

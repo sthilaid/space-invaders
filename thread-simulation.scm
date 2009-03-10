@@ -579,14 +579,14 @@
 
 ;;; Messaging lists
 
-(define messaging-lists-debug #f)
+(define messaging-lists-debug #t)
 (define messaging-lists (make-table test: equal?))
 (define (get-msg-list list-id)
   (table-ref messaging-lists list-id #f))
 (define (msg-list-size list-id)
   (cond
    ((get-msg-list list-id) => length)
-   (else (error (to-string (show "Could not retrieve msg list: " list-id))))))
+   (else 0)))
 
 (define (subscribe list-id agent)
   (cond ((table-ref messaging-lists list-id #f)
@@ -617,7 +617,9 @@
     ;; the result here is only for debug purpose
     (let ((res (string-append (to-string (show msg))
                               " was sent to "
-                              (to-string (show list-id)))))
+                              (to-string (show list-id))
+                              " from "
+                              (to-string (show (corout-id (self)))))))
       (if messaging-lists-debug (pp res))
       res)))
 

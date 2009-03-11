@@ -151,13 +151,10 @@
   (constructor: (lambda (obj id pos state color speed level)
                   (init! cast: '(corout * *) obj
                          id
-;;                          (behaviour obj level)
-                         (lambda ()
-                           (with-dynamic-handlers
-                            ((pause (pause obj))
-                             (die   (die   obj)))
-                            ((behaviour obj level))))
-                         )
+                         (lambda ()(with-dynamic-handlers
+                                    ((pause (pause obj))
+                                     (die   (die   obj)))
+                                    ((behaviour obj level)))))
                   (set-fields! obj game-object
                     ((pos pos)
                      (state state)
@@ -952,7 +949,10 @@
     (broadcast '(row-controller 0) 'init)))
 
 
+;; *Important note*: these generic functions must be called from
+;;                   *within* the obj coroutine such that (self) = obj.
 (define-generic behaviour)
+(define-generic die)
 
 (define-method (behaviour (obj corout) level)
   (pretty-print (to-string
@@ -984,6 +984,8 @@
      (game-paused
       (begin (paused-state)))))
 
+  
+
   (define (player-expl-state)
     (recv-only   ; assuming that the expl obj gets paused
      (game-paused (player-expl-state)) 
@@ -994,6 +996,15 @@
 
   ;; init state
   main-state)
+
+(define-method (die (obj game-object) level)
+  (level-remove-object! level obj)
+  ;; the terminate-corout unsubscribes the coroutine of its msg lists
+  (terminate-corout (to-string (show (corout-id (self)) " died normally"))))
+
+(define-method (die (obj invader-ship) level)
+  
+  (die cast: (game-object *) obj level))
 
 (define-class Barrier (corout) (slot: agent-arrived)
   (constructor: (lambda (obj thunk)

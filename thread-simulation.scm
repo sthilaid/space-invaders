@@ -591,7 +591,7 @@
 (define (subscribe list-id agent)
   (cond ((table-ref messaging-lists list-id #f)
          => (lambda (lst)
-              (table-set! messaging-lists list-id (set-add equal? agent lst))))
+              (table-set! messaging-lists list-id (set-add eq? agent lst))))
         (else (table-set! messaging-lists list-id (make-set agent))))
   (update! agent corout msg-lists
            (lambda (lists) (set-add equal? list-id lists))))
@@ -601,7 +601,7 @@
          (update! agent corout msg-lists
                   (lambda (lists) (set-remove equal? list-id lists)))
          (table-set! messaging-lists list-id
-                     (set-remove equal? agent msg-list)))))
+                     (set-remove eq? agent msg-list)))))
 (define (broadcast list-id msg)
   (let ((msg-list (get-msg-list list-id)))
     (if (not msg-list)

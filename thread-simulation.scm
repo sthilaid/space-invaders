@@ -596,6 +596,9 @@
   (update! agent corout msg-lists
            (lambda (lists) (set-add equal? list-id lists))))
 (define (unsubscribe list-id agent)
+  (if messaging-lists-debug
+      (pp `(unsubscribe ,list-id
+                        ,(corout-id agent) (by: ,(corout-id (self))))))
   (let ((msg-list (get-msg-list list-id)))
     (and msg-list
          (update! agent corout msg-lists
@@ -612,16 +615,13 @@
             (error (to-string
                     (show "could not broadcast message to list " list-id
                           ": list is empty!")))
-            (for-each (lambda (subscriber) (! subscriber msg))
-                      msg-list)))
-    ;; the result here is only for debug purpose
-    (let ((res (string-append (to-string (show msg))
-                              " was sent to "
-                              (to-string (show list-id))
-                              " from "
-                              (to-string (show (corout-id (self)))))))
-      (if messaging-lists-debug (pp res))
-      res)))
+            (for-each (lambda (subscriber)
+                        (if messaging-lists-debug
+                            (pp `(sending ,msg
+                                          to ,(corout-id subscriber)
+                                          from ,(corout-id (self)))))
+                        (! subscriber msg))
+                      msg-list)))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

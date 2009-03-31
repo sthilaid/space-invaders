@@ -150,36 +150,40 @@
          (mailbox (gensym 'mailbox)))
     `(let ((,mailbox (corout-mailbox (current-corout))))
        (let ,loop ()
-            (cond ((queue-find-and-remove!
-                    ,(generate-predicate asts)
-                    ,mailbox)
-                   => ,(generate-on-msg-found asts))
-                  ,(if use-dynamic-handlers?
+            (cond
+             ;; Normal message processing
+             ((queue-find-and-remove!
+               ,(generate-predicate asts)
+               ,mailbox)
+              => ,(generate-on-msg-found asts))
+             ;; Dynamic handlers processing
+             ,(if use-dynamic-handlers?
                        `((find-value (lambda (pred) (pred))
                                      (dynamic-handlers))
                          => (lambda (res) (unbox res)))
                        `(#f 'i-hope-this-is-optimized...))
-                  (else
-                   ,(cond
-                     (poll-only?
-                      `(begin (unbox ,poll-only?)))
-                     ((eq? timeout-val 'infinity)
-                      `(begin (continuation-capture
-                                 (lambda (k)
-                                   (let ((corout (current-corout)))
-                                     (corout-kont-set! corout k)
-                                     (corout-set-sleeping-mode!
-                                      corout
-                                      (sleeping-on-msg))
-                                     (resume-scheduling))))
-                                (,loop)))
-                     (else
-                      `(let ((msg-q-size (queue-size ,mailbox)))
-                         (sleep-for ,timeout-val interruptible?: #t)
-                         ;; might be awoken either from a (!) or timeout
-                         (if (= (queue-size ,mailbox) msg-q-size)
-                             (begin ,@timeout-ret-val)
-                             (,loop)))))))))))
+             ;; if no acceptable message found, sleep
+             (else
+              ,(cond
+                (poll-only?
+                 `(begin (unbox ,poll-only?)))
+                ((eq? timeout-val 'infinity)
+                 `(begin (continuation-capture
+                          (lambda (k)
+                            (let ((corout (current-corout)))
+                              (corout-kont-set! corout k)
+                              (corout-set-sleeping-mode!
+                               corout
+                               (sleeping-on-msg))
+                              (resume-scheduling))))
+                         (,loop)))
+                (else
+                 `(let ((msg-q-size (queue-size ,mailbox)))
+                    (sleep-for ,timeout-val interruptible?: #t)
+                    ;; might be awoken either from a (!) or timeout
+                    (if (= (queue-size ,mailbox) msg-q-size)
+                        (begin ,@timeout-ret-val)
+                        (,loop)))))))))))
 
 (define-macro (recv-only . pattern-list)
   (let* ((error-pattern
@@ -191,10 +195,12 @@
     ;; Must extract the timeout pattern and re-insert at the end of
     ;; the generated recv sequence
     (if timeout-pattern
-        `(recv ,@(drop-right pattern-list 1)
+        `(recv use-dynamic-handlers?: #f
+               ,@(drop-right pattern-list 1)
                ,error-pattern
                ,timeout-pattern)
-        `(recv ,@pattern-list
+        `(recv use-dynamic-handlers?: #f
+               ,@pattern-list
                ,error-pattern))))
 
 (define-macro (clean-mailbox pattern)

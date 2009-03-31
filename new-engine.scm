@@ -153,7 +153,7 @@
                          id
                          (lambda ()(with-dynamic-handlers
                                     ((pause (pause obj))
-                                     (die   (die   obj)))
+                                     (die   (die   obj level)))
                                     ((behaviour obj level)))))
                   (set-fields! obj game-object
                     ((pos pos)
@@ -793,6 +793,8 @@
 (define-method (resolve-collision! level (laser laser-obj) (inv invader-ship))
   (level-increase-score! level inv)
   (destroy-laser! level laser)
+  (! laser 'die)
+  (! inv   'die)
   ;;(explode-invader! level inv)
   )
 
@@ -964,7 +966,7 @@
   (define (find-controller row)
     (vector-ref (game-level-controllers level) row))
   (define (main-state)
-    (recv-only
+    (recv
      (move
       (begin
         (move-object! level (self))
@@ -987,24 +989,25 @@
   
 
   (define (player-expl-state)
-    (recv-only   ; assuming that the expl obj gets paused
+    (recv   ; assuming that the expl obj gets paused
      (game-paused (player-expl-state)) 
      (player-explosion-end (main-state))))
 
   (define (paused-state)
-    (recv-only ('game-unpaused (main-state))))
+    (recv ('game-unpaused (main-state))))
 
   ;; init state
   main-state)
 
 (define-method (die (obj game-object) level)
+  (pp `(object ,(corout-id (self)) died))
   (level-remove-object! level obj)
   ;; the terminate-corout unsubscribes the coroutine of its msg lists
   (terminate-corout (to-string (show (corout-id (self)) " died normally"))))
 
 (define-method (die (obj invader-ship) level)
   
-  (die cast: (game-object *) obj level))
+  (die cast: '(game-object *) obj level))
 
 (define-class Barrier (corout) (slot: agent-arrived)
   (constructor: (lambda (obj thunk)
@@ -1037,14 +1040,19 @@
               (update! (self) Barrier agent-arrived (lambda (n) (+ n 1)))
               (if (>= (Barrier-agent-arrived (self)) ,condition)
                   (begin
+                    ;; make sure there is no left-overs of msg 
+                    (clean-mailbox ,msg)
                     (Barrier-agent-arrived-set! (self) 0)
                     ,@barrier-open-code)
                   (,state-name)))))))
 
 (define instant-components 'instant-components)
 (define (wait-for-next-instant)
+;;   (pp `(waiting for instant ,(corout-id (self))
+;;                 (inst list size ,(msg-list-size instant-components))
+;;                 (mbox: ,(queue->list (corout-mailbox (self))))))
   (broadcast 'redraw 'redraw)
-  (recv-only (next-instant 'ok)))
+  (recv (next-instant 'ok)))
 
 (define (invader-controller)
   ;; Utilitaries
@@ -1063,14 +1071,14 @@
 
   ;; States
   (define (init-state)
-    (recv-only
+    (recv
      (init
       (subscribe instant-components (self))
       (broadcast `(invader-row ,(Inv-Controller-row (self)))
                  'move)
       (wait-state))))
   (define-wait-state wait-state moved (inv-nb)
-    (recv-only
+    (recv
      (go-down-warning
       (begin (broadcast `(invader-row ,(Inv-Controller-row (self)))
                         'wall-collision)
@@ -1214,17 +1222,16 @@
           ((d) (error "DEBUG"))))))
 
 (define-method (behaviour (obj redraw-agent) level)
-  (define-wait-state main-state redraw
-    (msg-list-size instant-components)
+  (define-wait-state main-state redraw (msg-list-size instant-components)
     (begin
-        (process-user-input level)
-        ;; FIXME: It would be better to either copy the level obj
-        ;; before passing it to redraw or do a syncronous remote call
-        ;; (in the termite !? style)
-        ;; Could also be done within this thread...
-        (thread-send user-interface-thread `(redraw ,level))
-        (broadcast instant-components 'next-instant)
-        (main-state)))
+      (process-user-input level)
+      ;; FIXME: It would be better to either copy the level obj
+      ;; before passing it to redraw or do a syncronous remote call
+      ;; (in the termite !? style)
+      ;; Could also be done within this thread...
+      (thread-send user-interface-thread `(redraw ,level))
+      (broadcast instant-components 'next-instant)
+      (main-state)))
   main-state)
 
 

@@ -265,7 +265,17 @@
 
 ;; TODO
 (define-class explosion    (game-object sprite-obj))
-(define-class invader_explosion       (explosion))
+(define-class invader_explosion       (explosion)
+  (constructor:
+   (lambda (obj inv level)
+     (init! cast: '(game-object * * * * * *)
+            obj
+            (symbol-append (game-object-id inv) '-explosion)
+            (game-object-pos inv)
+            0 ; state
+            (game-object-color inv)
+            (game-object-speed inv)
+            level))))
 (define-class invader_laser_explosion (explosion))
 (define-class player_explosion        (explosion))
 (define-class player_laser_explosion  (explosion))
@@ -785,9 +795,7 @@
 ;;        'inv-laser (compose-thunks
 ;;                    (lambda () (sleep-for next-invader-laser-interval))
 ;;                    (create-invader-laser level)))
-  (set! player-laser-last-destruction-time
-        (time->seconds (current-time)))
-  )
+  (set! player-laser-last-destruction-time (time->seconds (current-time))))
 
 ;; Laser collisions ;;
 (define-method (resolve-collision! level (laser laser-obj) (inv invader-ship))
@@ -795,8 +803,7 @@
   (destroy-laser! level laser)
   (! laser 'die)
   (! inv   'die)
-  ;;(explode-invader! level inv)
-  )
+  (level-add-object! level (new invader_explosion inv level)))
 
 (define-method (resolve-collision! level (laser1 laser-obj) (laser2 laser-obj))
   (let ((inv-laser (if (player_laser? laser1) laser2 laser1)))
@@ -972,6 +979,7 @@
         (move-object! level (self))
         (broadcast `(row-controller ,(invader-ship-row (self))) 'moved)
         (main-state)))
+
      (wall-collision
       (begin
         (update! (game-object-speed (self)) point x (lambda (dx) (- dx)))
@@ -979,7 +987,16 @@
         (move-object! level (self))
         (point-y-set! (game-object-speed (self)) 0)
         (broadcast `(row-controller ,(invader-ship-row (self))) 'moved)
-;;         (! (find-controller (invader-ship-row (self))) 'moved)
+        (main-state)))
+
+     (remote-wall-collision
+      (begin
+        (let ((dx (point-x (game-object-speed (self)))))
+          (point-x-set! (game-object-speed (self)) 0)
+          (point-y-set! (game-object-speed (self)) (- invader-y-movement-speed))
+          (move-object! level (self))
+          (point-x-set! (game-object-speed (self)) (- dx))
+          (point-y-set! (game-object-speed (self)) 0)
         (main-state)))
      (player-explosion
       (begin (player-expl-state)))
@@ -1080,9 +1097,12 @@
   (define-wait-state wait-state moved (inv-nb)
     (recv
      (go-down-warning
-      (begin (broadcast `(invader-row ,(Inv-Controller-row (self)))
-                        'wall-collision)
-             (wait-state)))
+      (let ((row-nb (Inv-Controller-row (self))))
+        (broadcast `(invader-row ,row-nb) 'wall-collision)
+        (for i 0 (< i invader-row-number)
+             (if (not (= i row-nb))
+                 (broadcast `(invader-row ,i) 'remote-wall-collision))))
+      (wait-state))
      ;; if no wall collision, then proceed to the next state
      (after 0
             (wait-for-next-instant)
@@ -1162,6 +1182,11 @@
     (wait-for-next-instant)
     (main-state))
   init-state)
+
+(define-method (behaviour (obj invader_explosion) level)
+  (define animation-delay 0.03)
+  (sleep-for animation-delay)
+  (die (self) level))
 
 (define-method (behaviour (obj spawner-agent) level)
   (define (random-access lst) (list-ref lst (random-integer (length lst))))

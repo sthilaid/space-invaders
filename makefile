@@ -20,7 +20,7 @@ GAMBIT_INCLUDE=$(PATH_TO_GAMBIT)/include
 ## Some scheme libraries paths
 OOSYSYEM_PATH=$(HOME)/projet/maitrise/class
 SCMLIB_PATH=$(HOME)/projet/maitrise/scm-lib
-
+THRDSIM_PATH=$(HOME)/projet/maitrise/thread-simulation
 
 ## Default options
 UI=sdl
@@ -104,6 +104,12 @@ scm-lib.scm: $(SCMLIB_PATH)/scm-lib.scm
 
 scm-lib-macro.scm: $(SCMLIB_PATH)/scm-lib-macro.scm
 	cp $(SCMLIB_PATH)/scm-lib-macro.scm .
+
+thread-simulation.scm: $(THRDSIM_PATH)/thread-simulation.scm
+	cp $(THRDSIM_PATH)/thread-simulation.scm .
+
+thread-simulation-macro.scm: $(THRDSIM_PATH)/thread-simulation-macro.scm
+	cp $(THRDSIM_PATH)/thread-simulation-macro.scm .
 
 .scm.o1:
 	$(GSC) -cc-options "$(INCLUDE_OPTIONS)" -ld-options "$(LD_OPTIONS)" -debug-source -o $*.o1 $*.scm

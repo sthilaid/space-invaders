@@ -790,45 +790,39 @@
 ;; depending on the laser type, might re-scheduled a new laser shot.
 (define (destroy-laser! level laser-obj)
   (level-remove-object! level laser-obj)
-;;   (if (not (eq? (game-object-sprite-id laser-obj) 'player_laser))
-;;       (spawn-brother-thunk
-;;        'inv-laser (compose-thunks
-;;                    (lambda () (sleep-for next-invader-laser-interval))
-;;                    (create-invader-laser level)))
-  (set! player-laser-last-destruction-time (time->seconds (current-time))))
+  )
 
 ;; Laser collisions ;;
 (define-method (resolve-collision! level (laser laser-obj) (inv invader-ship))
   (level-increase-score! level inv)
-  (destroy-laser! level laser)
   (! laser 'die)
   (! inv   'die)
   (level-add-object! level (new invader_explosion inv level)))
 
 (define-method (resolve-collision! level (laser1 laser-obj) (laser2 laser-obj))
   (let ((inv-laser (if (player_laser? laser1) laser2 laser1)))
-    ;;(explode-laser! level inv-laser)
-    (destroy-laser! level inv-laser)))
+    (explode-laser! level inv-laser)
+    (! inv-laser 'die)))
 
 (define-method (resolve-collision! level (laser laser-obj) (expl explosion))
-  ;;(explode-laser! level laser)
-  (destroy-laser! level laser))
+  (explode-laser! level laser)
+  (! laser 'die))
 
 (define-method (resolve-collision! level (laser laser-obj) (player player-ship))
 ;;   (spawn-brother-thunk 'player-explosion-anim
 ;;                        (lambda () (explode-player! level player)))
-  (destroy-laser! level laser))
+  (! laser 'die))
 
 (define-method (resolve-collision! level (laser laser-obj) (shield shield))
   (let ((penetrated-pos (get-laser-penetration-pos laser)))
     (game-object-pos-set! laser penetrated-pos)
-    ;;(explode-laser! level laser)
+    (explode-laser! level laser)
     (shield-explosion! shield laser))
-  (destroy-laser! level laser))
+  (! laser 'die))
 
 
 (define-method (resolve-collision! level (laser laser-obj) (mother mothership))
-  (destroy-laser! level laser)
+  (! laser 'die)
   ;;(explode-mothership! level mother)
   (level-increase-score! level mother)
   (let ((delta-t (mothership-random-delay)))
@@ -840,8 +834,8 @@
 
 (define-method (resolve-collision! level (laser laser-obj) (wall wall))
   (damage-wall! level laser)
-  ;;(explode-laser! level laser)
-  (destroy-laser! level laser))
+  (explode-laser! level laser)
+  (! laser 'die))
 
 ;; Invader Collision ;;
 (define-method (resolve-collision! level (invader invader-ship) (shield shield))
@@ -875,8 +869,7 @@
   'todo
 ;;   (spawn-brother-thunk 'player-explosion
 ;;                        (lambda () (explode-player! level player)))
-;;   (explode-invader! level inv)
-  )
+  (explode-invader! level inv))
 
 (define-method (resolve-collision! level (player player-ship) (laser laser-obj))
   (resolve-collision! level laser player))
@@ -1016,6 +1009,17 @@
 
 (define-method (die (obj invader-ship) level)
   
+  (die cast: '(game-object *) obj level))
+
+(define-method (die (obj laser-obj) level)
+  (if (not (eq? (game-object-sprite-id obj) 'player_laser))
+      ;;TODO
+      'todo
+;;       (spawn-brother-thunk
+;;        'inv-laser (compose-thunks
+;;                    (lambda () (sleep-for next-invader-laser-interval))
+;;                    (create-invader-laser level)))
+      (set! player-laser-last-destruction-time (time->seconds (current-time))))
   (die cast: '(game-object *) obj level))
 
 (define-class Barrier (corout) (slot: agent-arrived)
@@ -1159,6 +1163,33 @@
   ;; FIXME: Inefficient or bottleneck??
   (filter bottom-invader? (level-invaders level)))
 
+(define (explode-laser! level laser-obj)
+  (define animation-duration 0.3)
+  (define (center-pos pos expl-type-width)
+    ;; FIXME: ugly hack where only player laser's explotion are
+    ;; centered in x. I'm unsure why other lasers don't require this
+    ;; shift so far...
+    (if (player_laser? laser-obj)
+        (point-sub pos (make-point (floor (/ expl-type-width 2))
+                                   0))
+        pos))
+  (let* ((expl-instance (if (player_laser? laser-obj)
+                                    (make-player_laser_explosion-instance)
+                                    (make-invader_laser_explosion-instance)))
+         (obj (init! cast: '(game-object * * * * * *)
+                     expl-instance
+                     (gensym 'explosion)
+                     (game-object-pos laser-obj) ; not centered
+                     0
+                     (choose-color (game-object-pos laser-obj))
+                     (make-point 0 0)
+                     level)))
+    (update! obj laser-obj pos
+             (lambda (p) (center-pos p (type-width obj))))
+    (level-remove-object! level laser-obj)
+    (level-add-object! level obj)
+    (sleep-for animation-duration)))
+
 (define-method (behaviour (obj laser-obj) level)
   (define (init-state)
     (subscribe instant-components (self))
@@ -1179,7 +1210,7 @@
     (main-state))
   init-state)
 
-(define-method (behaviour (obj invader_explosion) level)
+(define-method (behaviour (obj explosion) level)
   (define animation-delay 0.03)
   (sleep-for animation-delay)
   (die (self) level))

@@ -216,6 +216,7 @@
       [(key-2)            (register-user-action '2)]
       [(key-c)            (register-user-action 'c)]
       [(key-d)            (register-user-action 'd)]
+      [(key-t)            (pp `(it is now: ,(current-sim-time)))]
       [(key-f)            (set! display-fps? (not display-fps?))]
       [(key-q)            (request-exit)])
     ))

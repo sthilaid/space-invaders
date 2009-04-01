@@ -64,9 +64,9 @@ devel: $(DEVEL_FILES:.scm=.o1) new-engine.scm
 run-invaders: $(SPACE_INVADERS_FILES:.scm=.o1)
 	@echo "*** Compilation Finished ***"
 	@echo
-	@echo "Starting Space Invaders...."
+	@echo "Launching Space Invaders...."
 	@echo
-	gsi $(SPACE_INVADERS_FILES:.scm=.o1) -e '(main)'
+	gsi -:dar $(SPACE_INVADERS_FILES:.scm=.o1) -e '(main)'
 
 ## "included" macro dependant scheme source files
 user-interface-images.c: user-interface-images.scm texture-macro.scm font-macro.scm scm-lib-macro.scm

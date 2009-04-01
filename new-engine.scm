@@ -979,24 +979,16 @@
         (move-object! level (self))
         (broadcast `(row-controller ,(invader-ship-row (self))) 'moved)
         (main-state)))
-
-     (wall-collision
-      (begin
-        (update! (game-object-speed (self)) point x (lambda (dx) (- dx)))
-        (point-y-set! (game-object-speed (self)) (- invader-y-movement-speed))
-        (move-object! level (self))
-        (point-y-set! (game-object-speed (self)) 0)
-        (broadcast `(row-controller ,(invader-ship-row (self))) 'moved)
-        (main-state)))
-
-     (remote-wall-collision
+     ((wall-collision ,move-back? ,sync-host?)
       (begin
         (let ((dx (point-x (game-object-speed (self)))))
-          (point-x-set! (game-object-speed (self)) 0)
+          (point-x-set! (game-object-speed (self))
+                        (if move-back? (- (* 2 dx)) 0))
           (point-y-set! (game-object-speed (self)) (- invader-y-movement-speed))
           (move-object! level (self))
           (point-x-set! (game-object-speed (self)) (- dx))
-          (point-y-set! (game-object-speed (self)) 0)
+          (point-y-set! (game-object-speed (self)) 0))
+        (if sync-host? (! sync-host? 'moved))
         (main-state)))
      (player-explosion
       (begin (player-expl-state)))
@@ -1101,7 +1093,11 @@
         (broadcast `(invader-row ,row-nb) 'wall-collision)
         (for i 0 (< i invader-row-number)
              (if (not (= i row-nb))
-                 (broadcast `(invader-row ,i) 'remote-wall-collision))))
+                 (let ((move-back? (< i row-nb)))
+                   (broadcast `(invader-row ,i)
+                              `(wall-collision ,move-back? #f)))
+                 (broadcast `(invader-row ,i)
+                            `(wall-collision  #t ,(self))))))
       (wait-state))
      ;; if no wall collision, then proceed to the next state
      (after 0

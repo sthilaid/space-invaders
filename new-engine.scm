@@ -51,8 +51,6 @@
 
 (define player-laser-refresh-constraint 0.6)
 
-(define (mothership-random-delay) (+ (random-integer 10) 5))
-
 (define get-invader-move-refresh-rate
   ;; the sleep delay is a function such that when the level is full of
   ;; invaders (55 invaders) then the delay is 0.1 and when there is
@@ -235,11 +233,17 @@
             (player-ship (new player-ship)))
        (init! cast: '(game-object * * * * * *)
               obj 'player pos state 'green speed level)
-       (level-add-object! level obj)))))
+       (level-spawn-object! level obj)))))
 (setup-static-fields! player-ship 'player (new rect 0 0 13 8) 1 0)
 
 (define-class mothership   (game-object sprite-obj)
   (constructor:
+   (lambda (obj level)
+     (pp 'toto!)
+     (init! cast: '(game-object * * * * * *)
+            obj 'mothership
+            'not-init 'not-init 'not-init 'not-init
+            level))
    (lambda (obj pos state color speed level)
      (init! cast: '(game-object * * * * * *)
             obj 'mothership pos state color speed level))))
@@ -487,7 +491,10 @@
 
 ;; Level utilitary functions
 (define (level-add-object! lvl obj)
-  (table-set! (level-object-table lvl) (game-object-id obj) obj)
+  (table-set! (level-object-table lvl) (game-object-id obj) obj))
+
+(define (level-spawn-object! lvl obj)
+  (level-add-object! lvl obj)
   (spawn-brother obj))
 
 (define (level-remove-object! lvl obj)
@@ -574,7 +581,7 @@
   (define speed (new point 0 0))
   (define hi-score (level-hi-score level))
   (for-each
-   (lambda (m) (level-add-object! level m))
+   (lambda (m) (level-spawn-object! level m))
    (append 
     (list
      (new message-obj 'top-banner (new point 2 y) state 'white speed
@@ -630,6 +637,7 @@
                 (lambda ()
                   (new player-ship level)
                   (spawn-brother (new spawner-agent level))
+                  (spawn-brother (new mothership level))
 ;;                   (spawn-brother-thunk
 ;;                    'mother-ship-corout
 ;;                    (compose-thunks
@@ -643,7 +651,7 @@
                 redraw-corout)))
 
     (add-global-score-messages! level)
-    (for-each (lambda (s) (level-add-object! level s)) (generate-shields level))
+    (for-each (lambda (s) (level-spawn-object! level s)) (generate-shields level))
     (level-init-corouts-set! level init-corouts)
     (subscribe 'redraw redraw-corout)
     level))
@@ -797,7 +805,7 @@
   (level-increase-score! level inv)
   (! laser 'die)
   (! inv   'die)
-  (level-add-object! level (new invader_explosion inv level)))
+  (level-spawn-object! level (new invader_explosion inv level)))
 
 (define-method (resolve-collision! level (laser1 laser-obj) (laser2 laser-obj))
   (let ((inv-laser (if (player_laser? laser1) laser2 laser1)))
@@ -822,15 +830,10 @@
 
 
 (define-method (resolve-collision! level (laser laser-obj) (mother mothership))
-  (! laser 'die)
+  (! laser  'die)
+  (! mother 'die)
   ;;(explode-mothership! level mother)
-  (level-increase-score! level mother)
-  (let ((delta-t (mothership-random-delay)))
-    (spawn-brother-thunk
-     'mothership (compose-thunks
-                  (lambda () (sleep-for delta-t))
-                  ;;(create-new-mothership level)
-                  ))))
+  (level-increase-score! level mother))
 
 (define-method (resolve-collision! level (laser laser-obj) (wall wall))
   (damage-wall! level laser)
@@ -878,13 +881,7 @@
 
 ;; Mothership collisions ;;
 (define-method (resolve-collision! level (mother mothership) (wall wall))
-  (level-remove-object! level mother)
-  (let ((delta-t (mothership-random-delay)))
-    (spawn-brother-thunk 'mothership
-                         (compose-thunks
-                          (lambda () (sleep-for delta-t))
-                          ;;(create-new-mothership level)
-                          ))))
+  (! mother 'die))
 
 (define-method (resolve-collision! level (mother mothership) (laser laser-obj))
   (resolve-collision! level laser mother))
@@ -988,7 +985,7 @@
                                   pos state 'white speed row col level))
                   (else      (new hard-invader
                                   pos state 'white speed row col level)))))
-      (level-add-object! level inv)
+      (level-spawn-object! level inv)
       (subscribe `(invader-row ,row) inv)))
                          
   (lambda ()
@@ -1115,6 +1112,41 @@
   ;; initialization
   (init-state))
 
+;;;;;;;;;; Mothership behaviour ;;;;;;;;;;
+
+(define-method (behaviour (obj mothership) level)
+  (define (mothership-random-delay) (+ (random-integer 10) 5))
+  (define (initialize-data!)
+    (let ((dx-mult (vector-ref '#(1 -1) (random-integer 2))))
+      (set-fields! obj mothership
+                   ((pos (new point
+                              (if (> dx-mult 0)
+                                  gamefield-min-x
+                                  (- gamefield-max-x 16))
+                              201))
+                    (state 0)
+                    (color 'red)
+                    (speed (new point
+                                (* dx-mult mothership-movement-speed)
+                                0))))))
+  
+  (define (main-state)
+    (initialize-data!)
+    (sleep-for 0)
+    (pp 'allo)
+    (level-add-object! level (self))
+    (subscribe instant-components (self))
+    (let loop ()
+      (move-object! level (self))
+      (wait-for-next-instant)
+      (loop)))
+
+  (main-state))
+
+(define-method (die (obj mothership) level)
+  (level-remove-object! lvl (self))
+  (unsubscribe instant-components (self)))
+
 
 ;;;;;;;;;; Lasers behaviour ;;;;;;;;;;
 
@@ -1144,7 +1176,7 @@
         ;;(id pos state color speed level)
         (init! laser-obj laser-id (make-point x y) 0 'white (make-point 0 dy)
                level)
-        (level-add-object! level laser-obj))))
+        (level-spawn-object! level laser-obj))))
 
 (define (find-shooter-candidates level)
   (define (rect-inv-collision? rect)
@@ -1187,7 +1219,7 @@
                      (make-point 0 0)
                      level)))
     (update! obj laser-obj pos (lambda (p) (center-pos p (type-width obj))))
-    (level-add-object! level obj)))
+    (level-spawn-object! level obj)))
 
 (define-method (behaviour (obj laser-obj) level)
   (define (init-state)

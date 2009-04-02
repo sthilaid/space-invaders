@@ -25,10 +25,10 @@
 
 (define user-interface-thread #f)
 
-;; (define invader-row-number 5)
-;; (define invader-col-number 11)
-(define invader-row-number 2)
-(define invader-col-number 2)
+(define invader-row-number 5)
+(define invader-col-number 11)
+;; (define invader-row-number 2)
+;; (define invader-col-number 2)
 
 (define invader-spacing 16)
 
@@ -239,7 +239,6 @@
 (define-class mothership   (game-object sprite-obj)
   (constructor:
    (lambda (obj level)
-     (pp 'toto!)
      (init! cast: '(game-object * * * * * *)
             obj 'mothership
             'not-init 'not-init 'not-init 'not-init
@@ -1153,7 +1152,7 @@
           (loop)
           (main-state))))
 
-  (main-state))
+  main-state)
 
 (define-method (die (obj mothership) level)
   (level-remove-object! level (self))
@@ -1258,8 +1257,9 @@
 
 (define-method (behaviour (obj explosion) level)
   (define animation-delay 0.03)
-  (sleep-for animation-delay)
-  (die (self) level))
+  (lambda ()
+   (sleep-for animation-delay)
+   (die (self) level)))
 
 
 ;;;;;;;;;; Spawner agent behaviour ;;;;;;;;;;
@@ -1280,9 +1280,8 @@
       (shoot-laser! level laser-creator shooter (- invader-laser-speed))))
   (define (main-state)
     (sleep-for next-invader-laser-interval)
-    ;; (shoot-invader-laser!)
-    ;; (main-state)
-    )
+    (shoot-invader-laser!)
+    (main-state))
   main-state)
 
 

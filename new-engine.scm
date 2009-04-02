@@ -279,7 +279,17 @@
             (game-object-speed inv)
             level))))
 (define-class invader_laser_explosion (explosion))
-(define-class player_explosion        (explosion))
+(define-class player_explosion        (explosion)
+  (constructor:
+   (lambda (obj player level)
+     (init! cast: '(game-object * * * * * *)
+            obj
+            (symbol-append (game-object-id player) '-explosion)
+            (game-object-pos player)
+            0 ; state
+            (game-object-color player)
+            (game-object-speed player)
+            level))))
 (define-class player_laser_explosion  (explosion))
 (define-class mothership_explosion    (explosion)
   (constructor:
@@ -825,9 +835,8 @@
   (! laser 'die))
 
 (define-method (resolve-collision! level (laser laser-obj) (player player-ship))
-;;   (spawn-brother-thunk 'player-explosion-anim
-;;                        (lambda () (explode-player! level player)))
-  (! laser 'die))
+  (! player 'die)
+  (! laser  'die))
 
 (define-method (resolve-collision! level (laser laser-obj) (shield shield))
   (let ((penetrated-pos (get-laser-penetration-pos laser)))
@@ -911,6 +920,7 @@
 ;;                   *within* the obj coroutine such that (self) = obj.
 (define-generic behaviour)
 (define-generic die)
+(define-generic pause)
 
 ;; Default behaviour
 (define-method (behaviour (obj corout) level)
@@ -930,13 +940,12 @@
   (die cast: '(game-object *) obj level))
 
 (define-method (die (obj laser-obj) level)
-  (if (not (eq? (game-object-sprite-id obj) 'player_laser))
-      'todo
-;;       (spawn-brother-thunk
-;;        'inv-laser (compose-thunks
-;;                    (lambda () (sleep-for next-invader-laser-interval))
-;;                    (create-invader-laser level)))
+  (if (eq? (game-object-sprite-id obj) 'player_laser)
       (set! player-laser-last-destruction-time (time->seconds (current-time))))
+  (die cast: '(game-object *) obj level))
+
+(define-method (die (obj player-ship) level)
+  (level-spawn-object! level (new player_explosion obj level))
   (die cast: '(game-object *) obj level))
 
 
@@ -1261,6 +1270,11 @@
    (sleep-for animation-delay)
    (die (self) level)))
 
+(define-method (behaviour (obj player_explosion) level)
+  (define animation-delay 0.03)
+  (lambda ()
+   (sleep-for animation-delay)
+   (die (self) level)))
 
 ;;;;;;;;;; Spawner agent behaviour ;;;;;;;;;;
 
@@ -1495,8 +1509,9 @@
                   (game-level-wall-damage level))
 
         (for-each render (game-level-shields level)))
-      ;; if we don't the draw the field, a black square is drawn to
-      ;; cover unwanted already drawn objects.
+
+      ;; FIXME: if we don't the draw the field, a black square is
+      ;; drawn to cover unwanted already drawn objects... hehe :(
       (begin
         (set-openGL-color 'black)
         (glBegin GL_QUADS)

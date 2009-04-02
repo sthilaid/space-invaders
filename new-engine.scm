@@ -841,7 +841,7 @@
 (define-method (resolve-collision! level (laser laser-obj) (mother mothership))
   (! laser  'die)
   (! mother 'die)
-  (spawn-brother (new mothership_explosion mother level))
+  (level-spawn-object! level (new mothership_explosion mother level))
   (level-increase-score! level mother))
 
 (define-method (resolve-collision! level (laser laser-obj) (wall wall))
@@ -1332,11 +1332,30 @@
 
           ((d) (error "DEBUG"))))))
 
+ (define (update-score-msg! level)
+    (if (game-level? level) 
+        (let* ((is-p2? (is-player2? level))
+               (score-obj
+                (level-get level (if is-p2?
+                                     'player2-score-msg
+                                     'player1-score-msg)))
+               (other-score-obj
+                (level-get level (if is-p2?
+                                     'player1-score-msg
+                                     'player2-score-msg))))
+          (update-other-player-state! level)
+          (message-obj-text-set!
+           score-obj (get-score-string (game-level-score level)))
+          (if (2p-game-level? level)
+              (message-obj-text-set!
+               other-score-obj
+               (get-score-string (2p-game-level-other-score level)))))))
 
 (define-method (behaviour (obj redraw-agent) level)
   (define-wait-state main-state redraw (msg-list-size instant-components)
     (begin
       (process-user-input level)
+      (update-score-msg! level)
       ;; FIXME: It would be better to either copy the level obj
       ;; before passing it to redraw or do a syncronous remote call
       ;; (in the termite !? style)

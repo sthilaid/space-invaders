@@ -1164,7 +1164,6 @@
   (filter bottom-invader? (level-invaders level)))
 
 (define (explode-laser! level laser-obj)
-  (define animation-duration 0.3)
   (define (center-pos pos expl-type-width)
     ;; FIXME: ugly hack where only player laser's explotion are
     ;; centered in x. I'm unsure why other lasers don't require this
@@ -1178,17 +1177,14 @@
                                     (make-invader_laser_explosion-instance)))
          (obj (init! cast: '(game-object * * * * * *)
                      expl-instance
-                     (gensym 'explosion)
+                     (gensym (symbol-append (corout-id laser-obj) '-explosion))
                      (game-object-pos laser-obj) ; not centered
                      0
                      (choose-color (game-object-pos laser-obj))
                      (make-point 0 0)
                      level)))
-    (update! obj laser-obj pos
-             (lambda (p) (center-pos p (type-width obj))))
-    (level-remove-object! level laser-obj)
-    (level-add-object! level obj)
-    (sleep-for animation-duration)))
+    (update! obj laser-obj pos (lambda (p) (center-pos p (type-width obj))))
+    (level-add-object! level obj)))
 
 (define-method (behaviour (obj laser-obj) level)
   (define (init-state)

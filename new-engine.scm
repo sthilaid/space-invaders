@@ -902,6 +902,74 @@
 ;;
 ;;*****************************************************************************
 
+;; *Important note*: these generic functions must be called from
+;;                   *within* the obj coroutine such that (self) = obj.
+(define-generic behaviour)
+(define-generic die)
+
+;; Default behaviour
+(define-method (behaviour (obj corout) level)
+  (pretty-print (to-string
+                 (show "Warning: no behaviour defined for object of type "
+                       (get-class-id obj))))
+  (recv (wait-forever....! (error 'should-no-go-here))))
+
+(define-method (die (obj game-object) level)
+  (pp `(object ,(corout-id (self)) died))
+  (level-remove-object! level obj)
+  ;; the terminate-corout unsubscribes the coroutine of its msg lists
+  (terminate-corout (to-string (show (corout-id (self)) " died normally"))))
+
+(define-method (die (obj invader-ship) level)
+  
+  (die cast: '(game-object *) obj level))
+
+(define-method (die (obj laser-obj) level)
+  (if (not (eq? (game-object-sprite-id obj) 'player_laser))
+      'todo
+;;       (spawn-brother-thunk
+;;        'inv-laser (compose-thunks
+;;                    (lambda () (sleep-for next-invader-laser-interval))
+;;                    (create-invader-laser level)))
+      (set! player-laser-last-destruction-time (time->seconds (current-time))))
+  (die cast: '(game-object *) obj level))
+
+
+;;;;;;;;;; Barrier definition and usage facilities ;;;;;;;;;;
+
+(define-class Barrier (corout) (slot: agent-arrived)
+  (constructor: (lambda (obj thunk)
+                  (init! cast: '(corout * *) obj
+                         (gensym 'barrier)
+                         thunk)
+                  (Barrier-agent-arrived-set! obj 0))))
+
+;; Condition is actively tested, i.e. that it is executed each time a
+;; message is received. This enables the use of dynamic barriers.
+(define-macro (define-wait-state state-name msg condition . barrier-open-code)
+  `(define (,state-name)
+     (recv (,msg
+            (begin
+              (update! (self) Barrier agent-arrived (lambda (n) (+ n 1)))
+              (if (>= (Barrier-agent-arrived (self)) ,condition)
+                  (begin
+                    ;; make sure there is no left-overs of msg 
+                    (clean-mailbox ,msg)
+                    (Barrier-agent-arrived-set! (self) 0)
+                    ,@barrier-open-code)
+                  (,state-name)))))))
+
+(define instant-components 'instant-components)
+(define (wait-for-next-instant)
+;;   (pp `(waiting for instant ,(corout-id (self))
+;;                 (inst list size ,(msg-list-size instant-components))
+;;                 (mbox: ,(queue->list (corout-mailbox (self))))))
+  (broadcast 'redraw 'redraw)
+  (recv (next-instant 'ok)))
+
+
+;;;;;;;;;; Invader Generation ;;;;;;;;;;
+
 (define (invader-generator level)
   (define animation-delay 0.01)
   (define x-offset 30)
@@ -951,16 +1019,7 @@
     (broadcast '(row-controller 0) 'init)))
 
 
-;; *Important note*: these generic functions must be called from
-;;                   *within* the obj coroutine such that (self) = obj.
-(define-generic behaviour)
-(define-generic die)
-
-(define-method (behaviour (obj corout) level)
-  (pretty-print (to-string
-                 (show "Warning: no behaviour defined for object of type "
-                       (get-class-id obj))))
-  (recv (wait-forever....! (error 'should-no-go-here))))
+;;;;;;;;;; Invader behaviour ;;;;;;;;;;
 
 (define-method (behaviour (inv invader-ship) level)
   (define (find-controller row)
@@ -988,8 +1047,6 @@
      (game-paused
       (begin (paused-state)))))
 
-  
-
   (define (player-expl-state)
     (recv   ; assuming that the expl obj gets paused
      (game-paused (player-expl-state)) 
@@ -1001,71 +1058,14 @@
   ;; init state
   main-state)
 
-(define-method (die (obj game-object) level)
-  (pp `(object ,(corout-id (self)) died))
-  (level-remove-object! level obj)
-  ;; the terminate-corout unsubscribes the coroutine of its msg lists
-  (terminate-corout (to-string (show (corout-id (self)) " died normally"))))
+;;;;;;;;;; Invader Controller ;;;;;;;;;;
 
-(define-method (die (obj invader-ship) level)
-  
-  (die cast: '(game-object *) obj level))
-
-(define-method (die (obj laser-obj) level)
-  (if (not (eq? (game-object-sprite-id obj) 'player_laser))
-      ;;TODO
-      'todo
-;;       (spawn-brother-thunk
-;;        'inv-laser (compose-thunks
-;;                    (lambda () (sleep-for next-invader-laser-interval))
-;;                    (create-invader-laser level)))
-      (set! player-laser-last-destruction-time (time->seconds (current-time))))
-  (die cast: '(game-object *) obj level))
-
-(define-class Barrier (corout) (slot: agent-arrived)
-  (constructor: (lambda (obj thunk)
-                  (init! cast: '(corout * *) obj
-                         (gensym 'barrier)
-                         thunk)
-                  (Barrier-agent-arrived-set! obj 0))))
 (define-class Inv-Controller (Barrier) (slot: row)
   (constructor: (lambda (obj row)
                   (init! cast: '(Barrier *) obj invader-controller)
                   (set-fields! obj Inv-Controller
                                ((id (gensym 'Inv-Controller))
                                 (row row))))))
-
-(define-class redraw-agent (Barrier)
-  (constructor: (lambda (obj level)
-                  (init! cast: '(Barrier *) obj (behaviour obj level)))))
-
-(define-class spawner-agent (corout)
-  (constructor: (lambda (obj level)
-                  (init! cast: '(corout * *)
-                         obj (gensym 'spawner-agent) (behaviour obj level)))))
-
-;; Condition is actively tested, i.e. that it is executed each time a
-;; message is received. This enables the use of dynamic barriers.
-(define-macro (define-wait-state state-name msg condition . barrier-open-code)
-  `(define (,state-name)
-     (recv (,msg
-            (begin
-              (update! (self) Barrier agent-arrived (lambda (n) (+ n 1)))
-              (if (>= (Barrier-agent-arrived (self)) ,condition)
-                  (begin
-                    ;; make sure there is no left-overs of msg 
-                    (clean-mailbox ,msg)
-                    (Barrier-agent-arrived-set! (self) 0)
-                    ,@barrier-open-code)
-                  (,state-name)))))))
-
-(define instant-components 'instant-components)
-(define (wait-for-next-instant)
-;;   (pp `(waiting for instant ,(corout-id (self))
-;;                 (inst list size ,(msg-list-size instant-components))
-;;                 (mbox: ,(queue->list (corout-mailbox (self))))))
-  (broadcast 'redraw 'redraw)
-  (recv (next-instant 'ok)))
 
 (define (invader-controller)
   ;; Utilitaries
@@ -1114,6 +1114,9 @@
 
   ;; initialization
   (init-state))
+
+
+;;;;;;;;;; Lasers behaviour ;;;;;;;;;;
 
 (define (shoot-laser! level laser-instance-creator shooter-obj dy)
   (define is-player-laser?
@@ -1206,10 +1209,20 @@
     (main-state))
   init-state)
 
+;;;;;;;;;; Explosions behaviour ;;;;;;;;;;
+
 (define-method (behaviour (obj explosion) level)
   (define animation-delay 0.03)
   (sleep-for animation-delay)
   (die (self) level))
+
+
+;;;;;;;;;; Spawner agent behaviour ;;;;;;;;;;
+
+(define-class spawner-agent (corout)
+  (constructor: (lambda (obj level)
+                  (init! cast: '(corout * *)
+                         obj (gensym 'spawner-agent) (behaviour obj level)))))
 
 (define-method (behaviour (obj spawner-agent) level)
   (define (random-access lst) (list-ref lst (random-integer (length lst))))
@@ -1228,7 +1241,12 @@
   main-state)
 
 
-;;; Redraw agent
+;;;;;;;;;; Redraw agent behaviour ;;;;;;;;;;
+
+(define-class redraw-agent (Barrier)
+  (constructor: (lambda (obj level)
+                  (init! cast: '(Barrier *) obj (behaviour obj level)))))
+
 
 (define (process-user-input level)
   (define game-paused? #f)
@@ -1268,6 +1286,7 @@
            (super-kill-all! 'reset))
 
           ((d) (error "DEBUG"))))))
+
 
 (define-method (behaviour (obj redraw-agent) level)
   (define-wait-state main-state redraw (msg-list-size instant-components)

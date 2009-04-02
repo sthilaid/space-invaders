@@ -25,10 +25,10 @@
 
 (define user-interface-thread #f)
 
-(define invader-row-number 5)
-(define invader-col-number 11)
-;; (define invader-row-number 2)
-;; (define invader-col-number 2)
+;; (define invader-row-number 5)
+;; (define invader-col-number 11)
+(define invader-row-number 2)
+(define invader-col-number 2)
 
 (define invader-spacing 16)
 
@@ -267,7 +267,6 @@
      (set-fields! obj shield ((particles particles))))))
 (setup-static-fields! shield 'shield (new rect 0 0 22 16) 1 0)
 
-;; TODO
 (define-class explosion    (game-object sprite-obj))
 (define-class invader_explosion       (explosion)
   (constructor:
@@ -283,7 +282,17 @@
 (define-class invader_laser_explosion (explosion))
 (define-class player_explosion        (explosion))
 (define-class player_laser_explosion  (explosion))
-(define-class mothership_explosion    (explosion))
+(define-class mothership_explosion    (explosion)
+  (constructor:
+   (lambda (obj mother level)
+     (init! cast: '(game-object * * * * * *)
+            obj
+            'mothership-explosion
+            (game-object-pos mother)
+            0 ; state
+            'red
+            (game-object-speed mother)
+            level))))
 (setup-static-fields!
  invader_explosion 'invader_explosion (new rect 0 0 13 8) 1 0)
 (setup-static-fields!
@@ -832,7 +841,7 @@
 (define-method (resolve-collision! level (laser laser-obj) (mother mothership))
   (! laser  'die)
   (! mother 'die)
-  ;;(explode-mothership! level mother)
+  (spawn-brother (new mothership_explosion mother level))
   (level-increase-score! level mother))
 
 (define-method (resolve-collision! level (laser laser-obj) (wall wall))
@@ -1070,9 +1079,9 @@
     (define (inc x) (modulo (+ x 1) invader-row-number))
     (let loop ((r (inc previous-row)))
       (cond
-       ((= r previous-row)
-        (error "could not find the next row of invaders..."))
        ((not (zero? (msg-list-size `(invader-row ,r))))
+        r)
+       ((= r previous-row)
         r)
        (else (loop (inc r))))))
 
@@ -1094,9 +1103,10 @@
         (broadcast `(invader-row ,row-nb) 'wall-collision)
         (for i 0 (< i invader-row-number)
              (if (not (= i row-nb))
-                 (let ((move-back? (< i row-nb)))
-                   (broadcast `(invader-row ,i)
-                              `(wall-collision ,move-back? #f)))
+                 (if (not (zero? (msg-list-size `(invader-row ,i))))
+                     (let ((move-back? (< i row-nb)))
+                       (broadcast `(invader-row ,i)
+                                  `(wall-collision ,move-back? #f))))
                  (broadcast `(invader-row ,i)
                             `(wall-collision  #t ,(self))))))
       (wait-state))
@@ -1116,6 +1126,7 @@
 
 (define-method (behaviour (obj mothership) level)
   (define (mothership-random-delay) (+ (random-integer 10) 5))
+  (define (random-score-val) (vector-ref '#(50 100 150) (random-integer 3)))
   (define (initialize-data!)
     (let ((dx-mult (vector-ref '#(1 -1) (random-integer 2))))
       (set-fields! obj mothership
@@ -1128,24 +1139,26 @@
                     (color 'red)
                     (speed (new point
                                 (* dx-mult mothership-movement-speed)
-                                0))))))
+                                0))
+                    (score-value (random-score-val))))))
   
   (define (main-state)
     (initialize-data!)
-    (sleep-for 0)
-    (pp 'allo)
+    (sleep-for 0) ; <- FIXME!
     (level-add-object! level (self))
     (subscribe instant-components (self))
     (let loop ()
       (move-object! level (self))
-      (wait-for-next-instant)
-      (loop)))
+      (if (not (eq? (wait-for-next-instant) 'died))
+          (loop)
+          (main-state))))
 
   (main-state))
 
 (define-method (die (obj mothership) level)
-  (level-remove-object! lvl (self))
-  (unsubscribe instant-components (self)))
+  (level-remove-object! level (self))
+  (unsubscribe instant-components (self))
+  'died)
 
 
 ;;;;;;;;;; Lasers behaviour ;;;;;;;;;;

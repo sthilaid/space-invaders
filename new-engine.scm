@@ -25,10 +25,10 @@
 
 (define user-interface-thread #f)
 
-(define invader-row-number 5)
-(define invader-col-number 11)
-;; (define invader-row-number 2)
-;; (define invader-col-number 2)
+;; (define invader-row-number 5)
+;; (define invader-col-number 11)
+(define invader-row-number 2)
+(define invader-col-number 2)
 
 (define invader-spacing 16)
 
@@ -40,7 +40,6 @@
 (define mothership-movement-speed 1)
 
 (define player-laser-last-destruction-time 0)
-
 
 ;; Simulation delays
 (define next-invader-laser-interval 0.2)
@@ -150,7 +149,7 @@
                   (init! cast: '(corout * *) obj
                          id
                          (lambda ()(with-dynamic-handlers
-                                    ((pause (pause obj))
+                                    ((pause (pause obj level))
                                      (die   (die   obj level)))
                                     ((behaviour obj level)))))
                   (set-fields! obj game-object
@@ -212,6 +211,7 @@
 (define-class invader-ship (game-object sprite-obj) (slot: row) (slot: col)
   (constructor:
    (lambda (obj pos state color speed row col level)
+     (subscribe `(invader-row ,row) obj)
      (init! cast: '(game-object * * * * * *)
             obj (gensym 'invader) pos state color speed level)
      (set-fields! obj invader-ship ((row row) (col col))))))
@@ -499,7 +499,7 @@
   (slot: wall-damage)
   (slot: wall-collision-detected?)
   (slot: draw-game-field?)
-  (slot: controllers))
+  (slot: game-paused?))
 
 
 (define-class 2p-game-level (game-level)
@@ -624,7 +624,7 @@
          (lives 3)
          (wall-collision-detected? #f)
          (draw-game-field? #t)
-         (controllers #f)
+         (game-paused? #f)
          (finished? #f)        ; only used for 2p games
          (other-finished? #f)  ; only used for 2p games
          (other-score 0)       ; only used for 2p games
@@ -635,7 +635,7 @@
                      hi-score init-corouts (new-mutex)
                      player-id init-score lives 
                      walls wall-damage wall-collision-detected?
-                     draw-game-field? controllers
+                     draw-game-field? game-paused?
                      finished? other-finished? other-score)
                     
                     (make-game-level
@@ -643,7 +643,7 @@
                      hi-score init-corouts (new-mutex)
                      player-id init-score lives 
                      walls wall-damage wall-collision-detected?
-                     draw-game-field? controllers)))
+                     draw-game-field? game-paused?)))
          (level-setup-corout
           (new corout
                'game-initialisation
@@ -671,7 +671,6 @@
     (add-global-score-messages! level)
     (for-each (lambda (s) (level-spawn-object! level s)) (generate-shields level))
     (level-init-corouts-set! level init-corouts)
-    (subscribe 'redraw redraw-corout)
     level))
 
 
@@ -929,6 +928,14 @@
                        (get-class-id obj))))
   (recv (wait-forever....! (error 'should-no-go-here))))
 
+(define (pause-game level)
+  (let ((paused? (game-level-game-paused? level)))
+    (broadcast 'redraw (if paused? 'unpause 'pause))
+    (game-level-game-paused?-set! level (not paused?))))
+
+(define-method (pause (obj game-object) level)
+  (recv (unpause 'ok)))
+
 (define-method (die (obj game-object) level)
   (pp `(object ,(corout-id (self)) died))
   (level-remove-object! level obj)
@@ -945,6 +952,7 @@
   (die cast: '(game-object *) obj level))
 
 (define-method (die (obj player-ship) level)
+  (level-loose-1-life! level)
   (level-spawn-object! level (new player_explosion obj level))
   (die cast: '(game-object *) obj level))
 
@@ -1002,8 +1010,7 @@
                                   pos state 'white speed row col level))
                   (else      (new hard-invader
                                   pos state 'white speed row col level)))))
-      (level-spawn-object! level inv)
-      (subscribe `(invader-row ,row) inv)))
+      (level-spawn-object! level inv)))
                          
   (lambda ()
     (let loop ((row 0) (col 0))
@@ -1021,10 +1028,8 @@
       (if (< row invader-row-number)
           (begin (let ((controller
                         (spawn-brother (new Inv-Controller row))))
-                   (subscribe `(row-controller ,row) controller)
                    (yield)
-                   (loop (+ row 1) (cons controller controllers))))
-          (game-level-controllers-set! level (apply vector (reverse controllers)))))
+                   (loop (+ row 1) (cons controller controllers))))))
     (thread-send user-interface-thread `(redraw ,level))
     (sleep-for animation-delay)))
 
@@ -1036,8 +1041,6 @@
 ;;;;;;;;;; Invader behaviour ;;;;;;;;;;
 
 (define-method (behaviour (inv invader-ship) level)
-  (define (find-controller row)
-    (vector-ref (game-level-controllers level) row))
   (define (main-state)
     (recv
      (move
@@ -1061,14 +1064,6 @@
      (game-paused
       (begin (paused-state)))))
 
-  (define (player-expl-state)
-    (recv   ; assuming that the expl obj gets paused
-     (game-paused (player-expl-state)) 
-     (player-explosion-end (main-state))))
-
-  (define (paused-state)
-    (recv ('game-unpaused (main-state))))
-
   ;; init state
   main-state)
 
@@ -1076,6 +1071,7 @@
 
 (define-class Inv-Controller (Barrier) (slot: row)
   (constructor: (lambda (obj row)
+                  (subscribe `(row-controller ,row) obj)
                   (init! cast: '(Barrier *) obj invader-controller)
                   (set-fields! obj Inv-Controller
                                ((id (gensym 'Inv-Controller))
@@ -1273,13 +1269,16 @@
 (define-method (behaviour (obj player_explosion) level)
   (define animation-delay 0.03)
   (lambda ()
-   (sleep-for animation-delay)
-   (die (self) level)))
+    (pause-game level)
+    (sleep-for animation-delay)
+    (pause-game level)
+    (die (self) level)))
 
 ;;;;;;;;;; Spawner agent behaviour ;;;;;;;;;;
 
 (define-class spawner-agent (corout)
   (constructor: (lambda (obj level)
+                  (subscribe 'spawner-agent obj)
                   (init! cast: '(corout * *)
                          obj (gensym 'spawner-agent) (behaviour obj level)))))
 
@@ -1288,11 +1287,11 @@
   (define creators (list make-laserA-instance make-laserB-instance
                          make-laserC-instance))
   (define (shoot-invader-laser!)
-   
     (let* ((laser-creator  (random-access creators))
            (shooter        (random-access (find-shooter-candidates level))))
       (shoot-laser! level laser-creator shooter (- invader-laser-speed))))
   (define (main-state)
+    (recv (shoot-laser 'ok))
     (sleep-for next-invader-laser-interval)
     (shoot-invader-laser!)
     (main-state))
@@ -1303,12 +1302,13 @@
 
 (define-class redraw-agent (Barrier)
   (constructor: (lambda (obj level)
+                  (subscribe 'redraw obj)
                   (init! cast: '(Barrier *) obj (behaviour obj level)))))
 
 
 (define (process-user-input level)
-  (define game-paused? #f)
-  (define (player-can-move?) (and (level-player level) (not game-paused?)))
+  (define (player-can-move?)
+    (and (level-player level) (not (game-level-game-paused? level))))
   
   (let ((player (level-player level))
         (msg (thread-receive 0 #f)))
@@ -1333,11 +1333,7 @@
                  (game-object-speed-set! player new-speed)
                  (move-object! level player))))
           
-          ((p)
-           (if game-paused?
-               (sem-unlock! (level-mutex level))
-               (sem-lock! (level-mutex level)))
-           (set! game-paused? (not game-paused?)))
+          ((p) (pause-game level))
 
           ((r)
            (stop-sfx 'all)

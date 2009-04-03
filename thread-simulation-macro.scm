@@ -146,7 +146,7 @@
                                                (,_ #t)))
                             pattern-list))
          (asts (map pattern->ast cleaned-patterns))
-         (loop (gensym 'loop))
+         (loop    (gensym 'loop))
          (mailbox (gensym 'mailbox)))
     `(let ((,mailbox (corout-mailbox (current-corout))))
        (let ,loop ()
@@ -156,12 +156,13 @@
                ,(generate-predicate asts)
                ,mailbox)
               => ,(generate-on-msg-found asts))
-             ;; Dynamic handlers processing
+             ;; Dynamic handlers processing, loop back to continue to
+             ;; wait for the messages
              ,(if use-dynamic-handlers?
-                       `((find-value (lambda (pred) (pred))
-                                     (dynamic-handlers))
-                         => (lambda (res) (unbox res)))
-                       `(#f 'i-hope-this-is-optimized...))
+                  `((find-value (lambda (pred) (pred))
+                                (dynamic-handlers))
+                    => (lambda (res) (unbox res) (,loop)))
+                  `(#f 'i-hope-this-is-optimized...))
              ;; if no acceptable message found, sleep
              (else
               ,(cond

@@ -654,14 +654,8 @@
                 ;; Setup level and start primordial game corouts
                 (lambda ()
                   (new player-ship level)
-                  (spawn-brother (new spawner-agent level))
-                  (spawn-brother (new mothership level))
-;;                   (spawn-brother-thunk
-;;                    'mother-ship-corout
-;;                    (compose-thunks
-;;                     (lambda () (sleep-for (mothership-random-delay)))
-;;                     (create-new-mothership level)))
-                  )
+                  ;(spawn-brother (new spawner-agent level))
+                  (spawn-brother (new mothership level)))
                 (start-game! level))))
          (redraw-corout (new redraw-agent level))
          (init-corouts
@@ -973,6 +967,13 @@
      (recv (,msg
             (begin
               (update! (self) Barrier agent-arrived (lambda (n) (+ n 1)))
+              (pp `(,(corout-id (self)) barrier
+                    (sn: ,(object->serial-number (self))) status:
+                    (,(Barrier-agent-arrived (self)) / ,,condition)
+                    (,(Barrier-agent-arrived (self)) / ,(msg-list-size instant-components))
+                    ,(map corout-id (get-msg-list instant-components))
+                    ,(msg-list-size instant-components)
+                    ,(length (get-msg-list instant-components))))
               (if (>= (Barrier-agent-arrived (self)) ,condition)
                   (begin
                     ;; make sure there is no left-overs of msg 
@@ -1284,7 +1285,8 @@
 
 (define-method (behaviour (obj spawner-agent) level)
   (define (random-access lst) (list-ref lst (random-integer (length lst))))
-  (define creators (list make-laserA-instance make-laserB-instance
+  (define creators (list make-laserA-instance
+                         make-laserB-instance
                          make-laserC-instance))
   (define (shoot-invader-laser!)
     (let* ((laser-creator  (random-access creators))

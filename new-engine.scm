@@ -211,9 +211,9 @@
 (define-class invader-ship (game-object sprite-obj) (slot: row) (slot: col)
   (constructor:
    (lambda (obj pos state color speed row col level)
-     (subscribe `(invader-row ,row) obj)
      (init! cast: '(game-object * * * * * *)
             obj (gensym 'invader) pos state color speed level)
+     (subscribe `(invader-row ,row) obj)
      (set-fields! obj invader-ship ((row row) (col col))))))
 
 (define-class easy-invader   (invader-ship))
@@ -1072,8 +1072,8 @@
 
 (define-class Inv-Controller (Barrier) (slot: row)
   (constructor: (lambda (obj row)
-                  (subscribe `(row-controller ,row) obj)
                   (init! cast: '(Barrier *) obj invader-controller)
+                  (subscribe `(row-controller ,row) obj)
                   (set-fields! obj Inv-Controller
                                ((id (gensym 'Inv-Controller))
                                 (row row))))))
@@ -1279,9 +1279,9 @@
 
 (define-class spawner-agent (corout)
   (constructor: (lambda (obj level)
-                  (subscribe 'spawner-agent obj)
                   (init! cast: '(corout * *)
-                         obj (gensym 'spawner-agent) (behaviour obj level)))))
+                         obj (gensym 'spawner-agent) (behaviour obj level))
+                  (subscribe 'spawner-agent obj))))
 
 (define-method (behaviour (obj spawner-agent) level)
   (define (random-access lst) (list-ref lst (random-integer (length lst))))
@@ -1304,8 +1304,8 @@
 
 (define-class redraw-agent (Barrier)
   (constructor: (lambda (obj level)
-                  (subscribe 'redraw obj)
-                  (init! cast: '(Barrier *) obj (behaviour obj level)))))
+                  (init! cast: '(Barrier *) obj (behaviour obj level))
+                  (subscribe 'redraw obj))))
 
 
 (define (process-user-input level)

@@ -579,7 +579,7 @@
 
 ;;; Messaging lists
 
-(define messaging-lists-debug #t)
+(define messaging-lists-debug #f)
 (define messaging-lists (make-table test: equal?))
 (define (get-msg-list list-id)
   (table-ref messaging-lists list-id #f))

@@ -967,13 +967,6 @@
      (recv (,msg
             (begin
               (update! (self) Barrier agent-arrived (lambda (n) (+ n 1)))
-              (pp `(,(corout-id (self)) barrier
-                    (sn: ,(object->serial-number (self))) status:
-                    (,(Barrier-agent-arrived (self)) / ,,condition)
-                    (,(Barrier-agent-arrived (self)) / ,(msg-list-size instant-components))
-                    ,(map corout-id (get-msg-list instant-components))
-                    ,(msg-list-size instant-components)
-                    ,(length (get-msg-list instant-components))))
               (if (>= (Barrier-agent-arrived (self)) ,condition)
                   (begin
                     ;; make sure there is no left-overs of msg 

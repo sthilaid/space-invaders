@@ -25,10 +25,10 @@
 
 (define user-interface-thread #f)
 
-;; (define invader-row-number 5)
-;; (define invader-col-number 11)
-(define invader-row-number 2)
-(define invader-col-number 2)
+(define invader-row-number 5)
+(define invader-col-number 11)
+;; (define invader-row-number 2)
+;; (define invader-col-number 2)
 
 (define invader-spacing 16)
 
@@ -654,7 +654,7 @@
                 ;; Setup level and start primordial game corouts
                 (lambda ()
                   (new player-ship level)
-                  ;(spawn-brother (new spawner-agent level))
+                  (spawn-brother (new spawner-agent level))
                   (spawn-brother (new mothership level)))
                 (start-game! level))))
          (redraw-corout (new redraw-agent level))
@@ -942,7 +942,8 @@
 
 (define-method (die (obj laser-obj) level)
   (if (eq? (game-object-sprite-id obj) 'player_laser)
-      (set! player-laser-last-destruction-time (time->seconds (current-time))))
+      (set! player-laser-last-destruction-time (time->seconds (current-time)))
+      (broadcast 'spawner-agent 'shoot-laser))
   (die cast: '(game-object *) obj level))
 
 (define-method (die (obj player-ship) level)
@@ -1274,6 +1275,7 @@
   (constructor: (lambda (obj level)
                   (init! cast: '(corout * *)
                          obj (gensym 'spawner-agent) (behaviour obj level))
+                  (! (self) 'shoot-laser) ; init the chain...
                   (subscribe 'spawner-agent obj))))
 
 (define-method (behaviour (obj spawner-agent) level)
@@ -1286,9 +1288,9 @@
            (shooter        (random-access (find-shooter-candidates level))))
       (shoot-laser! level laser-creator shooter (- invader-laser-speed))))
   (define (main-state)
-    (recv (shoot-laser 'ok))
     (sleep-for next-invader-laser-interval)
     (shoot-invader-laser!)
+    (recv (shoot-laser 'ok))
     (main-state))
   main-state)
 

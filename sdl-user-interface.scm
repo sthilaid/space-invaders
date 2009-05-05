@@ -379,18 +379,14 @@
 
   ;; Start a debug/developpement repl in a seperate thread
   ;;   (thread-start! (make-thread (lambda () (##repl))))
-  (cond
-   ((eqv? (length (command-line)) 1) (start))
-   (else
-    (display usage-message))))
+  (start))
 
 
-(include "statprof.scm")
-(profile-start!)
+;; (include "statprof.scm")
+;; (profile-start!)
 (main)
-(profile-stop!)
-
-(write-profile-report "profiling")
+;; (profile-stop!)
+;; (write-profile-report "profiling")
 
 
 ;; Creation of histogram data

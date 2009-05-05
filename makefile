@@ -5,8 +5,8 @@ SOUND_FILES = $(wildcard sounds/*.wav)
 
 GL_FILES = opengl.scm glu.scm
 UI_FILES = sdl-interface.scm sdl-user-interface.scm
-DEVEL_FILES = $(GL_FILES) rbtree.scm scm-lib.scm scm-lib-macro.scm stats.scm ppm-reader.scm texture.scm sprite.scm font.scm user-interface-images.scm $(UI_FILES)
-SPACE_INVADERS_FILES =  $(DEVEL_FILES) engine.scm
+DEVEL_FILES = $(GL_FILES) rbtree.scm scm-lib.scm scm-lib-macro.scm stats.scm ppm-reader.scm texture.scm sprite.scm font.scm thread-simulation.scm thread-simulation-macro.scm user-interface-images.scm
+SPACE_INVADERS_FILES =  $(DEVEL_FILES) engine.scm $(UI_FILES)
 
 ## compilers
 GSC=$(PATH_TO_GAMBIT)/bin/gsc -:=$(PATH_TO_GAMBIT) -debug
@@ -58,7 +58,7 @@ INCLUDE_OPTIONS=-I$(GAMBIT_INCLUDE) -I$(GL_INCLUDE) $(ALL_SDL_INCLUDE)
 
 all: welcome run-invaders 
 
-devel: $(DEVEL_FILES:.scm=.o1) engine.scm
+devel: $(DEVEL_FILES:.scm=.o1) engine.scm $(UI_FILES)
 	gsi -:dar start.scm
 
 run-invaders: $(SPACE_INVADERS_FILES:.scm=.o1)

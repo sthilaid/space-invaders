@@ -129,7 +129,7 @@
 ;; Font data type definition. The get-pointer parameter should be a
 ;; function taking a integer (let's call it 'i') argument, and it will
 ;; return the pointer corresponding to the 'i'th char image in the font.
-(define-type font id texture-id width height get-pointer)
+(define-type font id texture-table width height get-pointer)
 
 ;; Global variable that will contain all the registered (via
 ;; (define-symmetric-font ...)) font data.
@@ -183,30 +183,56 @@
 (define (add-new-font! font-name font-obj)
   (table-set! global-fonts-table font-name font-obj))
 
-;; This will set the (color char) combination of the specified font as
-;; the active character for that font.
-(define (change-current-char! font color char)
-  (let* ((ptr-index (get-char-index (font-id font) color char))
-         (ptr ((font-get-pointer font) ptr-index)))
-    (glBindTexture GL_TEXTURE_2D (font-texture-id font))
-    (glTexImage2D GL_TEXTURE_2D 0 GL_RGBA
-                  (font-width font) (font-height font)
-                  0 GL_RGBA GL_UNSIGNED_BYTE ptr)))
+(define texture-cache-id '())
+(define texture-cache-tex '())
+(define (load-texture-cache x)
+  (if (equal? x texture-cache-id)
+      texture-cache-tex
+      #f))
+(define (texture-cache-set! id tex)
+  (set! texture-cache-id tex)
+  (set! texture-cache-texture tex)
+  tex)
 
+(define (find-font-texture font color char)
+  (let ((id (list font color char)))
+   (cond
+    ((load-texture-cache id) => (lambda (x) x))
+    (else (texture-cache-set!
+           id
+           (table-ref (font-texture-table font) (list color char)))))))
 
+(define (upload-font-to-video-card font #!key
+                                   (wrap-s GL_CLAMP)
+                                   (wrap-t GL_CLAMP)
+                                   (mag GL_NEAREST)
+                                   (min GL_NEAREST))
+  (lambda (color char tex-id)
+    (glBindTexture GL_TEXTURE_2D tex-id)
+    (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_S wrap-s)
+    (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_T wrap-t)
+    (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MAG_FILTER mag)
+    (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MIN_FILTER min)
+    (let* ((ptr-index (get-char-index (font-id font) color char))
+           (ptr ((font-get-pointer font) ptr-index)))
+      (glTexImage2D GL_TEXTURE_2D 0 GL_RGBA
+                    (font-width  font)
+                    (font-height font)
+                    0 GL_RGBA GL_UNSIGNED_BYTE ptr))
+    ))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; External runtime functions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Returns the font data associated to the string font-name
-(define (get-font font-name)
-  (table-ref global-fonts-table font-name))
-
 ;; Draw the character of given color and font at coordinate (x',y)
 ;; where x' = x + char-width * x-offset.
-(define (draw-char font-name color char x y x-offset)
-  (let* ((current-font (get-font font-name))
-         (char-width (font-width current-font)))
-    (change-current-char! current-font color char)
-    (draw-texture font-name (+ x (* x-offset char-width)) y)))
+(define (draw-char font color char x y x-offset)
+  (let ((texture-obj (find-font-texture font color char)))
+    (draw-texture texture-obj
+                  (+ x (* x-offset (texture-width texture-obj)))
+                  y)))
+
+(define (draw-textured-object font color char x y width height)
+  (let ((texture-obj (find-font-texture font color char)))
+    (draw-texture texture-obj x y width: width height: height)))

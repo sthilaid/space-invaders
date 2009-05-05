@@ -64,12 +64,12 @@
       (let loop ((i 0) (chars (string->list str)))
         (if (pair? chars)
             (begin
-              (draw-char "bb_fonts" color (car chars) x y i)
+              (draw-char bb_fonts color (car chars) x y i)
               (loop (+ i 1) (cdr chars)))))))
 
-(define (render-fontified-sprite sprite-name x y state color)
+(define (render-fontified-sprite sprite x y state color)
   (if (not (eq? color 'black))
-   (draw-char (symbol->string sprite-name) color state x y 0)))
+      (draw-char sprite color state x y 0)))
 
 ;; Simple abstraction over open-gl to set up the desired color.
 (define (set-openGL-color color)
@@ -311,7 +311,7 @@
   (glEnable GL_BLEND)
   (glBlendFunc GL_SRC_ALPHA GL_ONE)
 
-  (initialize-textures!)
+  (for-each (lambda (f) (f)) debug-textures)
 
   (reshape w h)
   )

@@ -39,17 +39,5 @@
 ;;
 ;; tex-pointer should be the image pointer name (string) and width and
 ;; heigth are corresponding to the images size.
-(define-macro (define-texture
-                declaration-code
-                generation-code
-                init-script
-                tex-pointer width height)
-  (let* ((tex-id (gensym 'tex-id)))
-    `(begin
-       (c-declare ,declaration-code)
-       ((c-lambda () void ,generation-code))
-       (let ((,tex-id (genTexture)))
-         (table-set! texture-table
-                     ,tex-pointer
-                     (make-texture ,tex-id ,width ,height
-                                   (,init-script ,tex-id)))))))
+(define-macro (new-texture width height)
+  `(make-texture (genTexture) ,width ,height))

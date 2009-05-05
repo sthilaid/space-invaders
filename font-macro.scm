@@ -92,57 +92,10 @@
   ;; Ensure that the char indices will be coherent between the macro
   ;; expansion and the runtime with this call...
   (init-char-indexes! font-name)
-  (let* ((good-char-width (next-power-of-2 char-width))
+  (let* ((font-identifier (string->symbol font-name))
+         (good-char-width (next-power-of-2 char-width))
          (good-char-height (next-power-of-2 char-height))
          (font-char-table (get-font-table font-name char-width char-height))
-         (static-font-elements-declarations
-          ;; Will generate the filled array declaration that should
-          ;; look like
-          ;; GLubyte font[charnb][cheight][cwidth][4] =
-          ;;                                   {r1,g1,b1,a1,r2,g2,b2,a2,...};
-          `(c-declare
-            ,(to-string
-              (show "GLubyte "font-name
-                    "["(table-length font-char-table)"]"
-                    "["good-char-height"]"
-                    "["good-char-width"]"
-                    "[4] = {")
-              (let ((n 0)
-                    (last-n (- (table-length font-char-table) 1)))
-                (for-each
-                 (lambda (el)
-                   (let ((color (caar el))
-                         (char (cadar el))
-                         (pixels (cdr el)))
-                     (show "{")
-                     (for y 0 (< y good-char-height)
-                       (begin
-                         (for x 0 (< x good-char-width)
-                           (let* ((out-of-bounds?
-                                   (or (>= x char-width) (>= y char-height)))
-                                  (current-pix
-                                   (if (not out-of-bounds?)
-                                       (list-ref pixels (+ (* y char-width) x))
-                                       '()))
-                                  (r (if out-of-bounds? 0 (car current-pix)))
-                                  (g (if out-of-bounds? 0 (cadr current-pix)))
-                                  (b (if out-of-bounds? 0 (caddr current-pix)))
-                                  (a (if out-of-bounds?
-                                         0
-                                         (if (< (+ r g b) 10) 0 255))))
-                             (show r "," g "," b "," a)
-                             (if (< x (- good-char-width 1)) (show ","))))
-                         (if (= y (- good-char-height 1))
-                             (show "}")
-                             (show ",")))))
-                   (if (< n last-n)
-                       (begin (set! n (+ n 1)) (show ","))))
-                 (sort-chars (table->list font-char-table))))
-              (show "};\n"))))
-         ;; sets up the correct char indices at runtime
-         (static-font-elements-generation
-          `((lambda () (init-char-indexes! ,font-name))))
-         
         ;; if font loading is dynamic, an empty declaration is made.
         (dynamic-font-elements-declarations
          `(c-declare ,(to-string (show "GLubyte "font-name
@@ -164,15 +117,18 @@
         (texture-generation-code "1+1;\n")
         ;; The init script contains only the texture settings.
         (texture-init-script
-         (let ((tex-id-sym (gensym 'tex-id)))
-          `(lambda (,tex-id-sym)
-             (lambda ()
-               (glBindTexture GL_TEXTURE_2D ,tex-id-sym)
-               (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_S GL_CLAMP)
-               (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_T GL_CLAMP)
-               (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MAG_FILTER GL_NEAREST)
-               (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MIN_FILTER GL_NEAREST)
-               ))))
+         (let* ((tex-id-sym (gensym 'tex-id))
+               (wrap-s (if (memq 'loop-x options) 'GL_REPEAT 'GL_CLAMP))
+               (wrap-t (if (memq 'loop-y options) 'GL_REPEAT 'GL_CLAMP))
+               (mag 'GL_NEAREST)
+               (min mag))
+           (if (memq 'loop-x options) (pp `(,font-name : ,wrap-s ,wrap-t)))
+           `(upload-font-to-video-card
+             ,font-identifier
+             wrap-s: ,(if (memq 'loop-x options) 'GL_REPEAT 'GL_CLAMP)
+             wrap-t: ,(if (memq 'loop-y options) 'GL_REPEAT 'GL_CLAMP)
+             mag: GL_NEAREST
+             min: GL_NEAREST)))
         ;; This function returns a pointer to the image array.
         (get-pointer-code
          `(c-lambda (int) (pointer void)
@@ -182,18 +138,24 @@
     `(begin
        ;; depending on the options passed, the font loading will be
        ;; either static (at compile time) or dynamic (at runtime)
-       ,@(if (memq 'static options)
-             (list
-              static-font-elements-declarations
-              static-font-elements-generation)
-             (list
-              dynamic-font-elements-declarations
-              dynamic-font-elements-generation))
-       (define-texture ,texture-declaration-code ,texture-generation-code
-         ,texture-init-script ,font-name ,good-char-width ,good-char-height) 
-       (add-new-font!
-        ,font-name
-        (make-font ,font-name
-                   (texture-id (retrieve-texture ,font-name))
-                   ,good-char-width ,good-char-height
-                   ,get-pointer-code)))))
+       ,dynamic-font-elements-declarations
+       ,dynamic-font-elements-generation
+       (define ,font-identifier
+         (make-font ,font-name
+                    (make-table test: equal?)
+                    ,good-char-width ,good-char-height
+                    ,get-pointer-code))
+       (let ((tex-table (font-texture-table ,font-identifier)))
+         ,@(map
+            (lambda (color-char)
+              (let ((color (car color-char))
+                    (char  (cadr color-char))
+                    (tex-id (gensym 'tex-id)))
+                `(let ((texture (new-texture ,good-char-width
+                                             ,good-char-height)))
+                   (table-set! tex-table (list ',color ',char) texture)
+                   ;;(,texture-init-script ',color ',char (texture-id texture))
+
+                   ;; the init must come *after* opengl's initialization?
+                   (set! debug-textures (cons (lambda () (,texture-init-script ',color ',char (texture-id texture))) debug-textures)))))
+            (map car (table->list font-char-table)))))))

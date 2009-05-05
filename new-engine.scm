@@ -25,10 +25,10 @@
 
 (define user-interface-thread #f)
 
-(define invader-row-number 5)
-(define invader-col-number 11)
-;; (define invader-row-number 2)
-;; (define invader-col-number 2)
+;; (define invader-row-number 5)
+;; (define invader-col-number 11)
+(define invader-row-number 2)
+(define invader-col-number 2)
 
 (define invader-spacing 16)
 
@@ -219,9 +219,9 @@
 (define-class easy-invader   (invader-ship))
 (define-class medium-invader (invader-ship))
 (define-class hard-invader   (invader-ship))
-(setup-static-fields! easy-invader 'easy (new rect 0 0 12 8) 2 10)
-(setup-static-fields! medium-invader 'medium (new rect 0 0 12 8) 2 20)
-(setup-static-fields! hard-invader 'hard (new rect 0 0 12 8) 2 30)
+(setup-static-fields! easy-invader easy (new rect 0 0 12 8) 2 10)
+(setup-static-fields! medium-invader medium (new rect 0 0 12 8) 2 20)
+(setup-static-fields! hard-invader hard (new rect 0 0 12 8) 2 30)
 
 
 (define-class player-ship  (game-object sprite-obj)
@@ -234,7 +234,7 @@
        (init! cast: '(game-object * * * * * *)
               obj 'player pos state 'green speed level)
        (level-spawn-object! level obj)))))
-(setup-static-fields! player-ship 'player (new rect 0 0 13 8) 1 0)
+(setup-static-fields! player-ship player (new rect 0 0 13 8) 1 0)
 
 (define-class mothership   (game-object sprite-obj)
   (constructor:
@@ -246,17 +246,17 @@
    (lambda (obj pos state color speed level)
      (init! cast: '(game-object * * * * * *)
             obj 'mothership pos state color speed level))))
-(setup-static-fields! mothership 'mothership (new rect 0 0 16 7) 1 100)
+(setup-static-fields! mothership mothership (new rect 0 0 16 7) 1 100)
 
 (define-class laser-obj    (game-object sprite-obj))
 (define-class laserA         (laser-obj))
 (define-class laserB         (laser-obj))
 (define-class laserC         (laser-obj))
 (define-class player_laser   (laser-obj))
-(setup-static-fields! laserA 'laserA (new rect 1 0 1 7) 6 0)
-(setup-static-fields! laserB 'laserB (new rect 1 0 1 7) 8 0)
-(setup-static-fields! laserC 'laserC (new rect 1 0 1 7) 4 0)
-(setup-static-fields! player_laser 'player_laser (new rect 0 0 1 7) 1 0)
+(setup-static-fields! laserA laserA (new rect 1 0 1 7) 6 0)
+(setup-static-fields! laserB laserB (new rect 1 0 1 7) 8 0)
+(setup-static-fields! laserC laserC (new rect 1 0 1 7) 4 0)
+(setup-static-fields! player_laser player_laser (new rect 0 0 1 7) 1 0)
 
 (define-class shield       (game-object) (slot: particles)
   (constructor:
@@ -303,15 +303,15 @@
             (game-object-speed mother)
             level))))
 (setup-static-fields!
- invader_explosion 'invader_explosion (new rect 0 0 13 8) 1 0)
+ invader_explosion invader_explosion (new rect 0 0 13 8) 1 0)
 (setup-static-fields!
- invader_laser_explosion 'invader_laser_explosion (new rect 0 0 6 8) 1 0)
+ invader_laser_explosion invader_laser_explosion (new rect 0 0 6 8) 1 0)
 (setup-static-fields!
- player_explosion 'player_explosion (new rect 0 0 16 8) 2 0)
+ player_explosion player_explosion (new rect 0 0 16 8) 2 0)
 (setup-static-fields! 
- player_laser_explosion 'player_laser_explosion (new rect 0 0 8 8) 1 0)
+ player_laser_explosion player_laser_explosion (new rect 0 0 8 8) 1 0)
 (setup-static-fields!
- mothership_explosion 'mothership_explosion (new rect 0 0 21 8) 1 0)
+ mothership_explosion mothership_explosion (new rect 0 0 21 8) 1 0)
 
 (define-class message-obj  (game-object) (slot: text)
   (constructor:
@@ -1521,5 +1521,5 @@
   (let ((nb-lives (game-level-lives level)))
     (render-string 13 0 (number->string nb-lives) 'white)
     (for i 0 (< i (- nb-lives 1))
-         (render-fontified-sprite 'player (+ 30 (* i 15)) 0 0 'green))))
+         (render-fontified-sprite player (+ 30 (* i 15)) 0 0 'green))))
 

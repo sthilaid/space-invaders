@@ -1,0 +1,78 @@
+
+(define-macro (match sujet . clauses)	
+  (define (if-equal? var gab oui non)
+    (cond ((and (pair? gab)
+                (eq? (car gab) 'unquote)
+                (pair? (cdr gab))
+                (null? (cddr gab)))
+					 `(let ((,(cadr gab) ,var))
+							,oui))
+					((null? gab)
+           `(if (null? ,var) ,oui ,non))
+          ((or (symbol? gab) 
+							 (boolean? gab)
+               (keyword? gab)
+							 (char? gab))
+           `(if (eq? ,var ',gab) ,oui ,non))
+          ((number? gab)
+           `(if (eqv? ,var ,gab) ,oui ,non))
+					((string? gab)
+					 `(if (and (string? ,var) (string=? ,gab ,var)) ,oui	,non))
+          ((pair? gab)
+					 (if (and (pair? (car gab))
+										(eq? (caar gab) 'unquote-splicing)
+										(pair? (cdar gab))
+										(null? (cddar gab)))
+							 `(let ((,(cadar gab) ,var))
+									,oui)
+							 (let ((carvar (gensym))
+										 (cdrvar (gensym)))
+								 `(if (pair? ,var)
+											(let ((,carvar (car ,var)))
+												,(if-equal?
+													carvar
+													(car gab)
+													`(let ((,cdrvar (cdr ,var)))
+														 ,(if-equal?
+															 cdrvar
+															 (cdr gab)
+															 oui
+															 non))
+													non))
+											,non))))
+					((vector? gab)
+					 `(if (vector? ,var)
+								,(let ((v (gensym)))
+									 `((lambda (,v)
+											 (match (vector->list ,v) (,(vector->list gab) 
+																								 ,oui)))
+										 ,var))
+								,non))
+					
+					(else
+           (error "unknown pattern"))))
+	
+  (let* ((var
+          (gensym))
+         (fns
+          (map (lambda (x) (gensym))
+               clauses))
+         (err
+          (gensym)))
+    `(let ((,var ,sujet))
+       ,@(map (lambda (fn1 fn2 clause)
+                `(define (,fn1)
+                   ,(if-equal? var
+                               (car clause)
+                               (if (and (eq? (cadr clause) when:)
+                                        (pair? (cddr clause)))
+                                   `(if ,(caddr clause)
+                                        (begin ,@(cdddr clause))
+                                        (,fn2))
+                                   `(begin ,@(cdr clause)))
+                               `(,fn2))))
+              fns
+              (append (cdr fns) (list err))
+              clauses)
+       (define (,err) (error "match failed"))
+       (,(car fns)))))

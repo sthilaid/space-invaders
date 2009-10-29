@@ -1,126 +1,95 @@
-##											 Space-invaders makefile
-##
-## usage: The makefile possess 2 main variables OS and UI which
-## controls respectively the operating system used (win, mac, linux)
-## and the user interface used (glut or sdl).
-##
-## There are also many PATH_TO_XYZ variables that encapsulates the
-## dependent library paths. These PATH_TO variables are usually
-## accompanied by XYZ_INCLUDE and XYZ_LIB variables which gives the
-## location of the library file and header files associated with
-## XYZ. Setting only the PATH_TO_XYZ should work in most cases, but
-## setting directly the XYZ_LIB and XYZ_INCLUDE variables gives finer
-## granularity over the compilation and is required to cross-compile
-## the program.
-##
-## some general usage exemples:
-##
-## make OS=linux UI=sdl PATH_TO_SDL_mixer=$HOME/SDL_mixer
-## make OS=linux UI=glut
-## make OS=win UI=sdl PATH_TO_GAMBIT=$HOME/gambit-c-win/current
+##############################################################################
+## utilities
+##############################################################################
+add-presufix = $(foreach f, $(3), $(1)$(f)$(2))
 
-## Source files
+# will only copy the used depency files. This implies that the
+# recursive dependencies must be added to this project's depencies.
+define define-dependency
+DEPENDENCIES += $(1)
+$(addprefix $$(SRC_PATH)/,$(2)) : setup-$(1)
+setup-$(1):
+	 mkdir -p $$(EXTERNAL_LIBS)
+ ifeq "$$(wildcard $$(EXTERNAL_LIBS)/$(1))" ""
+	 cd $$(EXTERNAL_LIBS) && git clone $$($(1)-PATH)
+ endif
+	 cd $$(EXTERNAL_LIBS)/$(1) && git pull
+	 cd $$(EXTERNAL_LIBS)/$(1)/src/ && rsync -c $(2) ../../../$$(SRC_PATH)/
+endef
+
+##############################################################################
+## project paths
+##############################################################################
+PREFIX=.
+SRC_PATH=src
+INCLUDE_PATH=$(PREFIX)/include
+LIB_PATH=$(PREFIX)/lib
+EXTERNAL_LIBS=$(PREFIX)/external-libs
+
+##############################################################################
+## Projet files
+##############################################################################
 SPRITE_FILES = $(wildcard sprites/*.ppm) $(wildcard sprites/*.bmp)
 FONT_FILES = $(wildcard fonts/*.ppm) $(wildcard fonts/*.scm)
-DOC_FILES = $(wildcard doc/*.ppm)
 SOUND_FILES = $(wildcard sounds/*.wav)
 
-GL_FILES = opengl.scm glu.scm 
-SPACE_INVADERS_FILES =  rbtree.scm scm-lib.scm scm-lib-macro.scm stats.scm ppm-reader.scm thread-simulation.scm texture.scm sprite.scm font.scm engine.scm user-interface-images.scm 
+INCLUDE_FILES = debug-declarations.scm release-declarations.scm \
+	              scm-lib_.scm class.scm class_.scm  \
+                opengl_.scm glu_.scm texture_.scm sprite_.scm font_.scm \
+                class_.scm thread-simulation_.scm match.scm
+LIB_FILES = statprof.o1 \
+            scm-lib.o1 opengl.o1 glu.o1 ppm-reader.o1 texture.o1 sprite.o1 \
+            font.o1 sdl-interface.o1 rbtree.o1 thread-simulation.o1 \
+            user-interface-images.o1 engine.o1 sdl-user-interface.o1 
+GAME_FILES = $(LIB_FILES)
+COMPILED_FILES = opengl.o1 glu.o1 texture.o1 sprite.o1 sdl-interface.o1 \
+                 font.o1 user-interface-images.o1
 
+TARGET=debug
+debug_DECLARATIONS=../include/debug-declarations.scm
+release_DECLARATIONS=../include/release-declarations.scm
 
-## compilers
-GSC=$(PATH_TO_GAMBIT)/bin/gsc -:=$(PATH_TO_GAMBIT) -debug
-CC=gcc
+##############################################################################
+## compilers and interpreters
+##############################################################################
+GSI=$(PATH_TO_GAMBIT)/bin/gsi -:=$(PATH_TO_GAMBIT),dar
+GSC=$(PATH_TO_GAMBIT)/bin/gsc -:=$(PATH_TO_GAMBIT),dar -debug -prelude '(include "$($(TARGET)_DECLARATIONS)")'
+cc=gcc
 
-## Gambit-c
+## Gambit-c location
 PATH_TO_GAMBIT=/opt/gambit-c
 GAMBIT_LIB=$(PATH_TO_GAMBIT)/lib
 GAMBIT_INCLUDE=$(PATH_TO_GAMBIT)/include
 
-## Some scheme libraries paths
-OOSYSYEM_PATH=$(HOME)/projet/maitrise/class
-SCMLIB_PATH=$(HOME)/projet/maitrise/scm-lib
+##############################################################################
+## Some scheme libraries git repos
+##############################################################################
 
+# class-PATH=git://github.com/sthilaid/class.git
+# thread-simulation-PATH=git://github.com/sthilaid/thread-simulation.git
+# scm-lib-PATH=git://github.com/sthilaid/scm-lib.git
+# open-gl-ffi-PATH=git://github.com/sthilaid/open-gl-ffi.git
+# gl-fonts-PATH=git://github.com/sthilaid/gl-fonts.git
+# sdl-interface-PATH=git://github.com/sthilaid/sdl-interface.git
+# export state-machine-PATH=git://github.com/sthilaid/state-machine.git
 
-## Default options
-UI=sdl
-OS=linux
-VERSION=1.0
+export class-PATH=/home/dave/projet/maitrise/class
+export thread-simulation-PATH=/home/dave/projet/maitrise/thread-simulation
+export scm-lib-PATH=/home/dave/projet/maitrise/scm-lib
+export open-gl-ffi-PATH=/home/dave/projet/scheme/open-gl-ffi
+export gl-fonts-PATH=/home/dave/projet/maitrise/gl-fonts
+export sdl-interface-PATH=/home/dave/projet/maitrise/sdl-interface
+export state-machine-PATH=/home/dave/projet/maitrise/state-machine
 
-## UI dependent variables
-ifeq ($(UI), glut)
-UI_FILES = glut.scm user-interface.scm
-LD_OPTIONS_LIN = -lutil -lglut
-LD_OPTIONS_MAC = -framework GLUT -lobjc -framework OpenGL
-LD_OPTIONS_WIN = -lglut32 -lglu32 -lopengl32 -lws2_32 -mwindows
-LD_OPTIONS_COMMON =-L$(GAMBIT_LIB) -L$(GL_LIB) -lgambc
-
-# SDL used in general:
-else
-UI_FILES = sdl-interface.scm sdl-user-interface.scm
+##############################################################################
+## Comilation flags
+##############################################################################
 LD_OPTIONS_LIN = -lutil -lSDL -lSDL_mixer -lglut
-LD_OPTIONS_MAC = -framework SDL -framework SDL_mixer -lobjc -framework OpenGL -framework Cocoa
-LD_OPTIONS_WIN = -lSDL -lSDL_mixer -lglu32 -lopengl32 -lws2_32 -mwindows
 LD_OPTIONS_COMMON =-L$(GAMBIT_LIB) -L$(GL_LIB) -L$(SDL_LIB) -L$(SDL_mixer_LIB) -lgambc 
-endif
 
-
-############### OS dependent variables ###############
-
-## MAC OSX
-ifeq ($(OS), mac)
-# Paths not required for mac os if using the -framework options?
-PATH_TO_GL=/System/Library/Frameworks/OpenGL.framework
-GL_INCLUDE=$(PATH_TO_GL)/Headers
-GL_LIB=$(PATH_TO_GL)/Libraries
-
-GLUT_INCLUDE=/System/Library/Frameworks/GLUT.framework/Headers
-
-PATH_TO_SDL=/System/Library/Frameworks/SDL.framework
-SDL_INCLUDE=$(PATH_TO_SDL)/Headers
-SDL_LIB=$(PATH_TO_SDL)
-
-PATH_TO_SDL_devel=/System/Library/Frameworks/SDL.framework/SDL-devel-extras
-
-PATH_TO_SDL_mixer=/System/Library/Frameworks/SDL_mixer.framework
-SDL_mixer_INCLUDE=$(PATH_TO_SDL_mixer)/Headers
-SDL_mixer_LIB=$(PATH_TO_SDL_mixer)
-
-ALL_SDL_INCLUDE=-I$(SDL_INCLUDE) -I$(SDL_mixer_INCLUDE) -I$(PATH_TO_SDL_devel)
-LD_OPTIONS = $(LD_OPTIONS_COMMON) $(LD_OPTIONS_MAC)
-endif
-
-
-## Windows
-ifeq ($(OS), win)
-PATH_TO_GL=/mingw
-GL_INCLUDE=$(PATH_TO_GL)/include/GL
-GL_LIB=$(PATH_TO_GL)/lib
-
-GLUT_INCLUDE=/mingw/include/GL
-
-PATH_TO_SDL=/usr/local
-SDL_INCLUDE=$(PATH_TO_SDL)/include/SDL
-SDL_LIB=$(PATH_TO_SDL)/lib
-SDL_BIN=$(PATH_TO_SDL)/bin
-
-PATH_TO_SDL_mixer=/usr/local
-SDL_mixer_INCLUDE=$(PATH_TO_SDL_mixer)/include/SDL
-SDL_mixer_LIB=$(PATH_TO_SDL_mixer)/lib
-
-ALL_SDL_INCLUDE=-I$(SDL_INCLUDE) -I$(SDL_mixer_INCLUDE)
-LD_OPTIONS = $(LD_OPTIONS_COMMON) $(LD_OPTIONS_WIN)
-endif
-
-
-## Linux
-ifeq ($(OS), linux)
 PATH_TO_GL=/usr
 GL_INCLUDE=$(PATH_TO_GL)/include/GL
 GL_LIB=$(PATH_TO_GL)/lib
-
-GLUT_INCLUDE=/usr/include/GL
 
 PATH_TO_SDL=/usr
 SDL_INCLUDE=$(PATH_TO_SDL)/include/SDL
@@ -131,123 +100,68 @@ SDL_mixer_INCLUDE=$(PATH_TO_SDL_mixer)/include/SDL
 SDL_mixer_LIB=$(PATH_TO_SDL_mixer)/lib
 
 ALL_SDL_INCLUDE=-I$(SDL_INCLUDE) -I$(SDL_mixer_INCLUDE)
-LD_OPTIONS = $(LD_OPTIONS_COMMON) $(LD_OPTIONS_LIN)
-endif
 
-ifeq ($(UI), glut)
-INCLUDE_OPTIONS=-I$(GAMBIT_INCLUDE) -I$(GL_INCLUDE) -I$(GLUT_INCLUDE)
-else
 INCLUDE_OPTIONS=-I$(GAMBIT_INCLUDE) -I$(GL_INCLUDE) $(ALL_SDL_INCLUDE)
-endif
-
+LD_OPTIONS = $(LD_OPTIONS_COMMON) $(LD_OPTIONS_LIN)
 
 
 .SUFFIXES:
 .SUFFIXES: .c .scm .o .o1 .m
 .PHONY: all clean shared-objects tarball welcome
 
-all: welcome space-invaders.exe dll
+##############################################################################
+## Compilation Targets
+##############################################################################
 
-dll:
-ifeq ($(OS), win)
-ifeq ($(UI), sdl)
-	cp $(SDL_BIN)/SDL.dll $(SDL_BIN)/SDL_mixer.dll .
-endif
-endif
+all: welcome prefix include lib
 
-
-## the SDL mac version must be compiled with the SDLMain.m file
-## contained in the SDL devel package for mac osx.
-ifeq ($(OS), mac)
-ifeq ($(UI), sdl)
-space-invaders.exe: $(GL_FILES:.scm=.o) $(SPACE_INVADERS_FILES:.scm=.o) $(UI_FILES:.scm=.o) space-invaders_.o $(PATH_TO_SDL_devel)/SDLMain/NIBless/SDLMain.m
-	$(CC) $(INCLUDE_OPTIONS) -o $@ $^ $(LD_OPTIONS)
-endif
-else
-space-invaders.exe: $(GL_FILES:.scm=.o) $(SPACE_INVADERS_FILES:.scm=.o) $(UI_FILES:.scm=.o) space-invaders_.o 
-	$(CC) $(INCLUDE_OPTIONS) -o $@ $(GL_FILES:.scm=.o) $(SPACE_INVADERS_FILES:.scm=.o) $(UI_FILES:.scm=.o) space-invaders_.o $(LD_OPTIONS)
+prefix:
+ifneq "$(PREFIX)" "."
+	mkdir -p $(PREFIX)
 endif
 
-## only in mac osx, the main function must be renaimed to SDL_main.
-## The "right" way is to add #include <SDL.h> in the file where main is defined
-## but since it is difficult to add it to the link file, we chose to define it 
-## by ourselves. The commented code can be used if the -Dmain=SDL_main stops working
-## at some point
-ifeq ($(OS), mac)
-ifeq ($(UI), sdl)
-space-invaders_.o: space-invaders_.c
-#	cat $^ > link-temp
-#	echo "#include <SDL.h>" > $^
-#	cat link-temp >> $^
-#	rm link-temp
-	$(CC) $(INCLUDE_OPTIONS) -c $^ -Dmain=SDL_main
-endif
-endif
+include: $(foreach f,$(INCLUDE_FILES),$(INCLUDE_PATH)/$(f))
+$(INCLUDE_PATH)/%.scm: $(SRC_PATH)/%.scm
+	mkdir -p $(INCLUDE_PATH)
+	cp $< $@
 
-## Scheme link file
-space-invaders_.c: $(GL_FILES:.scm=.c) $(SPACE_INVADERS_FILES:.scm=.c) $(UI_FILES:.scm=.c)
-	$(GSC) -o $@ -link $^
+lib: $(foreach f,$(GAME_FILES),$(LIB_PATH)/$(f))
+$(LIB_PATH)/%.o1: $(SRC_PATH)/%.scm
+	mkdir -p $(LIB_PATH)
+	$(GSC) -cc-options "$(INCLUDE_OPTIONS)" -ld-options "$(LD_OPTIONS)" -o $@ $<
 
+stringify = $(foreach f,$(1),"$(f)")
+devel: $(SRC_PATH)/game-loader.scm \
+	     $(addprefix $(SRC_PATH)/,$(LIB_FILES:.o1=.scm)) \
+       $(addprefix $(LIB_PATH)/,$(COMPILED_FILES))
+	$(GSI) $< -e '(load-game $(call stringify,$(SRC_PATH)) $(call stringify,$(LIB_PATH)) (list $(call stringify,$(GAME_FILES))))'
 
-## "included" macro dependant scheme source files
-user-interface-images.c: user-interface-images.scm texture-macro.scm font-macro.scm scm-lib-macro.scm
-	$(GSC) -c user-interface-images.scm 
+run-game: $(addprefix $(LIB_PATH)/,$(GAME_FILES))
+	@echo "*** Compilation Finished ***"
+	@echo
+	@echo "Launching game...."
+	@echo
+	$(GSI) $^ -e '(main)'
 
-user-interface.c: user-interface.scm scm-lib-macro.scm opengl-header.scm
-	$(GSC) -c user-interface.scm 
+$(LIB_PATH)/font-%.o1: generated/font-%.scm
+	mkdir -p $(LIB_PATH)
+	$(GSC) -cc-options "$(INCLUDE_OPTIONS)" -ld-options "$(LD_OPTIONS)" -o $@ $<
 
-sdl-user-interface.c: sdl-user-interface.scm scm-lib-macro.scm opengl-header.scm
-	$(GSC) -c sdl-user-interface.scm 
+generated/font-%.scm: fonts/%.ppm $(SRC_PATH)/user-interface-images.scm
+	@echo Generating font scm file $@
+	mkdir -p generated
+	gsi $(SRC_PATH)/user-interface-images.scm -e "(generate-font-file \"$(<)\")"
 
-engine.c: engine.scm thread-simulation-macro.scm class.scm
-	$(GSC) -c engine.scm
+static: $(addprefix $(SRC_PATH)/,$(LIB_FILES:.o1=.scm)) 
+	$(GSC) -exe -o $(PREFIX)/lode-runner -cc-options "$(INCLUDE_OPTIONS)" -ld-options "$(LD_OPTIONS)" -prelude '(define-cond-expand-feature compiled-version)' $^
 
+### "included" macro dependant scheme source files
 
-# Opengl interface interdependance
-opengl.c: opengl.scm opengl-header.scm
-	$(GSC) -c opengl.scm
-
-glu.c: glu.scm glu-header.scm
-	$(GSC) -c glu.scm
-
-glut.c: glut.scm glut-header.scm
-	$(GSC) -c glut.scm
-
-
-# External Scheme library dependencies
-class.scm: $(OOSYSYEM_PATH)/class.scm
-	cp $(OOSYSYEM_PATH)/class.scm .
-
-scm-lib.scm: $(SCMLIB_PATH)/scm-lib.scm
-	cp $(SCMLIB_PATH)/scm-lib.scm .
-
-scm-lib-macro.scm: $(SCMLIB_PATH)/scm-lib-macro.scm
-	cp $(SCMLIB_PATH)/scm-lib-macro.scm .
-
-
-## General build instructions
-.m.o:
-	$(CC) $(INCLUDE_OPTIONS) -c $*.m
-
-.c.o:
-	$(CC) $(INCLUDE_OPTIONS) -c $*.c
-
-.scm.c: 
-	$(GSC) -c $*
-#	$(GSC) -expansion -c $*
-
-
-.scm.o1:
-	$(GSC) -ld-options "-lglut" -debug-source -o $*.o1 $*.scm
-
+# lousy dep: all lib files depend on the header files...
+$(addprefix $(LIB_PATH)/,$(LIB_FILES)): include
 
 ## Welcome banner
  welcome:
-	@echo "*** Global Variables ***"
-	@echo
-	@echo OS=$(OS)
-	@echo UI=$(UI)
-	@echo
 	@echo "*** Currently using following paths ***"
 	@echo
 	@echo PATH_TO_GAMBIT=$(PATH_TO_GAMBIT)
@@ -255,27 +169,25 @@ scm-lib-macro.scm: $(SCMLIB_PATH)/scm-lib-macro.scm
 ifeq ($(UI), sdl)
 	@echo PATH_TO_SDL=$(PATH_TO_SDL)
 	@echo PATH_TO_SDL_mixer=$(PATH_TO_SDL_mixer)
-ifeq ($(OS), mac)
-	@echo PATH_TO_SDL_devel=$(PATH_TO_SDL_devel)
-endif
 endif
 	@echo
-	@echo "*** Beginning compilation ***"
+	@echo "*** Beginning Compilation ***"
 
-ALL_SCM = $(wildcard *.scm)
+##############################################################################
+### External Scheme library dependencies
+##############################################################################
+$(eval $(call define-dependency,scm-lib,scm-lib.scm scm-lib_.scm))
+$(eval $(call define-dependency,open-gl-ffi,opengl.scm opengl_.scm \
+                                glu.scm glu_.scm))
+$(eval $(call define-dependency,sdl-interface,sdl-interface.scm))
+$(eval $(call define-dependency,gl-fonts,ppm-reader.scm texture.scm \
+                                texture_.scm sprite.scm sprite_.scm \
+	                              font.scm font_.scm))
+$(eval $(call define-dependency,class,class.scm class_.scm))
+$(eval $(call define-dependency,thread-simulation, rbtree.scm match.scm \
+                                  thread-simulation.scm \
+                                  thread-simulation_.scm ))
+#$(eval $(call define-dependency,state-machine,state-machine.scm))
+
 clean:
-	rm -f $(ALL_SCM:.scm=.c) *_.c *.o* space-invaders.exe *.tar.gz *.tgz *.~*~ *.zip
-  # external libs
-	rm -f class.scm scm-lib.scm scm-lib-macro.scm
-	$(MAKE) clean -C doc
-
-tarball: makefile README $(wildcard *.scm) $(SPRITE_FILES) $(FONT_FILES) $(DOC_FILES) $(SOUND_FILES)
-	tar cvzf space-invaders-src-v$(VERSION).tgz $(foreach file, $^, ../space-invaders/$(file))
-
-release: space-invaders.exe $(SPRITE_FILES) $(FONT_FILES) $(SOUND_FILES)
-ifeq ($(OS), win)
-# 	tar cvzf space-invaders.tar.gz $(foreach file, $^ SDL.dll SDL_mixer.dll, ../space-invaders/$(file))
-	zip -r space-invaders-$(OS).zip $(foreach file, $^ SDL.dll SDL_mixer.dll, ../space-invaders/$(file))
-else
-	tar cvzf space-invaders-$(OS).tar.gz $(foreach file, $^, ../space-invaders/$(file))
-endif
+	rm -rf generated $(INCLUDE_PATH) $(LIB_PATH) $(EXTERNAL_LIBS) $(SRC_PATH)/*.[oc] $(PREFIX)/lode-runner
